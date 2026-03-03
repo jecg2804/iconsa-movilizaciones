@@ -71,10 +71,10 @@ Documentacion:
 
 ## BASE DE DATOS - PENDIENTE
 
-- [ ] RLS (Row Level Security) - habilitar + politicas de desarrollo
-- [ ] Importar Equipment.csv (~392 registros)
-- [ ] Importar Vehiculos.csv (56 registros)
-- [ ] Importar codcost.csv
+- [x] RLS (Row Level Security) - habilitado con politicas de desarrollo
+- [ ] Importar Equipment.csv (equipos, excluyendo vehiculos que ya estan separados)
+- [ ] Importar Vehiculos.csv (56 registros, ya separados del Equipment.csv)
+- [ ] Importar codcost.csv (varia por proyecto, empezar con Muelle 14 y Paraiso)
 - [ ] Supabase Auth - setup de autenticacion
 
 
@@ -95,21 +95,57 @@ Documentacion:
 
 ## DECISIONES PENDIENTES (James consultar en ICONSA)
 
-- [ ] Lista completa ubicaciones reales (proveedores con sucursales)
-- [ ] Proyectos adicionales activos
-- [ ] Quienes crean solicitudes (nombres, correos)
-- [ ] Codigos de costo ASTIBAL y Costa Norte
-- [ ] Metricas reportes semanales Valderrama
+Astrid (clasificacion de equipos):
+- [ ] Confirmar: EQA = equipos menores. No mostrar ING ni MOV en dropdown de solicitudes
+- [ ] Definir cuales vehiculos son "flota de transporte" (Charris) vs "vehiculos de proyecto"
+- [ ] Categorias CSI para materiales (documento ya agregado al proyecto)
+
+Charris (logistica):
+- [ ] Confirmar su flota: cuales cabezales, plataformas, remolques usa para movilizaciones
+- [ ] Ubicaciones adicionales frecuentes (proveedores con sucursales: Cochez Colon, Cochez Mananitas, etc.)
+
+Ingenieros de proyecto:
+- [ ] Quienes exactamente crean solicitudes (nombres, correos)
+- [ ] Confirmar: a veces piden vehiculos (pickup, etc.) para uso interno en proyecto
+
+General:
+- [ ] Proyectos adicionales activos mas alla de los 4 actuales
+- [ ] Codigos de costo para ASTIBAL y Costa Norte
+- [ ] Departamentos y roles del Employee_Listing (161 empleados - cuales necesitan acceso)
+- [ ] Metricas para reportes semanales de Valderrama
 
 
 ## IDEAS PARA FASES FUTURAS (no MVP)
 
+- Solicitud de vehiculos: agregar vehicle_id a sm_request_lines para cuando proyectos pidan vehiculos (MVP usa fallback texto libre)
 - OC con OCR: subir PDF de orden de compra, AI extrae datos a Supabase
 - WhatsApp: solicitudes por voz via WhatsApp Business API
 - Inventario: tracking de stock por ubicacion
 - Inspecciones: formularios KoboToolbox sincronizados
 - Facturacion: dashboard mensual con exportacion
 
+
+
+## LOGICA DE FILTROS (decisiones tomadas)
+
+Dropdown "Equipo" en solicitud (ingeniero):
+- Tabla: equipment
+- Excluir: equipment_type = Equipos de Ingenieria (ING)
+- Excluir: equipos de movilizacion (cabezales, remolques - esos son flota de Charris)
+- EQA = equipos menores (flag importante para reportes)
+- Incluir fallback "No esta en lista" siempre
+
+Dropdown "Vehiculo" en programacion (Charris):
+- Tabla: vehicles
+- Solo flota de transporte (pendiente definir con Astrid cuales exactamente)
+
+Dropdown "Desde/Hasta" en solicitud:
+- Tabla: locations
+- Incluir todas + fallback "No esta en lista" para proveedores no registrados
+
+Si proyecto pide vehiculo (ej: pickup para uso interno):
+- MVP: usa fallback texto libre en equipment_text
+- Post-MVP: agregar vehicle_id a sm_request_lines
 
 ## REFERENCIA RAPIDA
 
