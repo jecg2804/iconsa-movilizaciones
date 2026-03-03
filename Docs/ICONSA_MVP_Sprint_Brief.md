@@ -111,7 +111,7 @@ CREATE TABLE people (
   position TEXT,
   phone TEXT,
   email TEXT,
-  app_role TEXT DEFAULT 'pm',        -- 'admin', 'pm', 'logistica', 'campo', 'almacen'
+  app_role TEXT,                      -- NULL=sin acceso, 'admin', 'pm', 'logistica', 'campo', 'almacen'
   status TEXT DEFAULT 'Activo',
   city TEXT,
   supervisor_id UUID REFERENCES people(id),

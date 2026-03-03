@@ -98,7 +98,7 @@ Filtros app:
 | position | TEXT | Si | - | Cargo (pendiente) |
 | phone | TEXT | Si | - | Telefono |
 | email | TEXT | Si | - | Correo. Requerido para usuarios sistema |
-| app_role | TEXT | Si | - | admin, pm, logistica, campo, almacen |
+| app_role | TEXT | Si | NULL | admin, pm, logistica, campo, almacen (NULL = sin acceso al sistema) |
 | status | TEXT | Si | - | Activo, Inactivo |
 | city | TEXT | Si | - | Ciudad de residencia |
 | supervisor_id | UUID FK | Si | - | FK people. Jefe directo |
@@ -111,7 +111,7 @@ Filtros app:
 | created_at | TIMESTAMPTZ | No | now() | Creacion |
 | updated_at | TIMESTAMPTZ | No | now() | Modificacion (trigger) |
 
-Datos: 160 registros importados de employees_for_supabase.csv.
+Datos: 160 registros importados (app_role=NULL para todos, asignar manualmente a usuarios del sistema).
 Roles: admin=James, pm=ingenieros, logistica=Charris, campo=conductores, almacen=Yoseph
 
 ---
@@ -167,7 +167,7 @@ id UUID PK, code TEXT, description TEXT, created_at, updated_at. Datos: 11 regis
 
 ### TABLA: cost_codes
 
-id UUID PK, project_id FK projects, code TEXT, phase_description TEXT, full_code TEXT, created_at, updated_at.
+id UUID PK, project_id FK projects, phase_code TEXT NOT NULL, phase_description TEXT, full_code TEXT, created_at, updated_at.
 Datos: VACIO. Pendiente importar codcost.csv.
 
 ---
