@@ -1,10 +1,13 @@
 # ICONSA — Sprint Brief: MVP Movilizaciones
 ## Documento de Contexto para Desarrollo con Claude Code
 
-**Versión:** 1.0 | **Fecha:** Marzo 2026
-**Stack:** Next.js 14 (App Router) + TypeScript + Supabase + Tailwind CSS
-**Deadline:** 1 semana
+**Versión:** 2.0 | **Fecha:** 03 Marzo 2026
+**Stack:** Next.js (App Router) + TypeScript + Supabase + Tailwind CSS
 **Builder:** James Cucalón (con Claude Code)
+
+> **IMPORTANTE:** El schema completo y actualizado de la base de datos está en `PROJECT_STATUS.md`.
+> Las CREATE TABLE statements en este documento son referencia simplificada.
+> En caso de conflicto, PROJECT_STATUS.md es la fuente de verdad.
 
 ---
 
@@ -92,23 +95,34 @@ CREATE TABLE projects (
   code TEXT UNIQUE NOT NULL,        -- '25-506'
   name TEXT NOT NULL,                -- 'Muelle 14'
   manager TEXT,                      -- 'Franklin Marciaga'
-  status TEXT DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT now()
+  status TEXT DEFAULT 'Activo',
+  location TEXT,                     -- Ubicación física del proyecto
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Personas / Usuarios
 CREATE TABLE people (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  auth_id UUID REFERENCES auth.users(id),  -- Link to Supabase Auth
-  code TEXT,                         -- Spectrum code
-  name TEXT NOT NULL,
+  auth_id UUID REFERENCES auth.users(id),
+  code TEXT,                         -- Spectrum code (CUC166)
+  name TEXT,
   department TEXT,
   position TEXT,
   phone TEXT,
-  email TEXT UNIQUE,
-  app_role TEXT NOT NULL DEFAULT 'pm', -- 'admin', 'pm', 'logistica', 'campo', 'almacen'
-  status TEXT DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT now()
+  email TEXT,
+  app_role TEXT DEFAULT 'pm',        -- 'admin', 'pm', 'logistica', 'campo', 'almacen'
+  status TEXT DEFAULT 'Activo',
+  city TEXT,
+  supervisor_id UUID REFERENCES people(id),
+  cedula TEXT,
+  license_type TEXT,
+  license_expiry DATE,
+  hire_date DATE,
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()  -- trigger auto
 );
 
 -- Asignación persona-proyecto (qué proyectos puede ver cada PM)
@@ -119,41 +133,49 @@ CREATE TABLE person_projects (
   UNIQUE(person_id, project_id)
 );
 
--- Equipos (equipo pesado que se moviliza)
+-- Equipos Y Vehículos (TABLA UNIFICADA — antes eran dos tablas separadas)
+-- Vehículos = type_code IN ('VHL', 'VHP'). Equipos = el resto.
+-- trips.vehicle_id y trips.trailer_id apuntan a esta misma tabla.
 CREATE TABLE equipment (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  spectrum_code TEXT,                -- 'CRN001'
-  description TEXT NOT NULL,         -- 'Grúa 318 – Liebherr LTM 1060'
-  equipment_type TEXT,               -- 'Grúa', 'Excavadora', 'Generador'
+  spectrum_code TEXT,                -- 'GRU508', 'CAB930'
+  description TEXT,                  -- 'GRUA 318', 'CABEZAL 350 HP'
+  equipment_type TEXT,               -- 'Gruas', 'Vehiculos Pesados'
+  type_code TEXT,                    -- 'EQP','GRU','MAR','EQA','EQL','FND','TEC','ING','VHL','VHP'
   brand TEXT,
   model TEXT,
+  serial_number TEXT,
   year INTEGER,
-  status TEXT DEFAULT 'active',
+  status TEXT DEFAULT 'Activo',
   current_location TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Vehículos de transporte (cabezales, camiones, pick-ups)
-CREATE TABLE vehicles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  spectrum_code TEXT,                -- 'CAB930'
-  description TEXT NOT NULL,         -- 'Cabezal Mack 350HP'
-  vehicle_type TEXT,                 -- 'Cabezal', 'Plataforma', 'Camión Grúa', 'Pick-up'
-  brand TEXT,
-  model TEXT,
-  plate TEXT,
-  capacity TEXT,
-  status TEXT DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT now()
+  plate TEXT,                        -- Solo VHL/VHP
+  capacity TEXT,                     -- '350 HP', '50 TON'
+  inspection_type TEXT,              -- 'HOROMETRO', 'ODOMETRO', NULL
+  current_project_id UUID REFERENCES projects(id),
+  weight_class TEXT,
+  acquisition_type TEXT DEFAULT 'Propio',
+  last_inspection_date DATE,
+  next_inspection_due DATE,
+  meter_reading NUMERIC,
+  insurance_expiry DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()  -- trigger auto
 );
 
 -- Ubicaciones
 CREATE TABLE locations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE,         -- 'Taller Chilibre', 'Muelle 14'
-  location_type TEXT,                -- 'taller', 'proyecto', 'almacen', 'proveedor'
-  project_id UUID REFERENCES projects(id), -- Si es un proyecto
-  created_at TIMESTAMPTZ DEFAULT now()
+  name TEXT NOT NULL,
+  location_type TEXT,                -- 'Taller', 'Proyecto', 'Almacen', 'Proveedor', 'Oficina', 'Externo'
+  address TEXT,
+  project_id UUID REFERENCES projects(id),
+  is_active BOOLEAN DEFAULT true,
+  contact_name TEXT,
+  contact_phone TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Tarifas de movilización
@@ -162,7 +184,9 @@ CREATE TABLE mobilization_rates (
   code TEXT UNIQUE NOT NULL,         -- 'MVCB50'
   description TEXT NOT NULL,         -- 'Movilización Cama Baja 50'
   rate DECIMAL(10,2) NOT NULL,       -- 500.00
-  created_at TIMESTAMPTZ DEFAULT now()
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Unidades de medida
@@ -199,10 +223,10 @@ CREATE TABLE sm_requests (
   priority TEXT,
     -- 'Vencida', 'Urgente', 'Próxima', 'Normal' (auto-calculated)
   notes TEXT,
+  attachments JSONB,                 -- URLs de archivos adjuntos
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-
 -- Líneas de solicitud
 CREATE TABLE sm_request_lines (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -223,7 +247,12 @@ CREATE TABLE sm_request_lines (
     -- 'Pendiente', 'Programada', 'En Tránsito', 'Entregada', 'Parcial', 'Cancelada'
   qty_scheduled DECIMAL(10,2) DEFAULT 0,
   qty_delivered DECIMAL(10,2) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now()
+  from_text TEXT,                    -- Fallback: origen texto libre
+  to_text TEXT,                      -- Fallback: destino texto libre
+  equipment_text TEXT,               -- Fallback: equipo texto libre
+  unit_text TEXT,                    -- Fallback: unidad texto libre
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Viajes (movilizaciones programadas)
@@ -232,16 +261,20 @@ CREATE TABLE trips (
   trip_id TEXT UNIQUE NOT NULL,      -- 'MOV-2026-042' (auto-generated)
   scheduled_date DATE NOT NULL,
   driver_id UUID REFERENCES people(id),
-  vehicle_id UUID REFERENCES vehicles(id),
-  trailer_id UUID REFERENCES vehicles(id), -- nullable
+  vehicle_id UUID REFERENCES equipment(id),   -- UNIFICADO: apunta a equipment
+  trailer_id UUID REFERENCES equipment(id),   -- UNIFICADO: apunta a equipment
   rate_id UUID REFERENCES mobilization_rates(id),
   cost DECIMAL(10,2),
   att_permit BOOLEAN DEFAULT false,
   escort BOOLEAN DEFAULT false,
-  confirmation_code TEXT,            -- 4-digit code for delivery confirmation (auto-generated)
+  confirmation_code TEXT,            -- 4-digit code (auto-generated)
   notes TEXT,
   status TEXT NOT NULL DEFAULT 'Programado',
     -- 'Programado', 'En Ruta', 'Completado', 'Cancelado'
+  actual_departure TIMESTAMPTZ,
+  actual_arrival TIMESTAMPTZ,
+  route_summary TEXT,                -- 'Chilibre → Muelle 14'
+  is_external BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -455,8 +488,12 @@ almacen  | Yoseph Caballero    | almacen
 Coco, Bonilla, Monchi, Rafael, Pedro — todos con rol 'campo'
 ```
 
-### Equipos (importar desde Equipment.csv — ~392 registros)
-### Vehículos (importar desde Vehiculos.csv — 56 registros)
+### Equipos y Vehículos (377 — YA IMPORTADOS en tabla unificada `equipment`)
+Tipos: TEC:121, MAR:48, ING:39, VHL:38, FND:34, EQA:31, EQP:26, GRU:16, VHP:15, EQL:9
+
+### Empleados (160 — YA IMPORTADOS en tabla `people`)
+Pendiente: asignar app_role, email, department a ~15-20 usuarios del sistema.
+
 ### Códigos de Costo (importar desde codcost.csv — variable por proyecto)
 
 ---
@@ -542,15 +579,15 @@ Gray:    #5A6272 (secondary text)
 ## 9. ARCHIVOS DE REFERENCIA
 
 En el proyecto hay archivos CSV con datos reales para importar:
-- `Equipment.csv` — ~392 equipos de Spectrum
-- `Vehiculos.csv` — 56 vehículos de transporte
-- `Proyectos.csv` — 4 proyectos activos
-- `TarifasMov.csv` — 14 tarifas de movilización
-- `Employee_Listing.csv` — 161 empleados (necesita limpieza)
-- `codcost.csv` — Códigos de costo por proyecto
+- `equipment_for_supabase.csv` — 377 equipos+vehículos unificados (YA IMPORTADO)
+- `employees_for_supabase.csv` — 160 empleados (YA IMPORTADO)
+- `Proyectos.csv` — 4 proyectos activos (YA IMPORTADO)
+- `TarifasMov.csv` — 14 tarifas de movilización (YA IMPORTADO)
+- `codcost.csv` — Códigos de costo por proyecto (PENDIENTE)
 
-Y el Feature Specification completo en:
-- `ICONSA_Feature_Specification_v1.docx` — documento formal con todas las reglas de negocio, estados, transiciones, y campos detallados. Referencia autoritativa para cualquier duda.
+Documentación clave:
+- `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo, estado de datos, decisiones.
+- `ICONSA_Feature_Specification_v2.docx` — documento formal con reglas de negocio, estados, transiciones.
 
 ---
 
@@ -566,4 +603,4 @@ El MVP está terminado cuando:
 7. ✅ El dashboard muestra KPIs básicos de solicitudes y viajes
 8. ✅ Los estados se actualizan en cascada automáticamente
 9. ✅ Funciona en celular (responsive)
-10. ✅ Datos reales de ICONSA precargados (proyectos, equipos, vehículos, tarifas)
+10. ✅ Datos reales de ICONSA precargados (proyectos, equipos, empleados, tarifas)

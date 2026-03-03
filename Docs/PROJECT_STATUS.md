@@ -3,155 +3,358 @@
 Ultima actualizacion: 2026-03-03
 
 Actualizar este archivo despues de CADA paso completado.
+Este documento es la UNICA fuente de verdad para el estado del schema, decisiones, y progreso.
 
+---
 
 ## INFRAESTRUCTURA
 
-Supabase:
-- [x] Proyecto creado (Oregon us-west-2)
-- [x] URL: https://bzeoszympkkicwlfdtcn.supabase.co
+| Componente | Estado | Detalle |
+|-----------|--------|---------|
+| Supabase | Activo | https://bzeoszympkkicwlfdtcn.supabase.co (Oregon us-west-2) |
+| GitHub | Activo | jecg2804/iconsa-movilizaciones (privado) |
+| Next.js | Inicializado | v16.1.6, localhost:3000, .env.local configurado |
+| Supabase Auth | PENDIENTE | Aun no configurado |
+| Supabase Storage | PENDIENTE | Para attachments de solicitudes |
 
-GitHub:
-- [x] Repo: jecg2804/iconsa-movilizaciones (privado)
-- [x] Primer push completado
+Documentacion en repo (docs/):
+- [x] README.md (DESACTUALIZADO - pendiente update)
+- [x] ICONSA_Feature_Specification_v2.docx
+- [x] ICONSA_MVP_Sprint_Brief.md (DESACTUALIZADO - pendiente update)
+- [x] ICONSA_Guia_Operativa.md
+- [x] PROJECT_STATUS.md (este archivo)
 
-VS Code:
-- [x] Next.js 16.1.6 inicializado
-- [x] .env.local con credenciales Supabase
-- [x] localhost:3000 funcionando (pagina default Next.js)
+---
 
-Documentacion:
-- [x] README.md en raiz
-- [x] docs/ICONSA_Feature_Specification_v2.docx
-- [x] docs/ICONSA_MVP_Sprint_Brief.md
-- [x] docs/ICONSA_Guia_Operativa.md
-- [x] docs/PROJECT_STATUS.md (este archivo)
+## SCHEMA COMPLETO DE BASE DE DATOS
 
+### Convenciones globales
+- Todos los IDs son UUID con gen_random_uuid()
+- Todas las tablas tienen created_at TIMESTAMPTZ DEFAULT now()
+- Todas las tablas (excepto trip_events y sequences) tienen updated_at TIMESTAMPTZ con trigger automatico
+- RLS habilitado en TODAS las tablas con politicas de desarrollo
+- 10 indices de performance en columnas frecuentemente filtradas
 
-## BASE DE DATOS - TABLAS MAESTRAS
-
-- [x] projects - 4 registros (ASTIBAL, Paraiso, Muelle 14, Costa Norte)
-- [x] people - 9 registros de prueba
-- [x] person_projects - 2 registros (Edward a Muelle 14 y Paraiso)
-- [x] equipment - tabla creada, VACIA (pendiente ~392 registros)
-- [x] vehicles - tabla creada, VACIA (pendiente ~56 registros)
-- [x] locations - 9 registros (6 originales + Gamboa, Melones, Oficina Central)
-- [x] mobilization_rates - 14 registros, completo
-- [x] units - 11 registros, completo
-- [x] cost_codes - tabla creada, VACIA (pendiente codcost.csv)
-- [x] sequences - tabla creada para auto-IDs
+### Trigger global: update_updated_at()
+Se ejecuta BEFORE UPDATE en todas las tablas que tienen updated_at.
+Automaticamente setea NEW.updated_at = now().
 
 
-## BASE DE DATOS - TABLAS TRANSACCIONALES
+---
 
-- [x] sm_requests - creada, vacia (incluye columna attachments JSONB)
-- [x] sm_request_lines - creada, vacia (incluye fallbacks: from_text, to_text, equipment_text, unit_text)
-- [x] trips - creada, vacia
-- [x] trip_line_assignments - creada, vacia
-- [x] trip_events - creada, vacia
-- [x] suggestions - creada, vacia
+### TABLA: equipment (UNIFICADA - equipos + vehiculos)
 
+Antes existia tabla separada vehicles. Se unifico. Vehiculos = type_code VHL/VHP.
+Principio: misma estructura = misma tabla, clasificacion por columnas, filtrado en codigo.
 
-## BASE DE DATOS - TRIGGERS
+| Columna | Tipo | Nullable | Default | Descripcion |
+|---------|------|----------|---------|-------------|
+| id | UUID PK | No | gen_random_uuid() | Identificador unico |
+| spectrum_code | TEXT | Si | - | Codigo Spectrum (GRU508, CAB930) |
+| description | TEXT | Si | - | Nombre/descripcion |
+| equipment_type | TEXT | Si | - | Nombre largo (Equipo Pesado, Gruas, Vehiculos Livianos) |
+| type_code | TEXT | Si | - | Codigo corto: EQP, GRU, MAR, EQA, EQL, FND, TEC, ING, VHL, VHP |
+| brand | TEXT | Si | - | Marca |
+| model | TEXT | Si | - | Modelo |
+| serial_number | TEXT | Si | - | Numero de serie |
+| year | INTEGER | Si | - | Ano fabricacion (4 digitos) |
+| status | TEXT | Si | - | Activo, Inactivo |
+| current_location | TEXT | Si | - | Ubicacion actual (texto libre) |
+| plate | TEXT | Si | - | Placa (solo VHL/VHP) |
+| capacity | TEXT | Si | - | Capacidad (350 HP, 50 TON) |
+| inspection_type | TEXT | Si | - | HOROMETRO, ODOMETRO, o NULL |
+| current_project_id | UUID FK | Si | - | FK projects. Donde esta AHORA |
+| weight_class | TEXT | Si | - | Clase de peso. Para permisos ATT |
+| acquisition_type | TEXT | Si | Propio | Propio, Alquilado, Leasing |
+| last_inspection_date | DATE | Si | - | Ultima inspeccion |
+| next_inspection_due | DATE | Si | - | Proxima inspeccion |
+| meter_reading | NUMERIC | Si | - | Lectura horometro/odometro |
+| insurance_expiry | DATE | Si | - | Vencimiento seguro |
+| notes | TEXT | Si | - | Notas internas |
+| created_at | TIMESTAMPTZ | No | now() | Creacion |
+| updated_at | TIMESTAMPTZ | No | now() | Ultima modificacion (trigger) |
 
-- [x] generate_request_id() - auto-genera 25-506-SM-001
-- [x] generate_trip_id() - auto-genera MOV-2026-001 + codigo 4 digitos
-- [x] calculate_priority() - Vencida/Urgente/Proxima/Normal
-- [x] cascade_line_status() - actualiza header segun lineas
+Datos: 377 registros importados registros (equipment_for_supabase.csv)
+Distribucion: TEC:121 MAR:48 ING:39 VHL:38 FND:34 EQA:31 EQP:26 GRU:16 VHP:15 EQL:9
+Los 14 MOV de Spectrum NO van aqui, ya estan en mobilization_rates.
+FKs entrantes: sm_request_lines.equipment_id, trips.vehicle_id, trips.trailer_id
 
+Filtros app:
+- Solicitud (ingeniero): type_code NOT IN ('ING','VHL','VHP','TEC') + fallback texto
+- Vehiculo (Charris): type_code IN ('VHL','VHP') - pendiente refinar con Astrid
+- EQA = equipos menores (distincion para reporteria)
 
-## BASE DE DATOS - COMPLETADO (auditoria 2026-03-03)
+---
 
-- [x] Columnas fallback: from_text, to_text, equipment_text, unit_text
-- [x] Columna attachments JSONB en sm_requests
-- [x] Fix sequences UNIQUE constraint para NULL en trips
-- [x] Ubicaciones adicionales: Gamboa, Melones, Oficina Central
-- [x] 10 indices de performance creados
+### TABLA: people
 
+| Columna | Tipo | Nullable | Default | Descripcion |
+|---------|------|----------|---------|-------------|
+| id | UUID PK | No | gen_random_uuid() | Identificador unico |
+| auth_id | UUID | Si | - | FK Supabase Auth |
+| code | TEXT | Si | - | Codigo Spectrum (CUC166) |
+| name | TEXT | Si | - | Nombre completo |
+| department | TEXT | Si | - | Departamento (pendiente) |
+| position | TEXT | Si | - | Cargo (pendiente) |
+| phone | TEXT | Si | - | Telefono |
+| email | TEXT | Si | - | Correo. Requerido para usuarios sistema |
+| app_role | TEXT | Si | - | admin, pm, logistica, campo, almacen |
+| status | TEXT | Si | - | Activo, Inactivo |
+| city | TEXT | Si | - | Ciudad de residencia |
+| supervisor_id | UUID FK | Si | - | FK people. Jefe directo |
+| cedula | TEXT | Si | - | Cedula Panama |
+| license_type | TEXT | Si | - | Tipo licencia conducir |
+| license_expiry | DATE | Si | - | Vencimiento licencia |
+| hire_date | DATE | Si | - | Fecha contratacion |
+| emergency_contact_name | TEXT | Si | - | Contacto emergencia |
+| emergency_contact_phone | TEXT | Si | - | Tel emergencia |
+| created_at | TIMESTAMPTZ | No | now() | Creacion |
+| updated_at | TIMESTAMPTZ | No | now() | Modificacion (trigger) |
 
-## BASE DE DATOS - PENDIENTE
+Datos: 160 registros importados de employees_for_supabase.csv.
+Roles: admin=James, pm=ingenieros, logistica=Charris, campo=conductores, almacen=Yoseph
 
-- [x] RLS (Row Level Security) - habilitado con politicas de desarrollo
-- [ ] Importar Equipment.csv (equipos, excluyendo vehiculos que ya estan separados)
-- [ ] Importar Vehiculos.csv (56 registros, ya separados del Equipment.csv)
-- [ ] Importar codcost.csv (varia por proyecto, empezar con Muelle 14 y Paraiso)
-- [ ] Supabase Auth - setup de autenticacion
+---
 
+### TABLA: projects
 
-## APLICACION NEXT.JS - PENDIENTE
+| Columna | Tipo | Nullable | Default | Descripcion |
+|---------|------|----------|---------|-------------|
+| id | UUID PK | No | gen_random_uuid() | ID |
+| code | TEXT UNIQUE | No | - | Codigo (25-506) |
+| name | TEXT | No | - | Nombre |
+| manager | TEXT | Si | - | Gerente |
+| status | TEXT | Si | - | Activo, Completado, Suspendido |
+| start_date | DATE | Si | - | Inicio |
+| end_date | DATE | Si | - | Fin estimado |
+| notes | TEXT | Si | - | Notas |
+| billing_code | TEXT | Si | - | Codigo facturacion |
+| budget | NUMERIC | Si | - | Presupuesto |
+| client | TEXT | Si | - | Cliente |
+| location | TEXT | Si | - | Ubicacion fisica del proyecto |
+| created_at | TIMESTAMPTZ | No | now() | Creacion |
+| updated_at | TIMESTAMPTZ | No | now() | Modificacion (trigger) |
 
-- [ ] Cliente Supabase (src/lib/supabase.ts)
-- [ ] Tipos TypeScript (src/types/database.ts)
-- [ ] Layout con navegacion
-- [ ] Login
-- [ ] Dashboard
-- [ ] Mis Solicitudes (lista filtrable)
-- [ ] Nueva/Detalle Solicitud (formulario header + lineas + fallbacks)
-- [ ] Programacion/Backlog (vista Charris)
-- [ ] Detalle Viaje
-- [ ] Mis Viajes (vista conductor)
-- [ ] Nota de Entrega
+Datos: 4 registros: ASTIBAL (25-504), Paraiso (25-505), Muelle 14 (25-506), Costa Norte (24-404)
 
+---
 
-## DECISIONES PENDIENTES (James consultar en ICONSA)
+### TABLA: person_projects (asignacion persona-proyecto)
 
-Astrid (clasificacion de equipos):
-- [ ] Confirmar: EQA = equipos menores. No mostrar ING ni MOV en dropdown de solicitudes
-- [ ] Definir cuales vehiculos son "flota de transporte" (Charris) vs "vehiculos de proyecto"
-- [ ] Categorias CSI para materiales (documento ya agregado al proyecto)
+id UUID PK, person_id FK people, project_id FK projects, role TEXT, is_active BOOLEAN DEFAULT true, created_at, updated_at.
 
-Charris (logistica):
-- [ ] Confirmar su flota: cuales cabezales, plataformas, remolques usa para movilizaciones
-- [ ] Ubicaciones adicionales frecuentes (proveedores con sucursales: Cochez Colon, Cochez Mananitas, etc.)
+---
 
-Ingenieros de proyecto:
-- [ ] Quienes exactamente crean solicitudes (nombres, correos)
-- [ ] Confirmar: a veces piden vehiculos (pickup, etc.) para uso interno en proyecto
+### TABLA: locations
 
-General:
-- [ ] Proyectos adicionales activos mas alla de los 4 actuales
-- [ ] Codigos de costo para ASTIBAL y Costa Norte
-- [ ] Departamentos y roles del Employee_Listing (161 empleados - cuales necesitan acceso)
-- [ ] Metricas para reportes semanales de Valderrama
+id UUID PK, name TEXT NOT NULL, location_type TEXT (Taller/Almacen/Proyecto/Proveedor/Oficina/Externo), address TEXT, project_id FK projects, is_active BOOLEAN, contact_name TEXT, contact_phone TEXT, notes TEXT, created_at, updated_at.
+Datos: 9 registros. Pendiente agregar proveedores frecuentes.
 
+---
 
-## IDEAS PARA FASES FUTURAS (no MVP)
+### TABLA: mobilization_rates
 
-- Solicitud de vehiculos: agregar vehicle_id a sm_request_lines para cuando proyectos pidan vehiculos (MVP usa fallback texto libre)
-- OC con OCR: subir PDF de orden de compra, AI extrae datos a Supabase
-- WhatsApp: solicitudes por voz via WhatsApp Business API
-- Inventario: tracking de stock por ubicacion
-- Inspecciones: formularios KoboToolbox sincronizados
-- Facturacion: dashboard mensual con exportacion
+id UUID PK, code TEXT, description TEXT, rate NUMERIC, is_active BOOLEAN DEFAULT true, created_at, updated_at.
+Datos: 14 registros completos.
 
+---
 
+### TABLA: units
 
-## LOGICA DE FILTROS (decisiones tomadas)
+id UUID PK, code TEXT, description TEXT, created_at, updated_at. Datos: 11 registros.
 
-Dropdown "Equipo" en solicitud (ingeniero):
-- Tabla: equipment
-- Excluir: equipment_type = Equipos de Ingenieria (ING)
-- Excluir: equipos de movilizacion (cabezales, remolques - esos son flota de Charris)
-- EQA = equipos menores (flag importante para reportes)
-- Incluir fallback "No esta en lista" siempre
+---
 
-Dropdown "Vehiculo" en programacion (Charris):
-- Tabla: vehicles
-- Solo flota de transporte (pendiente definir con Astrid cuales exactamente)
+### TABLA: cost_codes
 
-Dropdown "Desde/Hasta" en solicitud:
-- Tabla: locations
-- Incluir todas + fallback "No esta en lista" para proveedores no registrados
+id UUID PK, project_id FK projects, code TEXT, phase_description TEXT, full_code TEXT, created_at, updated_at.
+Datos: VACIO. Pendiente importar codcost.csv.
 
-Si proyecto pide vehiculo (ej: pickup para uso interno):
-- MVP: usa fallback texto libre en equipment_text
-- Post-MVP: agregar vehicle_id a sm_request_lines
+---
+
+### TABLA: sequences (interna)
+
+seq_type TEXT, project_id FK projects (nullable), next_number INTEGER.
+UNIQUE(seq_type, COALESCE(project_id, UUID_CERO)). Auto-gestionada.
+
+---
+
+## TABLAS TRANSACCIONALES
+
+### TABLA: sm_requests (solicitudes - header)
+
+| Columna | Tipo | Default | Descripcion |
+|---------|------|---------|-------------|
+| id | UUID PK | gen_random_uuid() | ID |
+| request_id | TEXT UNIQUE | auto | 25-506-SM-001 |
+| project_id | UUID FK | - | FK projects |
+| requester_id | UUID FK | - | FK people |
+| date_required | DATE | - | Fecha requerida |
+| date_created | TIMESTAMPTZ | now() | Cuando se creo |
+| status | TEXT | Borrador | Borrador/Enviada/En Proceso/Completada/Parcial/Cancelada |
+| priority | TEXT | auto | Vencida/Urgente/Proxima/Normal |
+| approved_by | UUID FK | - | FK people |
+| notes | TEXT | - | Notas |
+| attachments | JSONB | - | URLs archivos adjuntos |
+| created_at | TIMESTAMPTZ | now() | Creacion |
+| updated_at | TIMESTAMPTZ | now() | Modificacion (trigger) |
+
+Triggers: generate_request_id(), calculate_priority(), update_updated_at()
+
+---
+
+### TABLA: sm_request_lines (lineas de solicitud)
+
+| Columna | Tipo | Default | Descripcion |
+|---------|------|---------|-------------|
+| id | UUID PK | gen_random_uuid() | ID |
+| request_id | UUID FK | - | FK sm_requests (ON DELETE CASCADE) |
+| line_number | INTEGER | - | Numero de linea |
+| line_type | TEXT | - | Equipo o Material |
+| equipment_id | UUID FK nullable | - | FK equipment (si esta en lista) |
+| description | TEXT | - | Descripcion de lo solicitado |
+| from_location_id | UUID FK nullable | - | FK locations (origen) |
+| to_location_id | UUID FK nullable | - | FK locations (destino) |
+| quantity | DECIMAL(10,2) | 1 | Cantidad solicitada |
+| unit_id | UUID FK nullable | - | FK units |
+| cost_code_id | UUID FK nullable | - | FK cost_codes |
+| category | TEXT | - | Categoria del item |
+| po_reference | TEXT | - | Referencia OC (texto libre MVP) |
+| notes | TEXT | - | Notas de la linea |
+| status | TEXT | Pendiente | Pendiente/Programada/En Transito/Entregada/Parcial/Cancelada |
+| qty_scheduled | DECIMAL(10,2) | 0 | Cantidad programada en viajes |
+| qty_delivered | DECIMAL(10,2) | 0 | Cantidad entregada confirmada |
+| from_text | TEXT | - | Fallback: origen texto libre |
+| to_text | TEXT | - | Fallback: destino texto libre |
+| equipment_text | TEXT | - | Fallback: equipo texto libre |
+| unit_text | TEXT | - | Fallback: unidad texto libre |
+| created_at | TIMESTAMPTZ | now() | Creacion |
+| updated_at | TIMESTAMPTZ | now() | Modificacion |
+
+Trigger: cascade_request_status() - actualiza sm_requests.status basado en estados de lineas.
+
+---
+
+### TABLA: trips (viajes programados)
+
+id, trip_id (auto MOV-2026-001), scheduled_date DATE, driver_id FK people, vehicle_id FK equipment, trailer_id FK equipment, rate_id FK mobilization_rates, cost DECIMAL, att_permit BOOLEAN, escort BOOLEAN, confirmation_code TEXT (auto 4 digitos), notes TEXT, status TEXT DEFAULT Programado (Programado/En Ruta/Completado/Cancelado), actual_departure TIMESTAMPTZ, actual_arrival TIMESTAMPTZ, route_summary TEXT, is_external BOOLEAN DEFAULT false, created_at, updated_at.
+Trigger: generate_trip_id() + confirmation_code
+
+---
+
+### TABLA: trip_line_assignments (pivote many-to-many)
+
+id, trip_id FK trips (CASCADE), request_line_id FK sm_request_lines, quantity_assigned DECIMAL, created_at, updated_at.
+Un viaje lleva lineas de MULTIPLES solicitudes. Una linea puede dividirse en MULTIPLES viajes.
+
+---
+
+### TABLA: trip_events (eventos - INMUTABLES)
+
+id, trip_id FK trips, event_type TEXT (Salida/Llegada/Entrega/Retorno/Incidencia), event_timestamp TIMESTAMPTZ, location TEXT, registered_by FK people, confirmation_code_used TEXT, received_by_name TEXT, notes TEXT, created_at.
+NO tiene updated_at. Eventos son inmutables una vez registrados.
+
+---
+
+### TABLA: suggestions (fallbacks)
+
+id, table_name TEXT, suggested_value TEXT, suggested_by FK people, status TEXT (pendiente/aprobada/rechazada), reviewed_by FK people, created_at.
+
+---
+
+## TRIGGERS Y FUNCIONES
+
+| Funcion | Tabla | Evento | Descripcion |
+|---------|-------|--------|-------------|
+| update_updated_at() | Todas (excepto trip_events, sequences) | BEFORE UPDATE | Setea updated_at = now() |
+| generate_request_id() | sm_requests | BEFORE INSERT | Auto {project_code}-SM-### |
+| generate_trip_id() | trips | BEFORE INSERT | Auto MOV-YYYY-### + codigo 4 digitos |
+| calculate_priority() | sm_requests | BEFORE INSERT/UPDATE date_required | Vencida/Urgente/Proxima/Normal |
+| cascade_request_status() | sm_request_lines | AFTER UPDATE | Actualiza header basado en lineas |
+
+---
+
+## SEGURIDAD RLS
+
+RLS en TODAS las tablas. Dev: lectura publica masters, full transaccionales. Prod: pm=sus proyectos, campo=sus viajes, logistica=todo.
+
+## INDICES
+
+sm_requests: project_id, status, requester_id. sm_request_lines: request_id, status, equipment_id. trips: scheduled_date, driver_id, status. trip_line_assignments: trip_id.
+
+---
+
+## DATOS CARGADOS vs PENDIENTES
+
+| Tabla | Estado | Registros |
+|-------|--------|----------|
+| projects | COMPLETO | 4 |
+| locations | COMPLETO (base) | 9 |
+| mobilization_rates | COMPLETO | 14 |
+| units | COMPLETO | 11 |
+| equipment | COMPLETO | 377 |
+| people | COMPLETO | 160 |
+| cost_codes | PENDIENTE | 0 |
+| Transaccionales | VACIO | Se llenan con app |
+
+---
+
+## APP NEXT.JS - PANTALLAS
+
+| Ruta | Actor | Estado |
+|------|-------|--------|
+| / | Todos | PENDIENTE (login) |
+| /dashboard | Todos (varia por rol) | PENDIENTE |
+| /solicitudes | pm, admin, logistica | PENDIENTE |
+| /solicitudes/nueva | pm, admin | PENDIENTE |
+| /solicitudes/[id] | pm, admin, logistica | PENDIENTE |
+| /programacion | logistica, admin | PENDIENTE |
+| /programacion/viaje/nuevo | logistica, admin | PENDIENTE |
+| /programacion/viaje/[id] | logistica, admin | PENDIENTE |
+| /programacion/calendario | logistica, admin, pm(ro) | PENDIENTE |
+| /mis-viajes | campo | PENDIENTE |
+| /mis-viajes/[id] | campo | PENDIENTE |
+| /admin/masters | admin | PENDIENTE |
+
+---
+
+## DECISIONES PENDIENTES
+
+Astrid: EQA=menores, no ING dropdown, flota transporte vs proyecto, CSI.
+Charris: flota exacta, ubicaciones proveedores.
+Ingenieros: quienes crean solicitudes, vehiculos uso interno, movimientos internos.
+General: proyectos adicionales, codigos costo, empleados con acceso, metricas Valderrama.
+
+---
+
+## FASES FUTURAS (no MVP)
+
+Movilizaciones: solicitud vehiculos, movimientos internos, nota entrega PDF, facturacion.
+Chilibre: combustible, inspecciones, mantenimiento, ordenes trabajo, GPS, planillas.
+Equipos: tracking uso/tiempo/ubicacion por proyecto, horometros, alertas vencimiento.
+Integraciones: OC OCR, WhatsApp voz, Spectrum sync, inventario, Metabase.
+
+---
+
+## LOGICA DE FILTROS
+
+Principio: UNA tabla equipment, clasificacion por type_code, filtrado en queries.
+Solicitud (ingeniero): type_code NOT IN (ING,VHL,VHP,TEC) + fallback texto.
+Vehiculo (Charris): type_code IN (VHL,VHP) pendiente refinar con Astrid.
+Remolque: filtrar por descripcion CAMA/PLATAFORMA/REMOLQUE.
+Desde/Hasta: tabla locations + fallback. Vehiculo interno: equipment_text (MVP).
+
+---
 
 ## REFERENCIA RAPIDA
 
-- Demo: demo_v8.jsx
-- Feature Spec: docs/ICONSA_Feature_Specification_v2.docx
-- Sprint Brief: docs/ICONSA_MVP_Sprint_Brief.md
-- SOP: IC-LOG-PO-06
-- Repo: https://github.com/jecg2804/iconsa-movilizaciones
-- Supabase: https://bzeoszympkkicwlfdtcn.supabase.co
+| Recurso | Ubicacion |
+|---------|----------|
+| Demo UI | demo_v8.jsx |
+| Feature Spec | docs/ICONSA_Feature_Specification_v2.docx |
+| Sprint Brief | docs/ICONSA_MVP_Sprint_Brief.md |
+| SOP | IC-LOG-PO-06 |
+| GitHub | github.com/jecg2804/iconsa-movilizaciones |
+| Supabase | bzeoszympkkicwlfdtcn.supabase.co |
+| CSV Equipment | equipment_for_supabase.csv (377) |
+| CSV Employees | employees_for_supabase.csv (160) |
