@@ -1,6 +1,6 @@
 # ICONSA Movilizaciones - Estado del Proyecto
 
-Ultima actualizacion: 2026-03-03
+Ultima actualizacion: 2026-03-04 (toolstack actualizado: NestJS backend, n8n eliminado)
 
 Actualizar este archivo despues de CADA paso completado.
 Este documento es la UNICA fuente de verdad para el estado del schema, decisiones, y progreso.
@@ -12,15 +12,17 @@ Este documento es la UNICA fuente de verdad para el estado del schema, decisione
 | Componente | Estado | Detalle |
 |-----------|--------|---------|
 | Supabase | Activo | https://bzeoszympkkicwlfdtcn.supabase.co (Oregon us-west-2) |
-| GitHub | Activo | jecg2804/iconsa-movilizaciones (privado) |
-| Next.js | Inicializado | v16.1.6, localhost:3000, .env.local configurado |
+| GitHub | Activo | ICONSA-Solutions/movimientOS (org privada) |
+| Next.js (frontend) | Inicializado | v16.1.6, localhost:3000, .env.local configurado |
+| NestJS (backend) | PENDIENTE | Backend API — deploy target: Railway/Fly.io |
 | Supabase Auth | PENDIENTE | Aun no configurado |
 | Supabase Storage | PENDIENTE | Para attachments de solicitudes |
 
 Documentacion en repo (docs/):
-- [x] README.md (DESACTUALIZADO - pendiente update)
-- [x] ICONSA_Feature_Specification_v2.docx
-- [x] ICONSA_MVP_Sprint_Brief.md (DESACTUALIZADO - pendiente update)
+- [x] README.md (actualizado 2026-03-04)
+- [x] ICONSA_Feature_Specification_v2.md (v2.1, markdown, actualizado 2026-03-04)
+- [x] ICONSA_MVP_Sprint_Brief.md (v3.0, actualizado 2026-03-04)
+- [x] BUILD_PLAN.md (actualizado 2026-03-04)
 - [x] ICONSA_Guia_Operativa.md
 - [x] PROJECT_STATUS.md (este archivo)
 
@@ -276,7 +278,7 @@ id, table_name TEXT, suggested_value TEXT, suggested_by FK people, status TEXT (
 
 ## SEGURIDAD RLS
 
-RLS en TODAS las tablas. Dev: lectura publica masters, full transaccionales. Prod: pm=sus proyectos, campo=sus viajes, logistica=todo.
+RLS en TODAS las tablas. Dev: lectura publica masters, full transaccionales. Prod: pm=ve todas, crea/edita sus proyectos. campo=sus viajes. logistica=todo.
 
 ## INDICES
 
@@ -304,7 +306,7 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | Ruta | Actor | Estado |
 |------|-------|--------|
 | / | Todos | PENDIENTE (login) |
-| /dashboard | Todos (varia por rol) | PENDIENTE |
+| /dashboard | Todos (metricas globales) | PENDIENTE |
 | /solicitudes | pm, admin, logistica | PENDIENTE |
 | /solicitudes/nueva | pm, admin | PENDIENTE |
 | /solicitudes/[id] | pm, admin, logistica | PENDIENTE |
@@ -312,11 +314,24 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | /programacion/viaje/nuevo | logistica, admin | PENDIENTE |
 | /programacion/viaje/[id] | logistica, admin | PENDIENTE |
 | /programacion/calendario | logistica, admin, pm(ro) | PENDIENTE |
-| /mis-viajes | campo | PENDIENTE |
-| /mis-viajes/[id] | campo | PENDIENTE |
+| /mis-viajes | logistica, campo, almacen, admin | PENDIENTE |
+| /mis-viajes/[id] | logistica, campo, almacen, admin | PENDIENTE |
 | /admin/masters | admin | PENDIENTE |
 
 ---
+
+## DECISIONES TOMADAS (Auditoria 2026-03-04)
+
+1. PM ve TODAS las solicitudes (filtro default=su proyecto). CREA y EDITA solo para SUS proyectos.
+2. Enviada: editar header y lineas existentes, NO agregar lineas nuevas. Solo Borrador permite agregar.
+3. SI se puede eliminar linea programada — con warning de confirmacion.
+4. Cancelar viaje libera lineas de vuelta al backlog (Pendiente).
+5. Eventos: cualquier logistica/campo/almacen puede registrar. Sin restriccion por driver_id en MVP.
+6. Dashboard: metricas globales, sin restriccion por rol.
+7. Warning de lineas duplicadas: visual, no bloqueante. Solo al agregar en Borrador.
+8. Notificaciones email via NestJS incluidas en MVP.
+9. Bitacora de Movilizaciones: Fase 2, NO MVP.
+10. Edicion en estados En Proceso/Parcial: TBD con feedback de usuarios.
 
 ## DECISIONES PENDIENTES
 
@@ -324,15 +339,15 @@ Astrid: EQA=menores, no ING dropdown, flota transporte vs proyecto, CSI.
 Charris: flota exacta, ubicaciones proveedores.
 Ingenieros: quienes crean solicitudes, vehiculos uso interno, movimientos internos.
 General: proyectos adicionales, codigos costo, empleados con acceso, metricas Valderrama.
+Edicion en estados En Proceso/Parcial: definir con feedback de usuarios.
 
 ---
 
 ## FASES FUTURAS (no MVP)
 
-Movilizaciones: solicitud vehiculos, movimientos internos, nota entrega PDF, facturacion.
-Chilibre: combustible, inspecciones, mantenimiento, ordenes trabajo, GPS, planillas.
-Equipos: tracking uso/tiempo/ubicacion por proyecto, horometros, alertas vencimiento.
-Integraciones: OC OCR, WhatsApp voz, Spectrum sync, inventario, Metabase.
+Fase 2: Facturacion mensual, Nota de Entrega PDF, Bitacora de Movilizaciones (vista filtrable), Inspecciones de equipos, Two-Week Look-Ahead, Integracion OC, Categorias CSI, Accesorios de equipos, GPS flota.
+Fase 3: Inventario/Almacen, WhatsApp, Metabase dashboards, Spectrum lectura, QR equipos, PWA offline.
+Futuro: Combustible, mantenimiento, ordenes trabajo, planillas, compras, herramientas, equipos menores, vehiculos livianos.
 
 ---
 
@@ -351,10 +366,11 @@ Desde/Hasta: tabla locations + fallback. Vehiculo interno: equipment_text (MVP).
 | Recurso | Ubicacion |
 |---------|----------|
 | Demo UI | demo_v8.jsx |
-| Feature Spec | docs/ICONSA_Feature_Specification_v2.docx |
+| Feature Spec | docs/ICONSA_Feature_Specification_v2.md |
 | Sprint Brief | docs/ICONSA_MVP_Sprint_Brief.md |
+| Build Plan | docs/BUILD_PLAN.md |
 | SOP | IC-LOG-PO-06 |
-| GitHub | github.com/jecg2804/iconsa-movilizaciones |
+| GitHub | github.com/ICONSA-Solutions/movimientOS |
 | Supabase | bzeoszympkkicwlfdtcn.supabase.co |
 | CSV Equipment | equipment_for_supabase.csv (377) |
 | CSV Employees | employees_for_supabase.csv (160) |

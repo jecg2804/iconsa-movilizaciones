@@ -1,8 +1,8 @@
 # ICONSA — Sprint Brief: MVP Movilizaciones
 ## Documento de Contexto para Desarrollo con Claude Code
 
-**Versión:** 2.0 | **Fecha:** 03 Marzo 2026
-**Stack:** Next.js (App Router) + TypeScript + Supabase + Tailwind CSS
+**Versión:** 3.0 | **Fecha:** 04 Marzo 2026
+**Stack:** Next.js (frontend/Vercel) + NestJS (backend/Railway) + Supabase (DB/Auth) + TypeScript + Tailwind CSS
 **Builder:** James Cucalón (con Claude Code)
 
 > **IMPORTANTE:** El schema completo y actualizado de la base de datos está en `PROJECT_STATUS.md`.
@@ -34,13 +34,21 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 - Idioma: 100% español
 
 ### Feature 2: Solicitud de Movilización
-- **Actor:** Ingeniero de Proyecto
+- **Actor:** Ingeniero de Proyecto (pm)
 - **Flujo:** Entrar → Escoger proyecto → Crear solicitud → Agregar líneas → Enviar
 - **Header:** ID auto (25-506-SM-023), proyecto, solicitante, fecha requerida, notas, estado
 - **Líneas:** tipo (Equipo/Material), descripción, desde/hasta, cantidad, unidad, código de costo, notas
 - **Estados del header:** Borrador → Enviada → En Proceso → Completada / Parcial / Cancelada
 - **Estados de línea:** Pendiente → Programada → En Tránsito → Entregada / Parcial / Cancelada
-- PM solo ve solicitudes de SUS proyectos. Admin y Logística ven TODAS.
+- **Visibilidad:** PM ve TODAS las solicitudes de TODOS los proyectos (filtro default = su proyecto, pero puede cambiarlo). Esto permite coordinación cross-proyecto.
+- **Creación:** PM solo puede CREAR solicitudes para SUS proyectos asignados (via person_projects).
+- **Edición:** PM solo puede EDITAR solicitudes de SUS proyectos asignados. Logística y admin editan cualquiera.
+- **Reglas de edición por estado:**
+  - Borrador: todo editable, agregar/eliminar líneas
+  - Enviada: editar header y líneas existentes, NO agregar nuevas líneas, eliminar programada con warning
+  - En Proceso / Parcial: solo lectura (TBD con feedback de usuarios)
+  - Completada / Cancelada: solo lectura
+- **Warning de duplicados:** Al agregar línea (solo en Borrador), si existe línea activa similar, muestra warning visual no bloqueante.
 
 ### Feature 3: Backlog y Programación (Vista de Charris)
 - **Actor:** Carlos Charris (rol: logistica)
@@ -49,54 +57,60 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 - **Crear viaje:** Seleccionar líneas → asignar conductor, vehículo, remolque, fecha, tarifa, permiso ATT, escolta
 - **Relación many-to-many:** Un viaje puede llevar líneas de MÚLTIPLES solicitudes. Una línea puede requerir MÚLTIPLES viajes.
 - **Tabla pivote:** `trip_line_assignments` conecta líneas con viajes (con cantidad asignada por cada uno)
-- **Look-ahead:** Vista de calendario de 2 semanas con viajes programados por día
+- **Cancelar viaje:** Líneas asignadas regresan a Pendiente en backlog. Cascada re-evalúa solicitudes.
+- **Look-ahead:** Placeholder Fase 2
 
-### Feature 4: Ejecución / Eventos (Conductor + Receptor)
-- **Actor:** Conductor (rol: campo)
-- **"Mis Viajes":** Conductor ve los viajes asignados a él (hoy + próximas semanas)
+### Feature 4: Ejecución / Eventos
+- **Actores:** logistica, campo, almacen (todos pueden registrar eventos — sin restricción por driver_id en MVP)
+- **"Mis Viajes":** Lista de viajes activos (NO filtrado por conductor en MVP)
 - **Registrar eventos secuenciales:**
-  1. **Salida** — conductor marca salida (timestamp, ubicación) → viaje cambia a "En Ruta", líneas a "En Tránsito"
-  2. **Llegada** — conductor marca llegada al destino (timestamp) → informativo
-  3. **Entrega** — se confirma entrega con **código de 4 dígitos** → líneas a "Entregada", viaje a "Completado"
-  4. **Retorno** — conductor marca regreso a Chilibre (timestamp) → cierra ciclo
-- **Código de confirmación (tipo Uber):** Al programar un viaje, el sistema genera un código de 4 dígitos. El receptor en el proyecto proporciona el código al conductor para confirmar que la entrega se hizo a la persona indicada. Queda como registro auditable.
+  1. **Salida** — marca salida (timestamp) → viaje "En Ruta", líneas "En Tránsito"
+  2. **Llegada** — marca llegada al destino → informativo
+  3. **Entrega** — confirma con **código de 4 dígitos** → líneas "Entregada", cascada actualiza solicitud
+  4. **Retorno** — marca regreso a Chilibre → viaje "Completado"
+- **Código de confirmación (tipo Uber):** 4 dígitos generados al crear viaje. Receptor proporciona código al conductor.
 
 ### Feature 5: Dashboard
-- **Actor:** Todos (métricas filtradas por rol)
+- **Actor:** Todos los roles — métricas globales (sin restricción por rol)
 - **KPIs:** Solicitudes pendientes, líneas sin programar, viajes programados hoy/semana, completadas este mes
 - **Vista rápida:** Solicitudes recientes con estado, viajes del día
-- Para el jefe: visibilidad de qué está pasando sin entrar al detalle
 
 ---
 
 ## 3. LO QUE NO SE CONSTRUYE AHORA
 
-- ❌ Facturación mensual (fase 2)
-- ❌ Nota de Entrega como documento PDF formal (fase 2 — los REGISTROS de entrega SÍ están en MVP via eventos)
-- ❌ Inspección de equipos (fase 2, probablemente KoboToolbox)
-- ❌ Integración con Órdenes de Compra (fase 2 — campo de texto referencial OK)
-- ❌ GPS de flota (fase 2+)
-- ❌ Categorización CSI de materiales (fase 2)
-- ❌ Accesorios de equipos como entidad separada (fase 2)
-- ❌ WhatsApp notifications (fase 3)
-- ❌ Módulo de inventario (fase 3)
-- ❌ Integración con Spectrum ERP (fase 3+)
+- ❌ Facturación mensual (Fase 2)
+- ❌ Nota de Entrega como documento PDF formal (Fase 2 — los REGISTROS de entrega SÍ están en MVP via eventos)
+- ❌ Bitácora de Movilizaciones como pantalla dedicada (Fase 2)
+- ❌ Inspección de equipos (Fase 2, probablemente KoboToolbox)
+- ❌ Integración con Órdenes de Compra (Fase 2 — campo de texto referencial OK)
+- ❌ GPS de flota (Fase 2)
+- ❌ Categorización CSI de materiales (Fase 2)
+- ❌ Accesorios de equipos como entidad separada (Fase 2)
+- ❌ Two-Week Look-Ahead calendario (Fase 2)
+- ❌ WhatsApp notifications (Fase 3)
+- ❌ Módulo de inventario (Fase 3)
+- ❌ Integración con Spectrum ERP (Fase 3+)
 
 ---
 
 ## 4. MODELO DE DATOS (Supabase / PostgreSQL)
 
-### Tablas Maestras
+> **Schema completo en PROJECT_STATUS.md** — las CREATE TABLE aquí son referencia simplificada.
+
+### Tablas Maestras (10)
 
 ```sql
 -- Proyectos
 CREATE TABLE projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,        -- '25-506'
-  name TEXT NOT NULL,                -- 'Muelle 14'
-  manager TEXT,                      -- 'Franklin Marciaga'
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  manager TEXT,
   status TEXT DEFAULT 'Activo',
-  location TEXT,                     -- Ubicación física del proyecto
+  location TEXT,
+  start_date DATE, end_date DATE, notes TEXT,
+  billing_code TEXT, budget NUMERIC, client TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -105,306 +119,141 @@ CREATE TABLE projects (
 CREATE TABLE people (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   auth_id UUID REFERENCES auth.users(id),
-  code TEXT,                         -- Spectrum code (CUC166)
-  name TEXT,
-  department TEXT,
-  position TEXT,
-  phone TEXT,
-  email TEXT,
-  app_role TEXT,                      -- NULL=sin acceso, 'admin', 'pm', 'logistica', 'campo', 'almacen'
+  code TEXT, name TEXT, department TEXT, position TEXT,
+  phone TEXT, email TEXT,
+  app_role TEXT,  -- NULL=sin acceso, 'admin','pm','logistica','campo','almacen'
   status TEXT DEFAULT 'Activo',
-  city TEXT,
-  supervisor_id UUID REFERENCES people(id),
-  cedula TEXT,
-  license_type TEXT,
-  license_expiry DATE,
-  hire_date DATE,
-  emergency_contact_name TEXT,
-  emergency_contact_phone TEXT,
+  city TEXT, supervisor_id UUID REFERENCES people(id),
+  cedula TEXT, license_type TEXT, license_expiry DATE,
+  hire_date DATE, emergency_contact_name TEXT, emergency_contact_phone TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()  -- trigger auto
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Asignación persona-proyecto (qué proyectos puede ver cada PM)
+-- Asignación persona-proyecto
 CREATE TABLE person_projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   person_id UUID REFERENCES people(id),
   project_id UUID REFERENCES projects(id),
+  role TEXT, is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(person_id, project_id)
 );
 
--- Equipos Y Vehículos (TABLA UNIFICADA — antes eran dos tablas separadas)
+-- Equipos Y Vehículos (TABLA UNIFICADA)
 -- Vehículos = type_code IN ('VHL', 'VHP'). Equipos = el resto.
--- trips.vehicle_id y trips.trailer_id apuntan a esta misma tabla.
 CREATE TABLE equipment (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  spectrum_code TEXT,                -- 'GRU508', 'CAB930'
-  description TEXT,                  -- 'GRUA 318', 'CABEZAL 350 HP'
-  equipment_type TEXT,               -- 'Gruas', 'Vehiculos Pesados'
-  type_code TEXT,                    -- 'EQP','GRU','MAR','EQA','EQL','FND','TEC','ING','VHL','VHP'
-  brand TEXT,
-  model TEXT,
-  serial_number TEXT,
-  year INTEGER,
+  spectrum_code TEXT, description TEXT,
+  equipment_type TEXT, type_code TEXT,
+  brand TEXT, model TEXT, serial_number TEXT, year INTEGER,
   status TEXT DEFAULT 'Activo',
-  current_location TEXT,
-  plate TEXT,                        -- Solo VHL/VHP
-  capacity TEXT,                     -- '350 HP', '50 TON'
-  inspection_type TEXT,              -- 'HOROMETRO', 'ODOMETRO', NULL
-  current_project_id UUID REFERENCES projects(id),
-  weight_class TEXT,
-  acquisition_type TEXT DEFAULT 'Propio',
-  last_inspection_date DATE,
-  next_inspection_due DATE,
-  meter_reading NUMERIC,
-  insurance_expiry DATE,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()  -- trigger auto
-);
-
--- Ubicaciones
-CREATE TABLE locations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  location_type TEXT,                -- 'Taller', 'Proyecto', 'Almacen', 'Proveedor', 'Oficina', 'Externo'
-  address TEXT,
-  project_id UUID REFERENCES projects(id),
-  is_active BOOLEAN DEFAULT true,
-  contact_name TEXT,
-  contact_phone TEXT,
-  notes TEXT,
+  current_location TEXT, plate TEXT, capacity TEXT,
+  inspection_type TEXT, current_project_id UUID REFERENCES projects(id),
+  weight_class TEXT, acquisition_type TEXT DEFAULT 'Propio',
+  last_inspection_date DATE, next_inspection_due DATE,
+  meter_reading NUMERIC, insurance_expiry DATE, notes TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Tarifas de movilización
-CREATE TABLE mobilization_rates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,         -- 'MVCB50'
-  description TEXT NOT NULL,         -- 'Movilización Cama Baja 50'
-  rate DECIMAL(10,2) NOT NULL,       -- 500.00
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Unidades de medida
-CREATE TABLE units (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT UNIQUE NOT NULL,         -- 'und', 'kg', 'ton'
-  description TEXT
-);
-
--- Códigos de costo
-CREATE TABLE cost_codes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES projects(id),
-  phase_code TEXT NOT NULL,          -- '01-7113'
-  phase_description TEXT,            -- 'Movilización'
-  full_code TEXT,                    -- '25-506-01.7113'
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+-- Ubicaciones, tarifas, unidades, cost_codes, sequences, suggestions
+-- Ver PROJECT_STATUS.md para schema completo
 ```
 
-### Tablas Transaccionales
+### Tablas Transaccionales (6)
 
 ```sql
--- Solicitudes (header)
+-- Solicitudes
 CREATE TABLE sm_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  request_id TEXT UNIQUE NOT NULL,   -- '25-506-SM-023' (auto-generated)
+  request_id TEXT UNIQUE,
   project_id UUID NOT NULL REFERENCES projects(id),
   requester_id UUID NOT NULL REFERENCES people(id),
+  approved_by UUID REFERENCES people(id),
   date_required DATE NOT NULL,
   date_created TIMESTAMPTZ DEFAULT now(),
   status TEXT NOT NULL DEFAULT 'Borrador',
-    -- 'Borrador', 'Enviada', 'En Proceso', 'Completada', 'Parcial', 'Cancelada'
-  priority TEXT,
-    -- 'Vencida', 'Urgente', 'Próxima', 'Normal' (auto-calculated)
+  priority TEXT DEFAULT 'Normal',
   notes TEXT,
-  attachments JSONB,                 -- URLs de archivos adjuntos
+  attachments JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
 -- Líneas de solicitud
 CREATE TABLE sm_request_lines (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id UUID NOT NULL REFERENCES sm_requests(id) ON DELETE CASCADE,
   line_number INTEGER NOT NULL,
-  line_type TEXT NOT NULL,           -- 'Equipo' or 'Material'
-  equipment_id UUID REFERENCES equipment(id), -- Only if type = 'Equipo'
-  description TEXT NOT NULL,
-  from_location_id UUID REFERENCES locations(id),
-  to_location_id UUID REFERENCES locations(id),
-  quantity DECIMAL(10,2) NOT NULL DEFAULT 1,
-  unit_id UUID REFERENCES units(id),
-  cost_code_id UUID REFERENCES cost_codes(id),
-  category TEXT,                     -- 'EQI', 'MAT', etc.
-  po_reference TEXT,                 -- Text field for now (OC reference)
-  notes TEXT,
+  line_type TEXT NOT NULL CHECK (line_type IN ('Equipo','Material')),
+  equipment_id UUID REFERENCES equipment(id),
+  description TEXT, equipment_text TEXT,
+  from_location_id UUID REFERENCES locations(id), from_text TEXT,
+  to_location_id UUID REFERENCES locations(id), to_text TEXT,
+  quantity NUMERIC NOT NULL, unit_id UUID REFERENCES units(id), unit_text TEXT,
+  cost_code_id UUID REFERENCES cost_codes(id), category TEXT,
+  po_reference TEXT, notes TEXT,
   status TEXT NOT NULL DEFAULT 'Pendiente',
-    -- 'Pendiente', 'Programada', 'En Tránsito', 'Entregada', 'Parcial', 'Cancelada'
-  qty_scheduled DECIMAL(10,2) DEFAULT 0,
-  qty_delivered DECIMAL(10,2) DEFAULT 0,
-  from_text TEXT,                    -- Fallback: origen texto libre
-  to_text TEXT,                      -- Fallback: destino texto libre
-  equipment_text TEXT,               -- Fallback: equipo texto libre
-  unit_text TEXT,                    -- Fallback: unidad texto libre
+  qty_scheduled NUMERIC DEFAULT 0, qty_delivered NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Viajes (movilizaciones programadas)
+-- Viajes
 CREATE TABLE trips (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  trip_id TEXT UNIQUE NOT NULL,      -- 'MOV-2026-042' (auto-generated)
+  trip_id TEXT UNIQUE,
   scheduled_date DATE NOT NULL,
   driver_id UUID REFERENCES people(id),
-  vehicle_id UUID REFERENCES equipment(id),   -- UNIFICADO: apunta a equipment
-  trailer_id UUID REFERENCES equipment(id),   -- UNIFICADO: apunta a equipment
+  vehicle_id UUID REFERENCES equipment(id),
+  trailer_id UUID REFERENCES equipment(id),
   rate_id UUID REFERENCES mobilization_rates(id),
-  cost DECIMAL(10,2),
+  cost NUMERIC(10,2),
   att_permit BOOLEAN DEFAULT false,
   escort BOOLEAN DEFAULT false,
-  confirmation_code TEXT,            -- 4-digit code (auto-generated)
-  notes TEXT,
+  confirmation_code TEXT,
   status TEXT NOT NULL DEFAULT 'Programado',
-    -- 'Programado', 'En Ruta', 'Completado', 'Cancelado'
-  actual_departure TIMESTAMPTZ,
-  actual_arrival TIMESTAMPTZ,
-  route_summary TEXT,                -- 'Chilibre → Muelle 14'
-  is_external BOOLEAN DEFAULT false,
+  notes TEXT,
+  actual_departure TIMESTAMPTZ, actual_arrival TIMESTAMPTZ,
+  route_summary TEXT, is_external BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Asignaciones línea-viaje (tabla pivote many-to-many)
+-- Asignaciones línea↔viaje (many-to-many)
 CREATE TABLE trip_line_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   request_line_id UUID NOT NULL REFERENCES sm_request_lines(id),
-  quantity_assigned DECIMAL(10,2) NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
+  quantity_assigned NUMERIC NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(trip_id, request_line_id)
 );
 
--- Eventos de viaje (ejecución)
+-- Eventos de viaje (INMUTABLES)
 CREATE TABLE trip_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id UUID NOT NULL REFERENCES trips(id),
   event_type TEXT NOT NULL,
-    -- 'Salida', 'Llegada', 'Entrega', 'Retorno', 'Incidencia'
-  event_timestamp TIMESTAMPTZ DEFAULT now(),
-  location TEXT,
-  registered_by UUID REFERENCES people(id),
-  confirmation_code_used TEXT,       -- For 'Entrega' events: the 4-digit code entered
-  received_by_name TEXT,             -- For 'Entrega': name of person receiving
-  notes TEXT,
+  event_timestamp TIMESTAMPTZ NOT NULL DEFAULT now(),
+  location TEXT, registered_by UUID REFERENCES people(id),
+  confirmation_code_used TEXT, received_by_name TEXT, notes TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Secuencias para auto-IDs
-CREATE TABLE sequences (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  seq_type TEXT NOT NULL,            -- 'sm', 'trip'
-  project_id UUID REFERENCES projects(id), -- For 'sm' type (per-project sequence)
-  next_number INTEGER NOT NULL DEFAULT 1,
-  UNIQUE(seq_type, project_id)
-);
-
--- Sugerencias de fallback
-CREATE TABLE suggestions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  table_name TEXT NOT NULL,          -- 'equipment', 'locations', etc.
-  suggested_value TEXT NOT NULL,
-  suggested_by UUID REFERENCES people(id),
-  status TEXT DEFAULT 'pendiente',   -- 'pendiente', 'aprobada', 'rechazada'
-  reviewed_by UUID REFERENCES people(id),
-  created_at TIMESTAMPTZ DEFAULT now()
+  -- NO updated_at — eventos son inmutables
 );
 ```
 
-### Funciones y Triggers
+### Triggers
 
 ```sql
--- Auto-generate request ID: {project_code}-SM-{###}
-CREATE OR REPLACE FUNCTION generate_request_id()
-RETURNS TRIGGER AS $$
-DECLARE
-  proj_code TEXT;
-  next_num INTEGER;
-BEGIN
-  SELECT code INTO proj_code FROM projects WHERE id = NEW.project_id;
-  
-  INSERT INTO sequences (seq_type, project_id, next_number)
-  VALUES ('sm', NEW.project_id, 1)
-  ON CONFLICT (seq_type, project_id) DO UPDATE SET next_number = sequences.next_number + 1
-  RETURNING next_number INTO next_num;
-  
-  NEW.request_id := proj_code || '-SM-' || LPAD(next_num::TEXT, 3, '0');
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_request_id
-BEFORE INSERT ON sm_requests
-FOR EACH ROW
-WHEN (NEW.request_id IS NULL)
-EXECUTE FUNCTION generate_request_id();
-
--- Auto-generate trip ID: MOV-{YYYY}-{###}
-CREATE OR REPLACE FUNCTION generate_trip_id()
-RETURNS TRIGGER AS $$
-DECLARE
-  next_num INTEGER;
-BEGIN
-  INSERT INTO sequences (seq_type, project_id, next_number)
-  VALUES ('trip', NULL, 1)
-  ON CONFLICT (seq_type, project_id) DO UPDATE SET next_number = sequences.next_number + 1
-  RETURNING next_number INTO next_num;
-  
-  NEW.trip_id := 'MOV-' || EXTRACT(YEAR FROM now())::TEXT || '-' || LPAD(next_num::TEXT, 3, '0');
-  NEW.confirmation_code := LPAD((floor(random() * 10000))::TEXT, 4, '0');
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_trip_id
-BEFORE INSERT ON trips
-FOR EACH ROW
-WHEN (NEW.trip_id IS NULL)
-EXECUTE FUNCTION generate_trip_id();
-
--- Auto-calculate priority based on date_required
-CREATE OR REPLACE FUNCTION calculate_priority()
-RETURNS TRIGGER AS $$
-DECLARE
-  days_diff INTEGER;
-BEGIN
-  days_diff := NEW.date_required - CURRENT_DATE;
-  IF days_diff < 0 THEN NEW.priority := 'Vencida';
-  ELSIF days_diff <= 3 THEN NEW.priority := 'Urgente';
-  ELSIF days_diff <= 7 THEN NEW.priority := 'Próxima';
-  ELSE NEW.priority := 'Normal';
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_priority
-BEFORE INSERT OR UPDATE OF date_required ON sm_requests
-FOR EACH ROW
-EXECUTE FUNCTION calculate_priority();
-
--- Cascade: update header status based on line statuses
+-- Trigger de cascada: actualiza status de solicitud padre
 CREATE OR REPLACE FUNCTION cascade_request_status()
 RETURNS TRIGGER AS $$
 DECLARE
-  total_lines INTEGER;
-  delivered INTEGER;
-  cancelled INTEGER;
-  in_progress INTEGER;
-  new_status TEXT;
+  total_lines INTEGER; delivered INTEGER;
+  cancelled INTEGER; in_progress INTEGER; new_status TEXT;
 BEGIN
   SELECT COUNT(*) INTO total_lines FROM sm_request_lines WHERE request_id = NEW.request_id;
   SELECT COUNT(*) INTO delivered FROM sm_request_lines WHERE request_id = NEW.request_id AND status = 'Entregada';
@@ -424,11 +273,6 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_cascade_status
-AFTER UPDATE OF status ON sm_request_lines
-FOR EACH ROW
-EXECUTE FUNCTION cascade_request_status();
 ```
 
 ---
@@ -443,84 +287,83 @@ EXECUTE FUNCTION cascade_request_status();
 24-404 | Costa Norte | César Caballero
 ```
 
-### Ubicaciones (8+)
+### Ubicaciones (9)
 ```
-Taller Chilibre (taller), Almacén Central (almacen), 
-Muelle 14 (proyecto→25-506), Proyecto Paraíso (proyecto→25-505), 
-ASTIBAL (proyecto→25-504), Costa Norte (proyecto→24-404), 
-Gamboa (otro), Oficina Central (otro)
+Taller Chilibre (Taller), Almacén Central (Almacen),
+Muelle 14 (Proyecto→25-506), Proyecto Paraíso (Proyecto→25-505),
+ASTIBAL (Proyecto→25-504), Costa Norte (Proyecto→24-404),
+Gamboa (Externo), Oficina Central (Oficina), Proveedores varios (Proveedor)
 ```
 
 ### Tarifas de Movilización (14)
 ```
-MVG108  | Movilización Grúa 108          | $2,000
-MVG318  | Movilización Grúa 318          | $3,000
-MVG518  | Movilización Grúa 518          | $6,400
-MVGSNY  | Movilización Grúa Sany         | $11,000
-MVPLAT  | Movilización Canter Plataforma | $200
-MVTTOP  | Movilización Tilt-Top          | $350
-MVCALT  | Movilización Cama Alta         | $425
-MVCB50  | Movilización Cama Baja 50      | $500
-MVCB75  | Movilización Cama Baja 75      | $600
-MVCEXT  | Movilización Mesa Extendible   | $550
-MVVQ11  | Movilización Camión Volquete   | $260
-MVLPUP  | Movilización Pick-up           | $75
-MVAPX1  | Movilización Remolcador MAR213 | $5,000
-MVCGRU  | Movilización Camión Grúa       | $300
+MVG108=$2,000  MVG318=$3,000  MVG518=$6,400  MVGSNY=$11,000
+MVPLAT=$200    MVTTOP=$350    MVCALT=$425    MVCB50=$500
+MVCB75=$600    MVCEXT=$550    MVVQ11=$260    MVLPUP=$75
+MVAPX1=$5,000  MVCGRU=$300
 ```
 
-### Unidades (11)
-```
-und, ml, m², m³, kg, ton, gal, juegos, pzas, ft, qq
-```
+### Unidades (11): und, ml, m², m³, kg, ton, gal, juegos, pzas, ft, qq
 
-### Usuarios de Prueba (5)
-```
-admin    | James Cucalón       | admin
-pm       | Edward Rodríguez    | pm (proyectos: 25-506, 25-505)
-logistica| Carlos Charris      | logistica
-campo    | Coco                | campo (conductor)
-almacen  | Yoseph Caballero    | almacen
-```
-
-### Conductores (5)
-```
-Coco, Bonilla, Monchi, Rafael, Pedro — todos con rol 'campo'
-```
-
-### Equipos y Vehículos (377 — YA IMPORTADOS en tabla unificada `equipment`)
-Tipos: TEC:121, MAR:48, ING:39, VHL:38, FND:34, EQA:31, EQP:26, GRU:16, VHP:15, EQL:9
-
-### Empleados (160 — YA IMPORTADOS en tabla `people`)
-Pendiente: asignar app_role, email, department a ~15-20 usuarios del sistema.
-
-### Códigos de Costo (importar desde codcost.csv — variable por proyecto)
+### Equipos y Vehículos: 377 (YA IMPORTADOS en tabla unificada `equipment`)
+### Empleados: 160 (YA IMPORTADOS en `people`)
+### Códigos de Costo: PENDIENTE importar desde codcost.csv
 
 ---
 
 ## 6. REGLAS DE NEGOCIO CRÍTICAS
 
-### Tipo de movilización (auto-calculado del desde/hasta)
+### Visibilidad y permisos PM
+- PM ve TODAS las solicitudes de todos los proyectos. Filtro default = su proyecto.
+- PM solo CREA solicitudes para SUS proyectos (via person_projects).
+- PM solo EDITA solicitudes de SUS proyectos.
+- Logística edita cualquier solicitud en Borrador/Enviada (no crea solicitudes). Admin crea y edita cualquiera.
+
+### Reglas de edición de solicitudes
+- **Borrador:** Todo editable + agregar/eliminar líneas.
+- **Enviada:** Editar existentes, NO agregar líneas nuevas. Eliminar programada con warning.
+- **En Proceso+:** Solo lectura (TBD con feedback).
+- **Completada/Cancelada:** Solo lectura.
+
+### Cancelación
+- **Cancelar solicitud:** Cancela líneas pendientes. Líneas programadas se liberan del viaje.
+- **Cancelar viaje:** Líneas regresan a Pendiente en backlog. Cascada re-evalúa solicitudes.
+- **Eliminar línea programada:** Warning → remueve asignación → elimina línea.
+
+### Warning de líneas duplicadas
+- Al agregar línea (solo en Borrador), busca líneas activas similares.
+- Muestra warning visual. NO bloquea. PM decide.
+
+### Tipo de movilización (auto-calculado)
 - **Movilización:** origen = Chilibre → destino = proyecto
 - **Desmovilización:** origen = proyecto → destino = Chilibre
 - **Movimiento Interno:** origen = proyecto → destino = proyecto
 
 ### Código de confirmación de entrega (tipo Uber)
-- Se genera automáticamente al crear el viaje (4 dígitos random)
-- Solo visible para: el solicitante original y Charris
-- Al entregar, el conductor ingresa el código que le da el receptor
-- Si el código coincide → entrega confirmada, queda registro de quién recibió
-- Si no coincide → warning, pero permite continuar (para casos donde receptor no tiene el código)
+- 4 dígitos generados al crear viaje. Visible para solicitante y Charris.
+- Conductor ingresa código del receptor. Warning si no coincide pero permite continuar.
 
-### Cascada de estados
-- Cuando TODAS las líneas de una solicitud = Entregada → header = Completada
-- Cuando ≥1 línea programada y ninguna entregada → header = En Proceso
-- Cuando hay mezcla de entregadas y pendientes → header = Parcial
-- Se ejecuta como trigger PostgreSQL
+### Cascada de estados (trigger PostgreSQL)
+- TODAS líneas Entregada → Completada
+- TODAS líneas Cancelada → Cancelada
+- ≥1 Entregada + resto Cancelada → Parcial
+- ≥1 Programada/En Tránsito → En Proceso
+- No modifica Borrador ni Cancelada
 
-### Fallback universal
-- Cada dropdown tiene opción "No está en lista" → campo de texto libre
-- Se crea registro en tabla `suggestions` para que admin lo revise
+### Registro de eventos (MVP)
+- Cualquier usuario logistica/campo/almacen puede registrar eventos.
+- No se restringe por driver_id del viaje.
+
+### Dashboard
+- Métricas globales. Todos los roles ven las mismas métricas.
+
+### Notificaciones (MVP: email vía NestJS)
+- Solicitud enviada → Charris
+- Solicitud programada → PM solicitante
+- Solicitud completada → PM solicitante
+- Solicitud vencida (daily) → Charris + PM
+- Sugerencia fallback → Admin
+- WhatsApp: Fase futura
 
 ---
 
@@ -528,34 +371,34 @@ Pendiente: asignar app_role, email, department a ~15-20 usuarios del sistema.
 
 ```
 / (login)
-/dashboard (home — varía por rol)
-/solicitudes (lista de solicitudes — PM ve las suyas, logistica ve todas)
-/solicitudes/nueva (crear solicitud)
-/solicitudes/[id] (ver/editar solicitud)
-/programacion (backlog + viajes — solo logistica/admin)
+/dashboard (home — KPIs globales)
+/solicitudes (lista — TODOS ven TODAS, PM filtro default su proyecto)
+/solicitudes/nueva (crear — PM solo sus proyectos)
+/solicitudes/[id] (ver/editar según reglas de edición)
+/programacion (backlog + viajes — logistica/admin RW, pm RO)
 /programacion/viaje/nuevo (crear viaje)
 /programacion/viaje/[id] (ver/editar viaje)
-/programacion/calendario (two-week look-ahead)
-/mis-viajes (conductor — viajes asignados)
-/mis-viajes/[id] (detalle del viaje + registrar eventos)
-/admin/masters (gestión de tablas maestras — solo admin)
+/programacion/calendario (Fase 2 placeholder)
+/mis-viajes (viajes activos — logistica/campo/almacen)
+/mis-viajes/[id] (detalle + registrar eventos)
+/admin/masters (gestión masters — solo admin)
 ```
 
 ### Navegación por rol:
 | Pantalla | admin | pm | logistica | campo | almacen |
 |----------|-------|-----|-----------|-------|---------|
 | Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Solicitudes | ✅ (todas) | ✅ (sus proyectos) | ✅ (todas) | ❌ | ❌ |
-| Nueva Solicitud | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Solicitudes | ✅ (todas) | ✅ (todas, default su proyecto) | ✅ (todas) | ❌ | ❌ |
+| Nueva Solicitud | ✅ | ✅ (sus proyectos) | ❌ | ❌ | ❌ |
 | Programación | ✅ | 👁️ (solo lectura) | ✅ | ❌ | ❌ |
-| Mis Viajes | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Mis Viajes | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Admin Masters | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
 ## 8. UI/UX GUIDELINES
 
-### Design tokens (mantener consistencia con demos anteriores)
+### Design tokens
 ```
 Navy:    #1B3A5C (primary — headers, nav, branding)
 Gold:    #F0A500 (accent — ICONSA brand)
@@ -570,37 +413,43 @@ Gray:    #5A6272 (secondary text)
 ### Principios
 - **Mobile-first:** Ingenieros y conductores usan celular
 - **Español 100%:** Toda la interfaz en español
-- **Badges de estado con colores:** Siempre visible el estado de cualquier entidad
-- **Monospace para IDs:** 25-506-SM-023 siempre en font monospace
-- **Mínimo clicks:** Crear solicitud debe ser rápido — no wizard de 5 pasos
+- **Badges de estado con colores:** Siempre visible
+- **Monospace para IDs:** 25-506-SM-023 siempre monospace
+- **Mínimo clicks:** Crear solicitud debe ser rápido
 
 ---
 
 ## 9. ARCHIVOS DE REFERENCIA
 
-En el proyecto hay archivos CSV con datos reales para importar:
-- `equipment_for_supabase.csv` — 377 equipos+vehículos unificados (YA IMPORTADO)
-- `employees_for_supabase.csv` — 160 empleados (YA IMPORTADO)
-- `Proyectos.csv` — 4 proyectos activos (YA IMPORTADO)
-- `TarifasMov.csv` — 14 tarifas de movilización (YA IMPORTADO)
-- `codcost.csv` — Códigos de costo por proyecto (PENDIENTE)
-
 Documentación clave:
-- `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo, estado de datos, decisiones.
-- `ICONSA_Feature_Specification_v2.docx` — documento formal con reglas de negocio, estados, transiciones.
+- `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo
+- `ICONSA_Feature_Specification_v2.md` — reglas de negocio, estados, transiciones
+- `BUILD_PLAN.md` — plan de construcción con 6 fases
+- `supabase_schema_verified.sql` — schema SQL definitivo para generación de tipos
+
+Datos ya importados:
+- equipment: 377 registros (tabla unificada equipos+vehículos)
+- people: 160 registros (pendiente asignar roles a ~15-20)
+- projects: 4 registros
+- mobilization_rates: 14 registros
+- locations: 9 registros
+- units: 11 registros
+- cost_codes: PENDIENTE importar
 
 ---
 
 ## 10. DEFINICIÓN DE "TERMINADO" PARA EL MVP
 
-El MVP está terminado cuando:
-1. ✅ Un usuario puede entrar con email/contraseña y ver solo lo que le corresponde
-2. ✅ Un PM puede crear una solicitud con líneas y enviarla
-3. ✅ Charris ve TODAS las solicitudes en un backlog con prioridad visual
-4. ✅ Charris puede crear un viaje asignando líneas, conductor, vehículo, fecha
-5. ✅ Un conductor puede ver sus viajes asignados
-6. ✅ Se pueden registrar eventos de ejecución (salida, entrega con código 4 dígitos, retorno)
-7. ✅ El dashboard muestra KPIs básicos de solicitudes y viajes
-8. ✅ Los estados se actualizan en cascada automáticamente
-9. ✅ Funciona en celular (responsive)
-10. ✅ Datos reales de ICONSA precargados (proyectos, equipos, empleados, tarifas)
+1. ✅ Login con email/contraseña y navegación por rol
+2. ✅ PM crea solicitud con líneas para SUS proyectos y la envía
+3. ✅ PM ve TODAS las solicitudes (filtro default su proyecto, puede cambiar)
+4. ✅ Warning de duplicados al agregar línea (visual, no bloquea)
+5. ✅ Charris ve backlog con prioridad visual de TODOS los proyectos
+6. ✅ Charris crea viaje asignando líneas, conductor, vehículo, fecha
+7. ✅ Eventos de ejecución registrables por logistica/campo/almacen
+8. ✅ Entrega con código 4 dígitos
+9. ✅ Dashboard con KPIs globales
+10. ✅ Estados en cascada automática (trigger PostgreSQL)
+11. ✅ Notificaciones email (NestJS): enviada→Charris, programada/completada→PM
+12. ✅ Responsive (mobile-first)
+13. ✅ Datos reales precargados (proyectos, equipos, empleados, tarifas)
