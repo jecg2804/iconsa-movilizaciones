@@ -1,6 +1,6 @@
 -- MovimientOS Schema - Verificado contra Supabase live
--- Fecha: 2026-03-04
--- Fuente: Export directo de Supabase SQL Editor
+-- Fecha: 2026-03-04 (actualizado con constraints D4-D5 y CASCADE)
+-- Fuente: Export directo de Supabase SQL Editor + verificación pg_constraint
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
@@ -106,8 +106,9 @@ CREATE TABLE public.person_projects (
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT person_projects_pkey PRIMARY KEY (id),
-  CONSTRAINT person_projects_person_id_fkey FOREIGN KEY (person_id) REFERENCES public.people(id),
-  CONSTRAINT person_projects_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id)
+  CONSTRAINT person_projects_person_id_project_id_key UNIQUE (person_id, project_id),
+  CONSTRAINT person_projects_person_id_fkey FOREIGN KEY (person_id) REFERENCES public.people(id) ON DELETE CASCADE,
+  CONSTRAINT person_projects_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE
 );
 
 CREATE TABLE public.projects (
@@ -182,7 +183,8 @@ CREATE TABLE public.sm_request_lines (
   unit_text text,
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT sm_request_lines_pkey PRIMARY KEY (id),
-  CONSTRAINT sm_request_lines_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.sm_requests(id),
+  CONSTRAINT sm_request_lines_line_type_check CHECK (line_type = ANY (ARRAY['Equipo'::text, 'Material'::text])),
+  CONSTRAINT sm_request_lines_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.sm_requests(id) ON DELETE CASCADE,
   CONSTRAINT sm_request_lines_equipment_id_fkey FOREIGN KEY (equipment_id) REFERENCES public.equipment(id),
   CONSTRAINT sm_request_lines_from_location_id_fkey FOREIGN KEY (from_location_id) REFERENCES public.locations(id),
   CONSTRAINT sm_request_lines_to_location_id_fkey FOREIGN KEY (to_location_id) REFERENCES public.locations(id),
@@ -227,7 +229,8 @@ CREATE TABLE public.trip_line_assignments (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT trip_line_assignments_pkey PRIMARY KEY (id),
-  CONSTRAINT trip_line_assignments_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id),
+  CONSTRAINT trip_line_assignments_trip_line_unique UNIQUE (trip_id, request_line_id),
+  CONSTRAINT trip_line_assignments_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id) ON DELETE CASCADE,
   CONSTRAINT trip_line_assignments_request_line_id_fkey FOREIGN KEY (request_line_id) REFERENCES public.sm_request_lines(id)
 );
 

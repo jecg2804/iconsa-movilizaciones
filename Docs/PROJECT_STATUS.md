@@ -304,19 +304,85 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 
 ---
 
+## APP NEXT.JS - COMPONENTES
+
+### Fase 0 — Fundacion (COMPLETADA)
+| Archivo | Estado |
+|---------|--------|
+| lib/types/database.ts | COMPLETADO |
+| lib/supabase/client.ts | COMPLETADO |
+| lib/supabase/server.ts | COMPLETADO |
+| lib/utils/constants.ts | COMPLETADO |
+| lib/utils/status.ts | COMPLETADO |
+| lib/utils/roles.ts | COMPLETADO |
+| lib/utils/format.ts | COMPLETADO |
+| hooks/useAuth.ts | COMPLETADO |
+| middleware.ts | COMPLETADO |
+
+### Fase 1 — Auth + Layout Shell (COMPLETADA)
+| Archivo | Estado |
+|---------|--------|
+| app/globals.css | COMPLETADO |
+| app/layout.tsx | COMPLETADO |
+| app/(auth)/login/page.tsx | COMPLETADO |
+| components/ui/Button.tsx | COMPLETADO |
+| components/ui/Input.tsx | COMPLETADO |
+| components/layout/Sidebar.tsx | COMPLETADO |
+| components/layout/Topbar.tsx | COMPLETADO |
+| components/layout/MobileNav.tsx | COMPLETADO |
+| components/layout/AppShell.tsx | COMPLETADO |
+| app/(app)/layout.tsx | COMPLETADO |
+| app/(app)/dashboard/page.tsx | COMPLETADO (placeholder KPIs) |
+| app/page.tsx | COMPLETADO (redirect) |
+
+### Fase 2 — Solicitudes (COMPLETADA)
+| Archivo | Estado |
+|---------|--------|
+| components/ui/Badge.tsx | COMPLETADO |
+| components/ui/Select.tsx | COMPLETADO |
+| components/ui/DuplicateWarning.tsx | COMPLETADO |
+| lib/utils/duplicates.ts | COMPLETADO |
+| hooks/useProjects.ts | COMPLETADO |
+| hooks/useEquipment.ts | COMPLETADO |
+| hooks/useLocations.ts | COMPLETADO |
+| components/ui/SelectWithFallback.tsx | COMPLETADO |
+| components/ui/DataTable.tsx | COMPLETADO |
+| hooks/useSolicitudes.ts | COMPLETADO |
+| components/solicitudes/LineRow.tsx | COMPLETADO |
+| components/solicitudes/LineEditor.tsx | COMPLETADO |
+| components/solicitudes/SolicitudForm.tsx | COMPLETADO |
+| app/(app)/solicitudes/page.tsx | COMPLETADO |
+| app/(app)/solicitudes/nueva/page.tsx | COMPLETADO |
+| app/(app)/solicitudes/[id]/page.tsx | COMPLETADO |
+
+### Fase 3 — Programacion (COMPLETADA)
+
+| Archivo | Estado |
+|---------|--------|
+| hooks/useVehicles.ts | COMPLETADO |
+| hooks/useTrips.ts | COMPLETADO |
+| components/programacion/BacklogTable.tsx | COMPLETADO |
+| components/programacion/LineSelector.tsx | COMPLETADO |
+| components/programacion/TripForm.tsx | COMPLETADO |
+| app/(app)/programacion/page.tsx | COMPLETADO |
+| app/(app)/programacion/viaje/nuevo/page.tsx | COMPLETADO |
+| app/(app)/programacion/viaje/[id]/page.tsx | COMPLETADO |
+| app/(app)/programacion/calendario/page.tsx | COMPLETADO (placeholder) |
+
 ## APP NEXT.JS - PANTALLAS
 
 | Ruta | Actor | Estado |
 |------|-------|--------|
-| / | Todos | PENDIENTE (login) |
-| /dashboard | Todos (metricas globales) | PENDIENTE |
-| /solicitudes | pm, admin, logistica | PENDIENTE |
-| /solicitudes/nueva | pm, admin | PENDIENTE |
-| /solicitudes/[id] | pm, admin, logistica | PENDIENTE |
-| /programacion | logistica, admin | PENDIENTE |
-| /programacion/viaje/nuevo | logistica, admin | PENDIENTE |
-| /programacion/viaje/[id] | logistica, admin | PENDIENTE |
-| /programacion/calendario | logistica, admin, pm(ro) | PENDIENTE |
+| / | Todos | COMPLETADO (redirect a login/dashboard) |
+| /login | Todos | COMPLETADO |
+| /dashboard | Todos (metricas globales) | COMPLETADO (placeholder KPIs) |
+| /solicitudes | pm, admin, logistica | COMPLETADO |
+| /solicitudes/nueva | pm, admin | COMPLETADO |
+| /solicitudes/[id] | pm, admin, logistica | COMPLETADO |
+| /programacion | logistica, admin, pm(ro) | COMPLETADO |
+| /programacion/viaje/nuevo | logistica, admin | COMPLETADO |
+| /programacion/viaje/[id] | logistica, admin | COMPLETADO |
+| /programacion/calendario | logistica, admin, pm(ro) | COMPLETADO (placeholder) |
 | /mis-viajes | logistica, campo, almacen, admin | PENDIENTE |
 | /mis-viajes/[id] | logistica, campo, almacen, admin | PENDIENTE |
 | /admin/masters | admin | PENDIENTE |
