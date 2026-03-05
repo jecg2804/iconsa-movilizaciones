@@ -30,8 +30,9 @@ export default function LoginPage() {
 
       // Forzar navegación completa para evitar estados colgados del router cliente.
       window.location.assign('/dashboard')
-    } catch {
-      setError('No se pudo iniciar sesión. Intente nuevamente.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error inesperado'
+      setError(`No se pudo iniciar sesión. ${message}`)
     } finally {
       setLoading(false)
     }
