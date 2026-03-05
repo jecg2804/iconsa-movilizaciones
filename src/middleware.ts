@@ -2,14 +2,27 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Evita caídas del middleware cuando faltan variables en Vercel.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (pathname !== '/login') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'config')
+      return NextResponse.redirect(url)
+    }
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -26,31 +39,38 @@ export async function middleware(request: NextRequest) {
           )
         },
       },
-    },
-  )
+    })
 
-  // IMPORTANTE: No usar getSession() — getUser() valida contra el servidor de Auth
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    // IMPORTANTE: No usar getSession() — getUser() valida contra el servidor de Auth
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+    // Si no hay sesión y no está en /login, redirigir a /login
+    if (!user && pathname !== '/login') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
 
-  // Si no hay sesión y no está en /login, redirigir a /login
-  if (!user && pathname !== '/login') {
+    // Si hay sesión y está en /login o raíz, redirigir a /dashboard
+    if (user && (pathname === '/login' || pathname === '/')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    return supabaseResponse
+  } catch {
+    // Evita MIDDLEWARE_INVOCATION_FAILED por errores runtime en Edge.
+    if (pathname === '/login') {
+      return NextResponse.next({ request })
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    url.searchParams.set('error', 'auth')
     return NextResponse.redirect(url)
   }
-
-  // Si hay sesión y está en /login o raíz, redirigir a /dashboard
-  if (user && (pathname === '/login' || pathname === '/')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
-  return supabaseResponse
 }
 
 export const config = {
