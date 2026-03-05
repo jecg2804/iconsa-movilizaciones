@@ -1,6 +1,6 @@
 # ICONSA Movilizaciones - Estado del Proyecto
 
-Ultima actualizacion: 2026-03-03
+Ultima actualizacion: 2026-03-04 (toolstack actualizado: NestJS backend, n8n eliminado)
 
 Actualizar este archivo despues de CADA paso completado.
 Este documento es la UNICA fuente de verdad para el estado del schema, decisiones, y progreso.
@@ -12,15 +12,17 @@ Este documento es la UNICA fuente de verdad para el estado del schema, decisione
 | Componente | Estado | Detalle |
 |-----------|--------|---------|
 | Supabase | Activo | https://bzeoszympkkicwlfdtcn.supabase.co (Oregon us-west-2) |
-| GitHub | Activo | jecg2804/iconsa-movilizaciones (privado) |
-| Next.js | Inicializado | v16.1.6, localhost:3000, .env.local configurado |
+| GitHub | Activo | ICONSA-Solutions/movimientOS (org privada) |
+| Next.js (frontend) | Inicializado | v16.1.6, localhost:3000, .env.local configurado |
+| NestJS (backend) | PENDIENTE | Backend API — deploy target: Railway/Fly.io |
 | Supabase Auth | PENDIENTE | Aun no configurado |
 | Supabase Storage | PENDIENTE | Para attachments de solicitudes |
 
 Documentacion en repo (docs/):
-- [x] README.md (DESACTUALIZADO - pendiente update)
-- [x] ICONSA_Feature_Specification_v2.docx
-- [x] ICONSA_MVP_Sprint_Brief.md (DESACTUALIZADO - pendiente update)
+- [x] README.md (actualizado 2026-03-04)
+- [x] ICONSA_Feature_Specification_v2.md (v2.1, markdown, actualizado 2026-03-04)
+- [x] ICONSA_MVP_Sprint_Brief.md (v3.0, actualizado 2026-03-04)
+- [x] BUILD_PLAN.md (actualizado 2026-03-04)
 - [x] ICONSA_Guia_Operativa.md
 - [x] PROJECT_STATUS.md (este archivo)
 
@@ -51,7 +53,7 @@ Principio: misma estructura = misma tabla, clasificacion por columnas, filtrado 
 |---------|------|----------|---------|-------------|
 | id | UUID PK | No | gen_random_uuid() | Identificador unico |
 | spectrum_code | TEXT | Si | - | Codigo Spectrum (GRU508, CAB930) |
-| description | TEXT | Si | - | Nombre/descripcion |
+| description | TEXT | No | - | Nombre/descripcion |
 | equipment_type | TEXT | Si | - | Nombre largo (Equipo Pesado, Gruas, Vehiculos Livianos) |
 | type_code | TEXT | Si | - | Codigo corto: EQP, GRU, MAR, EQA, EQL, FND, TEC, ING, VHL, VHP |
 | brand | TEXT | Si | - | Marca |
@@ -111,7 +113,7 @@ Filtros app:
 | created_at | TIMESTAMPTZ | No | now() | Creacion |
 | updated_at | TIMESTAMPTZ | No | now() | Modificacion (trigger) |
 
-Datos: 160 registros importados (app_role=NULL para todos, asignar manualmente a usuarios del sistema).
+Datos: 164 registros (160 importados + 4 test users nuevos). 6 usuarios con auth_id y app_role asignados: admin, almacen, campo, logistica (Charris CHA082), pm×2 (Caballero, Jacome JAC161). Duplicados de Charris y Jacome mergeados en filas reales con código de empleado.
 Roles: admin=James, pm=ingenieros, logistica=Charris, campo=conductores, almacen=Yoseph
 
 ---
@@ -141,7 +143,8 @@ Datos: 4 registros: ASTIBAL (25-504), Paraiso (25-505), Muelle 14 (25-506), Cost
 
 ### TABLA: person_projects (asignacion persona-proyecto)
 
-id UUID PK, person_id FK people, project_id FK projects, role TEXT, is_active BOOLEAN DEFAULT true, created_at, updated_at.
+id UUID PK, person_id FK people (CASCADE), project_id FK projects (CASCADE), role TEXT, is_active BOOLEAN DEFAULT true, created_at, updated_at.
+UNIQUE(person_id, project_id). Datos: 11 asignaciones (Admin×4, Charris×4, Caballero×2, Jacome×1).
 
 ---
 
@@ -176,6 +179,7 @@ Datos: VACIO. Pendiente importar codcost.csv.
 
 seq_type TEXT, project_id FK projects (nullable), next_number INTEGER.
 UNIQUE(seq_type, COALESCE(project_id, UUID_CERO)). Auto-gestionada.
+Datos: 5 registros (SM×4 proyectos + MOV global). next_number=1 en todas.
 
 ---
 
@@ -232,6 +236,7 @@ Triggers: generate_request_id(), calculate_priority(), update_updated_at()
 | updated_at | TIMESTAMPTZ | now() | Modificacion |
 
 Trigger: cascade_request_status() - actualiza sm_requests.status basado en estados de lineas.
+Constraints: CHECK (line_type IN ('Equipo','Material')). FK request_id ON DELETE CASCADE.
 
 ---
 
@@ -245,7 +250,7 @@ Trigger: generate_trip_id() + confirmation_code
 ### TABLA: trip_line_assignments (pivote many-to-many)
 
 id, trip_id FK trips (CASCADE), request_line_id FK sm_request_lines, quantity_assigned DECIMAL, created_at, updated_at.
-Un viaje lleva lineas de MULTIPLES solicitudes. Una linea puede dividirse en MULTIPLES viajes.
+UNIQUE(trip_id, request_line_id). Un viaje lleva lineas de MULTIPLES solicitudes. Una linea puede dividirse en MULTIPLES viajes.
 
 ---
 
@@ -276,7 +281,7 @@ id, table_name TEXT, suggested_value TEXT, suggested_by FK people, status TEXT (
 
 ## SEGURIDAD RLS
 
-RLS en TODAS las tablas. Dev: lectura publica masters, full transaccionales. Prod: pm=sus proyectos, campo=sus viajes, logistica=todo.
+RLS en TODAS las tablas. Dev: lectura publica masters, full transaccionales. Prod: pm=ve todas, crea/edita sus proyectos. campo=sus viajes. logistica=todo.
 
 ## INDICES
 
@@ -299,24 +304,103 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 
 ---
 
+## APP NEXT.JS - COMPONENTES
+
+### Fase 0 — Fundacion (COMPLETADA)
+| Archivo | Estado |
+|---------|--------|
+| lib/types/database.ts | COMPLETADO |
+| lib/supabase/client.ts | COMPLETADO |
+| lib/supabase/server.ts | COMPLETADO |
+| lib/utils/constants.ts | COMPLETADO |
+| lib/utils/status.ts | COMPLETADO |
+| lib/utils/roles.ts | COMPLETADO |
+| lib/utils/format.ts | COMPLETADO |
+| hooks/useAuth.ts | COMPLETADO |
+| middleware.ts | COMPLETADO |
+
+### Fase 1 — Auth + Layout Shell (COMPLETADA)
+| Archivo | Estado |
+|---------|--------|
+| app/globals.css | COMPLETADO |
+| app/layout.tsx | COMPLETADO |
+| app/(auth)/login/page.tsx | COMPLETADO |
+| components/ui/Button.tsx | COMPLETADO |
+| components/ui/Input.tsx | COMPLETADO |
+| components/layout/Sidebar.tsx | COMPLETADO |
+| components/layout/Topbar.tsx | COMPLETADO |
+| components/layout/MobileNav.tsx | COMPLETADO |
+| components/layout/AppShell.tsx | COMPLETADO |
+| app/(app)/layout.tsx | COMPLETADO |
+| app/(app)/dashboard/page.tsx | COMPLETADO (placeholder KPIs) |
+| app/page.tsx | COMPLETADO (redirect) |
+
+### Fase 2 — Solicitudes (COMPLETADA)
+| Archivo | Estado |
+|---------|--------|
+| components/ui/Badge.tsx | COMPLETADO |
+| components/ui/Select.tsx | COMPLETADO |
+| components/ui/DuplicateWarning.tsx | COMPLETADO |
+| lib/utils/duplicates.ts | COMPLETADO |
+| hooks/useProjects.ts | COMPLETADO |
+| hooks/useEquipment.ts | COMPLETADO |
+| hooks/useLocations.ts | COMPLETADO |
+| components/ui/SelectWithFallback.tsx | COMPLETADO |
+| components/ui/DataTable.tsx | COMPLETADO |
+| hooks/useSolicitudes.ts | COMPLETADO |
+| components/solicitudes/LineRow.tsx | COMPLETADO |
+| components/solicitudes/LineEditor.tsx | COMPLETADO |
+| components/solicitudes/SolicitudForm.tsx | COMPLETADO |
+| app/(app)/solicitudes/page.tsx | COMPLETADO |
+| app/(app)/solicitudes/nueva/page.tsx | COMPLETADO |
+| app/(app)/solicitudes/[id]/page.tsx | COMPLETADO |
+
+### Fase 3 — Programacion (COMPLETADA)
+
+| Archivo | Estado |
+|---------|--------|
+| hooks/useVehicles.ts | COMPLETADO |
+| hooks/useTrips.ts | COMPLETADO |
+| components/programacion/BacklogTable.tsx | COMPLETADO |
+| components/programacion/LineSelector.tsx | COMPLETADO |
+| components/programacion/TripForm.tsx | COMPLETADO |
+| app/(app)/programacion/page.tsx | COMPLETADO |
+| app/(app)/programacion/viaje/nuevo/page.tsx | COMPLETADO |
+| app/(app)/programacion/viaje/[id]/page.tsx | COMPLETADO |
+| app/(app)/programacion/calendario/page.tsx | COMPLETADO (placeholder) |
+
 ## APP NEXT.JS - PANTALLAS
 
 | Ruta | Actor | Estado |
 |------|-------|--------|
-| / | Todos | PENDIENTE (login) |
-| /dashboard | Todos (varia por rol) | PENDIENTE |
-| /solicitudes | pm, admin, logistica | PENDIENTE |
-| /solicitudes/nueva | pm, admin | PENDIENTE |
-| /solicitudes/[id] | pm, admin, logistica | PENDIENTE |
-| /programacion | logistica, admin | PENDIENTE |
-| /programacion/viaje/nuevo | logistica, admin | PENDIENTE |
-| /programacion/viaje/[id] | logistica, admin | PENDIENTE |
-| /programacion/calendario | logistica, admin, pm(ro) | PENDIENTE |
-| /mis-viajes | campo | PENDIENTE |
-| /mis-viajes/[id] | campo | PENDIENTE |
+| / | Todos | COMPLETADO (redirect a login/dashboard) |
+| /login | Todos | COMPLETADO |
+| /dashboard | Todos (metricas globales) | COMPLETADO (placeholder KPIs) |
+| /solicitudes | pm, admin, logistica | COMPLETADO |
+| /solicitudes/nueva | pm, admin | COMPLETADO |
+| /solicitudes/[id] | pm, admin, logistica | COMPLETADO |
+| /programacion | logistica, admin, pm(ro) | COMPLETADO |
+| /programacion/viaje/nuevo | logistica, admin | COMPLETADO |
+| /programacion/viaje/[id] | logistica, admin | COMPLETADO |
+| /programacion/calendario | logistica, admin, pm(ro) | COMPLETADO (placeholder) |
+| /mis-viajes | logistica, campo, almacen, admin | PENDIENTE |
+| /mis-viajes/[id] | logistica, campo, almacen, admin | PENDIENTE |
 | /admin/masters | admin | PENDIENTE |
 
 ---
+
+## DECISIONES TOMADAS (Auditoria 2026-03-04)
+
+1. PM ve TODAS las solicitudes (filtro default=su proyecto). CREA y EDITA solo para SUS proyectos.
+2. Enviada: editar header y lineas existentes, NO agregar lineas nuevas. Solo Borrador permite agregar.
+3. SI se puede eliminar linea programada — con warning de confirmacion.
+4. Cancelar viaje libera lineas de vuelta al backlog (Pendiente).
+5. Eventos: cualquier logistica/campo/almacen puede registrar. Sin restriccion por driver_id en MVP.
+6. Dashboard: metricas globales, sin restriccion por rol.
+7. Warning de lineas duplicadas: visual, no bloqueante. Solo al agregar en Borrador.
+8. Notificaciones email via NestJS incluidas en MVP.
+9. Bitacora de Movilizaciones: Fase 2, NO MVP.
+10. Edicion en estados En Proceso/Parcial: TBD con feedback de usuarios.
 
 ## DECISIONES PENDIENTES
 
@@ -324,15 +408,15 @@ Astrid: EQA=menores, no ING dropdown, flota transporte vs proyecto, CSI.
 Charris: flota exacta, ubicaciones proveedores.
 Ingenieros: quienes crean solicitudes, vehiculos uso interno, movimientos internos.
 General: proyectos adicionales, codigos costo, empleados con acceso, metricas Valderrama.
+Edicion en estados En Proceso/Parcial: definir con feedback de usuarios.
 
 ---
 
 ## FASES FUTURAS (no MVP)
 
-Movilizaciones: solicitud vehiculos, movimientos internos, nota entrega PDF, facturacion.
-Chilibre: combustible, inspecciones, mantenimiento, ordenes trabajo, GPS, planillas.
-Equipos: tracking uso/tiempo/ubicacion por proyecto, horometros, alertas vencimiento.
-Integraciones: OC OCR, WhatsApp voz, Spectrum sync, inventario, Metabase.
+Fase 2: Facturacion mensual, Nota de Entrega PDF, Bitacora de Movilizaciones (vista filtrable), Inspecciones de equipos, Two-Week Look-Ahead, Integracion OC, Categorias CSI, Accesorios de equipos, GPS flota.
+Fase 3: Inventario/Almacen, WhatsApp, Metabase dashboards, Spectrum lectura, QR equipos, PWA offline.
+Futuro: Combustible, mantenimiento, ordenes trabajo, planillas, compras, herramientas, equipos menores, vehiculos livianos.
 
 ---
 
@@ -351,10 +435,11 @@ Desde/Hasta: tabla locations + fallback. Vehiculo interno: equipment_text (MVP).
 | Recurso | Ubicacion |
 |---------|----------|
 | Demo UI | demo_v8.jsx |
-| Feature Spec | docs/ICONSA_Feature_Specification_v2.docx |
+| Feature Spec | docs/ICONSA_Feature_Specification_v2.md |
 | Sprint Brief | docs/ICONSA_MVP_Sprint_Brief.md |
+| Build Plan | docs/BUILD_PLAN.md |
 | SOP | IC-LOG-PO-06 |
-| GitHub | github.com/jecg2804/iconsa-movilizaciones |
+| GitHub | github.com/ICONSA-Solutions/movimientOS |
 | Supabase | bzeoszympkkicwlfdtcn.supabase.co |
 | CSV Equipment | equipment_for_supabase.csv (377) |
 | CSV Employees | employees_for_supabase.csv (160) |
