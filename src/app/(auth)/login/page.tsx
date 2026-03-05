@@ -1,13 +1,11 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -18,19 +16,25 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const supabase = createClient()
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (authError) {
-      setError('Correo o contraseña incorrectos')
+      if (authError) {
+        setError('Correo o contraseña incorrectos')
+        return
+      }
+
+      // Forzar navegación completa para evitar estados colgados del router cliente.
+      window.location.assign('/dashboard')
+    } catch {
+      setError('No se pudo iniciar sesión. Intente nuevamente.')
+    } finally {
       setLoading(false)
-      return
     }
-
-    router.push('/dashboard')
   }
 
   return (
