@@ -52,11 +52,11 @@ src/
 |-----------|---------------|
 | @Docs/BUILD_PLAN.md | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
 | @Docs/ICONSA_MVP_Sprint_Brief.md | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
-| @Docs/ICONSA_Feature_Specification_v2.md | Detalle completo de pantallas, campos, validaciones, estados. |
+| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados. |
 | @Docs/PROJECT_STATUS.md | Schema actual de BD (15 tablas), estado de cada componente. |
 | @Docs/supabase_schema_verified.sql | SQL exacto del schema verificado contra Supabase live. |
 
-**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v2.2 para reglas de negocio.
+**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.0 para reglas de negocio.
 
 ## Coding Conventions
 
@@ -116,6 +116,10 @@ Gray:   #5A6272  (secondary text)
 5. **UI 100% español.** Botones, labels, mensajes, placeholders — todo en español.
 6. **Mobile-first.** Los ingenieros y conductores usan celulares.
 7. **Monospace para IDs.** `25-506-SM-023` y `MOV-2026-042` siempre en fuente monoespaciada.
+8. **Remolque condicional.** REQUERIDO cuando vehículo es cabezal (CAB### o 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
+9. **Tarifa auto-rellena costo.** Al seleccionar tarifa, pre-rellenar campo Costo con el valor `rate`. Campo sigue editable.
+10. **Redirect después de guardar/enviar.** Toda acción de guardado redirige a la pantalla de lista correspondiente.
+11. **Filtro equipos en solicitud:** `type_code NOT IN ('ING')`. NO excluir VHL, VHP, TEC.
 
 ## Estados y Cascada
 
@@ -130,14 +134,25 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 
 ## Workflow para Claude Code
 
-**Plan Mode (Shift+Tab×2):** Usar para estudiar codebase y planificar antes de escribir código.
-**Normal Mode:** Implementar después de que el plan esté aprobado por James.
+**ANTES de cada sesión:**
+1. `/model sonnet` — Sonnet es el default. Solo usar `/model opus` para arquitectura compleja.
+2. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
 
-1. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
-2. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-3. Verifica columnas y relaciones en `@Docs/PROJECT_STATUS.md` o via Supabase MCP.
-4. Implementa. Corre `npm run build` para verificar que compila sin errores.
-5. **No hagas commits automáticos.** James revisa y commitea manualmente.
+**DURANTE la sesión:**
+3. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
+4. Verifica columnas y relaciones en `@Docs/PROJECT_STATUS.md` o via Supabase MCP.
+5. Implementa. Corre `npm run build` para verificar que compila sin errores.
+6. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
+
+**DESPUÉS de cada paso completado:**
+7. Sugiere commit message: `feat: paso X.Y — descripción`
+8. Espera aprobación de James antes de continuar al siguiente paso.
+9. `/clear` entre pasos no relacionados. NUNCA acumular múltiples fases en una sesión.
+
+**NUNCA:**
+- No hagas commits automáticos. James revisa y commitea.
+- No modifiques archivos en Docs/ que sean specs de referencia (Feature Spec, BUILD_PLAN, Sprint Brief).
+- Solo PROJECT_STATUS.md es editable por Claude Code.
 
 ## Git
 

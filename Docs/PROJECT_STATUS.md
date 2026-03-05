@@ -20,7 +20,7 @@ Este documento es la UNICA fuente de verdad para el estado del schema, decisione
 
 Documentacion en repo (docs/):
 - [x] README.md (actualizado 2026-03-04)
-- [x] ICONSA_Feature_Specification_v2.md (v2.1, markdown, actualizado 2026-03-04)
+- [x] ICONSA_Feature_Specification_v3.md (v3.0, markdown, actualizado 2026-03-05)
 - [x] ICONSA_MVP_Sprint_Brief.md (v3.0, actualizado 2026-03-04)
 - [x] BUILD_PLAN.md (actualizado 2026-03-04)
 - [x] ICONSA_Guia_Operativa.md
@@ -82,7 +82,7 @@ Los 14 MOV de Spectrum NO van aqui, ya estan en mobilization_rates.
 FKs entrantes: sm_request_lines.equipment_id, trips.vehicle_id, trips.trailer_id
 
 Filtros app:
-- Solicitud (ingeniero): type_code NOT IN ('ING','VHL','VHP','TEC') + fallback texto
+- Solicitud (ingeniero): type_code NOT IN ('ING') + fallback texto
 - Vehiculo (Charris): type_code IN ('VHL','VHP') - pendiente refinar con Astrid
 - EQA = equipos menores (distincion para reporteria)
 
@@ -402,6 +402,42 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 9. Bitacora de Movilizaciones: Fase 2, NO MVP.
 10. Edicion en estados En Proceso/Parcial: TBD con feedback de usuarios.
 
+## BUGS CONOCIDOS
+
+| # | Bug | Estado | Fecha |
+|---|-----|--------|-------|
+| 1 | Botón "Enviar Solicitud" fallaba (trigger generate_request_id) | RESUELTO | 2026-03-05 |
+| 2 | Crear viaje fallaba por indexes duplicados en sequences | RESUELTO | 2026-03-05 |
+| 3 | Tarifa seleccionada no pre-rellena campo Costo | PENDIENTE | 2026-03-05 |
+| 4 | Dropdowns no filtrados (conductor muestra 164 personas, equipo sin filtro) | PENDIENTE | 2026-03-05 |
+| 5 | Guardar/Enviar no redirige a pantalla anterior | PENDIENTE | 2026-03-05 |
+| 6 | Viajes Recientes: falta columna remolque, tarifa, ruta; falta filtros | PENDIENTE | 2026-03-05 |
+| 7 | Líneas del viaje no muestran fecha requerida | PENDIENTE | 2026-03-05 |
+| 8 | Remolque siempre opcional — debe ser requerido cuando vehículo es cabezal | PENDIENTE | 2026-03-05 |
+
+## MEJORAS DESCUBIERTAS DURANTE TESTING
+
+| # | Mejora | Prioridad | Fase |
+|---|--------|-----------|------|
+| 1 | Agrupación de viajes de grúa para facturación (multiplicador) | Media | Fase 2 |
+| 2 | Relación BD entre tarifa y tipo de vehículo/remolque para auto-sugerencia | Media | Fase 2 |
+| 3 | Campos de nota de entrega (código equipo, descripción, placa) en viaje | Media | Fase 2 |
+| 4 | Toggle de código de confirmación por solicitante según tipo de carga | Baja | TBD |
+| 5 | Integración GPS Skydata (https://app.skydatapa.com/) para tracking de flota | Alta | Fase 2 |
+
+## PENDIENTES VIDA REAL (James con equipo ICONSA)
+
+| # | Pendiente | Con quién | Estado |
+|---|-----------|-----------|--------|
+| 1 | Lista de conductores activos y flota de Charris | Charris | TIENE LISTA |
+| 2 | Clasificar personas por departamento y cargo | Charris + HR | PENDIENTE |
+| 3 | Importar códigos de costo por proyecto (Memo de inicio) | Astrid | PENDIENTE |
+| 4 | Confirmar categorías de equipo a excluir de dropdown | Astrid | PARCIAL (ING confirmado) |
+| 5 | Placas de vehículos | Charris/Fleetwise | PENDIENTE |
+| 6 | Definir roles y accesos de usuarios finales | Gerencia | PENDIENTE |
+| 7 | Confirmar lógica de tarifas con cabezal/remolque/grúa | Charris + Gerencia | PENDIENTE |
+| 8 | Ubicaciones adicionales (proveedores frecuentes) | Charris | PENDIENTE |
+
 ## DECISIONES PENDIENTES
 
 Astrid: EQA=menores, no ING dropdown, flota transporte vs proyecto, CSI.
@@ -423,7 +459,7 @@ Futuro: Combustible, mantenimiento, ordenes trabajo, planillas, compras, herrami
 ## LOGICA DE FILTROS
 
 Principio: UNA tabla equipment, clasificacion por type_code, filtrado en queries.
-Solicitud (ingeniero): type_code NOT IN (ING,VHL,VHP,TEC) + fallback texto.
+Solicitud (ingeniero): type_code NOT IN (ING) + fallback texto.
 Vehiculo (Charris): type_code IN (VHL,VHP) pendiente refinar con Astrid.
 Remolque: filtrar por descripcion CAMA/PLATAFORMA/REMOLQUE.
 Desde/Hasta: tabla locations + fallback. Vehiculo interno: equipment_text (MVP).
@@ -435,7 +471,7 @@ Desde/Hasta: tabla locations + fallback. Vehiculo interno: equipment_text (MVP).
 | Recurso | Ubicacion |
 |---------|----------|
 | Demo UI | demo_v8.jsx |
-| Feature Spec | docs/ICONSA_Feature_Specification_v2.md |
+| Feature Spec | docs/ICONSA_Feature_Specification_v3.md |
 | Sprint Brief | docs/ICONSA_MVP_Sprint_Brief.md |
 | Build Plan | docs/BUILD_PLAN.md |
 | SOP | IC-LOG-PO-06 |

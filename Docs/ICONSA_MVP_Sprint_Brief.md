@@ -54,7 +54,7 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 - **Actor:** Carlos Charris (rol: logistica)
 - **Backlog:** Lista de TODAS las líneas pendientes de TODOS los proyectos, con prioridad visual
 - **Prioridad auto-calculada:** Vencida (rojo, fecha < hoy), Urgente (naranja, ≤3 días), Próxima (azul, ≤7 días), Normal (verde, >7 días)
-- **Crear viaje:** Seleccionar líneas → asignar conductor, vehículo, remolque, fecha, tarifa, permiso ATT, escolta
+- **Crear viaje:** Seleccionar líneas → asignar conductor, vehículo, remolque (requerido si cabezal), fecha, tarifa (auto-rellena costo, editable), permiso ATT, escolta
 - **Relación many-to-many:** Un viaje puede llevar líneas de MÚLTIPLES solicitudes. Una línea puede requerir MÚLTIPLES viajes.
 - **Tabla pivote:** `trip_line_assignments` conecta líneas con viajes (con cantidad asignada por cada uno)
 - **Cancelar viaje:** Líneas asignadas regresan a Pendiente en backlog. Cascada re-evalúa solicitudes.
@@ -423,7 +423,7 @@ Gray:    #5A6272 (secondary text)
 
 Documentación clave:
 - `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo
-- `ICONSA_Feature_Specification_v2.md` — reglas de negocio, estados, transiciones
+- `ICONSA_Feature_Specification_v3.md` — reglas de negocio, estados, transiciones
 - `BUILD_PLAN.md` — plan de construcción con 6 fases
 - `supabase_schema_verified.sql` — schema SQL definitivo para generación de tipos
 

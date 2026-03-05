@@ -214,6 +214,12 @@ src/
 
 **Cancelación de viaje:** Líneas regresan a Pendiente. Cascada re-evalúa solicitudes.
 
+**Reglas de formulario de viaje:**
+- Remolque: REQUERIDO cuando vehículo es cabezal (CAB### / 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
+- Tarifa: al seleccionar, pre-rellena campo Costo con `rate`. Costo sigue editable.
+- Guardar Viaje redirige a `/programacion`.
+- Líneas asignadas deben mostrar fecha requerida de la solicitud padre.
+
 **Entregables de documentación:**
 - Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 3
 

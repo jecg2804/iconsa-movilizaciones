@@ -1,9 +1,5 @@
 # Gestión de costos y contexto
 
-## Modelo
-- Default: Sonnet 4.6 (`/model sonnet` al inicio de cada sesión)
-- Opus: Solo para arquitectura compleja o debugging difícil (`/model opus`)
-
 ## Contexto
 - `/compact` al llegar a 50% de uso de contexto
 - `/clear` entre pasos no relacionados o entre fases
