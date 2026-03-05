@@ -50,13 +50,13 @@ src/
 
 | Documento | Cuándo leerlo |
 |-----------|---------------|
-| `Docs/BUILD_PLAN.md` | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
-| `Docs/ICONSA_MVP_Sprint_Brief.md` | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
-| `Docs/ICONSA_Feature_Specification_v2.md` | Detalle completo de pantallas, campos, validaciones, estados. |
-| `Docs/PROJECT_STATUS.md` | Schema actual de BD (16 tablas), estado de cada componente. |
-| `Docs/supabase_schema_verified.sql` | SQL exacto del schema verificado contra Supabase live. |
+| @Docs/BUILD_PLAN.md | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
+| @Docs/ICONSA_MVP_Sprint_Brief.md | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
+| @Docs/ICONSA_Feature_Specification_v2.md | Detalle completo de pantallas, campos, validaciones, estados. |
+| @Docs/PROJECT_STATUS.md | Schema actual de BD (15 tablas), estado de cada componente. |
+| @Docs/supabase_schema_verified.sql | SQL exacto del schema verificado contra Supabase live. |
 
-**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v2.1 para reglas de negocio.
+**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v2.2 para reglas de negocio.
 
 ## Coding Conventions
 
@@ -77,7 +77,7 @@ src/
 - Todas las tablas tienen `created_at` y `updated_at` con trigger automático.
 - RLS habilitado en todas las tablas.
 - Tabla `equipment` es UNIFICADA (equipos + vehículos). Vehículos = `type_code IN ('VHL','VHP')`.
-- **No crear tablas nuevas.** El schema de 16 tablas ya está definido y verificado.
+- **No crear tablas nuevas.** El schema de 15 tablas ya está definido y verificado.
 
 ### Archivos
 - Componentes: `PascalCase.tsx` (ej: `SolicitudForm.tsx`)
@@ -130,9 +130,12 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 
 ## Workflow para Claude Code
 
-1. Lee `Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
+**Plan Mode (Shift+Tab×2):** Usar para estudiar codebase y planificar antes de escribir código.
+**Normal Mode:** Implementar después de que el plan esté aprobado por James.
+
+1. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
 2. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-3. Verifica columnas y relaciones en `Docs/PROJECT_STATUS.md`.
+3. Verifica columnas y relaciones en `@Docs/PROJECT_STATUS.md` o via Supabase MCP.
 4. Implementa. Corre `npm run build` para verificar que compila sin errores.
 5. **No hagas commits automáticos.** James revisa y commitea manualmente.
 

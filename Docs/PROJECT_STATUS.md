@@ -53,7 +53,7 @@ Principio: misma estructura = misma tabla, clasificacion por columnas, filtrado 
 |---------|------|----------|---------|-------------|
 | id | UUID PK | No | gen_random_uuid() | Identificador unico |
 | spectrum_code | TEXT | Si | - | Codigo Spectrum (GRU508, CAB930) |
-| description | TEXT | Si | - | Nombre/descripcion |
+| description | TEXT | No | - | Nombre/descripcion |
 | equipment_type | TEXT | Si | - | Nombre largo (Equipo Pesado, Gruas, Vehiculos Livianos) |
 | type_code | TEXT | Si | - | Codigo corto: EQP, GRU, MAR, EQA, EQL, FND, TEC, ING, VHL, VHP |
 | brand | TEXT | Si | - | Marca |
@@ -113,7 +113,7 @@ Filtros app:
 | created_at | TIMESTAMPTZ | No | now() | Creacion |
 | updated_at | TIMESTAMPTZ | No | now() | Modificacion (trigger) |
 
-Datos: 160 registros importados (app_role=NULL para todos, asignar manualmente a usuarios del sistema).
+Datos: 164 registros (160 importados + 4 test users nuevos). 6 usuarios con auth_id y app_role asignados: admin, almacen, campo, logistica (Charris CHA082), pm×2 (Caballero, Jacome JAC161). Duplicados de Charris y Jacome mergeados en filas reales con código de empleado.
 Roles: admin=James, pm=ingenieros, logistica=Charris, campo=conductores, almacen=Yoseph
 
 ---
@@ -143,7 +143,8 @@ Datos: 4 registros: ASTIBAL (25-504), Paraiso (25-505), Muelle 14 (25-506), Cost
 
 ### TABLA: person_projects (asignacion persona-proyecto)
 
-id UUID PK, person_id FK people, project_id FK projects, role TEXT, is_active BOOLEAN DEFAULT true, created_at, updated_at.
+id UUID PK, person_id FK people (CASCADE), project_id FK projects (CASCADE), role TEXT, is_active BOOLEAN DEFAULT true, created_at, updated_at.
+UNIQUE(person_id, project_id). Datos: 11 asignaciones (Admin×4, Charris×4, Caballero×2, Jacome×1).
 
 ---
 
@@ -178,6 +179,7 @@ Datos: VACIO. Pendiente importar codcost.csv.
 
 seq_type TEXT, project_id FK projects (nullable), next_number INTEGER.
 UNIQUE(seq_type, COALESCE(project_id, UUID_CERO)). Auto-gestionada.
+Datos: 5 registros (SM×4 proyectos + MOV global). next_number=1 en todas.
 
 ---
 
@@ -234,6 +236,7 @@ Triggers: generate_request_id(), calculate_priority(), update_updated_at()
 | updated_at | TIMESTAMPTZ | now() | Modificacion |
 
 Trigger: cascade_request_status() - actualiza sm_requests.status basado en estados de lineas.
+Constraints: CHECK (line_type IN ('Equipo','Material')). FK request_id ON DELETE CASCADE.
 
 ---
 
@@ -247,7 +250,7 @@ Trigger: generate_trip_id() + confirmation_code
 ### TABLA: trip_line_assignments (pivote many-to-many)
 
 id, trip_id FK trips (CASCADE), request_line_id FK sm_request_lines, quantity_assigned DECIMAL, created_at, updated_at.
-Un viaje lleva lineas de MULTIPLES solicitudes. Una linea puede dividirse en MULTIPLES viajes.
+UNIQUE(trip_id, request_line_id). Un viaje lleva lineas de MULTIPLES solicitudes. Una linea puede dividirse en MULTIPLES viajes.
 
 ---
 

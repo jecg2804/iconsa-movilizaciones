@@ -130,11 +130,15 @@ src/
 
 **Criterio de éxito:** `npm run build` pasa sin errores, tipos compilando.
 
+**Entregables de documentación:**
+- Crear `.env.example` con todas las variables necesarias
+- Verificar `.mcp.json` (Supabase MCP) funciona en Claude Code
+- Crear `supabase/seed.sql` con datos de desarrollo
+- Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 0
+
 ---
 
 ### Fase 1: Auth + Layout Shell
-
-**Objetivo:** Login funcional y layout correcto por rol.
 
 | Paso | Archivo(s) | Qué hace |
 |------|-----------|----------|
@@ -150,11 +154,12 @@ src/
 
 **Prerequisito Supabase:** 3+ usuarios en Auth + app_role + auth_id + person_projects.
 
+**Entregables de documentación:**
+- Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 1
+
 ---
 
 ### Fase 2: Solicitudes (flujo del PM)
-
-**Objetivo:** Crear, ver, editar, enviar solicitudes con líneas.
 
 | Paso | Archivo(s) | Qué hace |
 |------|-----------|----------|
@@ -186,6 +191,10 @@ src/
 - Cancelar solicitud: cancela líneas pendientes, libera líneas programadas.
 - Eliminar línea programada: warning → remueve asignación del viaje.
 
+**Entregables de documentación:**
+- Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 2
+- Verificar que Feature Spec sección 4 (Solicitudes) coincide con lo implementado
+
 ---
 
 ### Fase 3: Programación (flujo de Charris)
@@ -205,6 +214,9 @@ src/
 
 **Cancelación de viaje:** Líneas regresan a Pendiente. Cascada re-evalúa solicitudes.
 
+**Entregables de documentación:**
+- Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 3
+
 ---
 
 ### Fase 4: Ejecución (Eventos)
@@ -222,6 +234,9 @@ src/
 
 **Quién registra:** Cualquier logistica, campo, almacen. Sin restricción por driver_id.
 
+**Entregables de documentación:**
+- Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 4
+
 ---
 
 ### Fase 5: Dashboard
@@ -235,6 +250,9 @@ src/
 | 5.3 | `app/(app)/dashboard/page.tsx` | Dashboard real con KPIs globales |
 
 **KPIs:** Solicitudes pendientes, líneas sin programar, viajes hoy/semana, completadas mes.
+
+**Entregables de documentación:**
+- Actualizar `Docs/PROJECT_STATUS.md` con estado de Fase 5
 
 ---
 
@@ -254,6 +272,12 @@ src/
 - Solicitud completada → PM solicitante
 - Solicitud vencida (daily cron) → Charris + PM
 - Sugerencia fallback → Admin
+
+**Entregables de documentación:**
+- Crear `apps/api/CLAUDE.md` (convenciones NestJS, estructura módulos)
+- Crear `Docs/api-contracts.md` (endpoints, request/response shapes)
+- Actualizar `Docs/PROJECT_STATUS.md` con estado final pre-deploy
+- Actualizar RLS policies de `USING(true)` a políticas reales basadas en roles
 
 ---
 
