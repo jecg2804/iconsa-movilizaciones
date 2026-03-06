@@ -370,6 +370,27 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | app/(app)/programacion/viaje/[id]/page.tsx | COMPLETADO |
 | app/(app)/programacion/calendario/page.tsx | COMPLETADO (placeholder) |
 
+### Fase 4 — Ejecucion y Eventos (COMPLETADA — 2026-03-06)
+
+| Archivo | Estado |
+|---------|--------|
+| hooks/useMyTrips.ts | COMPLETADO |
+| hooks/useTripEvents.ts | COMPLETADO |
+| components/viajes/TripCard.tsx | COMPLETADO |
+| components/viajes/EventTimeline.tsx | COMPLETADO |
+| components/viajes/EventButton.tsx | COMPLETADO |
+| components/viajes/CodeConfirmation.tsx | COMPLETADO |
+| app/(app)/mis-viajes/page.tsx | COMPLETADO |
+| app/(app)/mis-viajes/[id]/page.tsx | COMPLETADO |
+
+Notas Fase 4:
+- useMyTrips: lista todos los viajes Programado/En Ruta sin filtro por driver_id (MVP)
+- useTripEvents: INSERT inmutable en trip_events + transiciones de estado por tipo de evento
+- CodeConfirmation: expectedCode solo usado para validacion interna, NUNCA mostrado en UI
+- mis-viajes/[id]: codigo de confirmacion visible SOLO para logistica y admin
+- Secuencia: Salida -> Entrega -> Retorno (Llegada opcional). Incidencia siempre disponible.
+- Bugs #3-#8 corregidos en esta sesion (tarifa, filtros, redirects, columnas, fecha requerida, remolque cabezal)
+
 ## APP NEXT.JS - PANTALLAS
 
 | Ruta | Actor | Estado |
@@ -384,8 +405,8 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | /programacion/viaje/nuevo | logistica, admin | COMPLETADO |
 | /programacion/viaje/[id] | logistica, admin | COMPLETADO |
 | /programacion/calendario | logistica, admin, pm(ro) | COMPLETADO (placeholder) |
-| /mis-viajes | logistica, campo, almacen, admin | PENDIENTE |
-| /mis-viajes/[id] | logistica, campo, almacen, admin | PENDIENTE |
+| /mis-viajes | logistica, campo, almacen, admin | COMPLETADO |
+| /mis-viajes/[id] | logistica, campo, almacen, admin | COMPLETADO |
 | /admin/masters | admin | PENDIENTE |
 
 ---
@@ -442,12 +463,12 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 |---|-----|--------|-------|
 | 1 | Botón "Enviar Solicitud" fallaba (trigger generate_request_id) | RESUELTO | 2026-03-05 |
 | 2 | Crear viaje fallaba por indexes duplicados en sequences | RESUELTO | 2026-03-05 |
-| 3 | Tarifa seleccionada no pre-rellena campo Costo | PENDIENTE | 2026-03-05 |
-| 4 | Dropdowns no filtrados (conductor muestra 164 personas, equipo sin filtro) | PENDIENTE | 2026-03-05 |
-| 5 | Redirect después de guardar: crear nuevo → ir a lista, editar existente → quedarse en detalle | PENDIENTE | 2026-03-05 |
-| 6 | Viajes Recientes: falta columna remolque, tarifa, ruta; falta filtros | PENDIENTE | 2026-03-05 |
-| 7 | Líneas del viaje no muestran fecha requerida | PENDIENTE | 2026-03-05 |
-| 8 | Remolque siempre opcional — debe ser requerido cuando vehículo es cabezal | PENDIENTE | 2026-03-05 |
+| 3 | Tarifa seleccionada no pre-rellena campo Costo | RESUELTO | 2026-03-05 |
+| 4 | Dropdowns no filtrados (conductor muestra 164 personas, equipo sin filtro) | RESUELTO | 2026-03-05 |
+| 5 | Redirect después de guardar: crear nuevo → ir a lista, editar existente → quedarse en detalle | RESUELTO | 2026-03-05 |
+| 6 | Viajes Recientes: falta columna remolque, tarifa, ruta; falta filtros | RESUELTO | 2026-03-05 |
+| 7 | Líneas del viaje no muestran fecha requerida | RESUELTO | 2026-03-05 |
+| 8 | Remolque siempre opcional — debe ser requerido cuando vehículo es cabezal | RESUELTO | 2026-03-05 |
 
 ## MEJORAS DESCUBIERTAS DURANTE TESTING
 
@@ -465,12 +486,12 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 |---|-----------|-----------|--------|
 | 1 | Lista de conductores activos y flota de Charris | Charris | TIENE LISTA |
 | 2 | Clasificar personas por departamento y cargo | Charris + HR | PENDIENTE |
-| 3 | Importar códigos de costo por proyecto (Memo de inicio) | Astrid | PENDIENTE |
+| 3 | Importar códigos de costo por proyecto (Memo de inicio) | Astrid | RESUELTO |
 | 4 | Confirmar categorías de equipo a excluir de dropdown | Astrid | PARCIAL (ING confirmado) |
-| 5 | Placas de vehículos | Charris/Fleetwise | PENDIENTE |
-| 6 | Definir roles y accesos de usuarios finales | Gerencia | PENDIENTE |
-| 7 | Confirmar lógica de tarifas con cabezal/remolque/grúa | Charris + Gerencia | PENDIENTE |
-| 8 | Ubicaciones adicionales (proveedores frecuentes) | Charris | PENDIENTE |
+| 5 | Placas de vehículos | Charris/Fleetwise | RESUELTO |
+| 6 | Definir roles y accesos de usuarios finales | Gerencia | RESUELTO |
+| 7 | Confirmar lógica de tarifas con cabezal/remolque/grúa | Charris + Gerencia | RESUELTO |
+| 8 | Ubicaciones adicionales (proveedores frecuentes) | Charris | RESUELTO |
 
 ## DECISIONES PENDIENTES
 
