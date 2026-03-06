@@ -83,6 +83,7 @@ export default function NuevoViajePage() {
         .from('people')
         .select('id, name')
         .eq('status', 'Activo')
+        .eq('app_role', 'campo')
         .order('name')
       setDrivers(data ?? [])
       setDriversLoading(false)
@@ -177,6 +178,7 @@ export default function NuevoViajePage() {
         value: r.id,
         label: `${r.code} — ${r.description}`,
         sublabel: formatCurrency(r.rate),
+        amount: r.rate,
       })),
     [rates],
   )
@@ -187,7 +189,7 @@ export default function NuevoViajePage() {
     if (!tripData.scheduled_date) errors.push('Seleccione la fecha programada')
     if (!tripData.driver_id) errors.push('Seleccione un conductor')
     if (!tripData.vehicle_id) errors.push('Seleccione un vehiculo')
-    if (!tripData.rate_id) errors.push('Seleccione una tarifa de movilizacion')
+    // Tarifa es opcional — no toda movilización tiene tarifa formal
     if (assignments.length === 0) errors.push('Seleccione al menos una linea')
     setValidationErrors(errors)
     return errors.length === 0

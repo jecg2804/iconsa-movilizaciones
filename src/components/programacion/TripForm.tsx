@@ -154,11 +154,21 @@ function TripForm({
   const handleRateChange = useCallback(
     (val: string | null) => {
       setRateId(val)
-      // Notificar al padre para que auto-rellene el costo si lo desea
+      // Auto-rellenar costo desde el amount de la opción seleccionada
+      if (val) {
+        const selectedRate = rates.find((r) => r.value === val)
+        if (selectedRate?.amount != null) {
+          const newCost = String(selectedRate.amount)
+          setCost(newCost)
+          onRateChange?.(val)
+          propagate({ rate_id: val, cost: selectedRate.amount })
+          return
+        }
+      }
       onRateChange?.(val)
       propagate({ rate_id: val })
     },
-    [propagate, onRateChange],
+    [propagate, onRateChange, rates],
   )
 
   const handleCostChange = useCallback(

@@ -7,6 +7,8 @@ export interface SelectOption {
   value: string
   label: string
   sublabel?: string
+  /** Valor numérico opcional — usado para auto-fill (ej: monto de tarifa de movilización) */
+  amount?: number
 }
 
 interface SelectProps {

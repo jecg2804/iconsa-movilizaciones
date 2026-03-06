@@ -22,6 +22,15 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 ## Key Directories
 
 ```
+.claude/                          # ⚠️ EN LA RAÍZ DEL REPO, NO en tu directorio de usuario
+├── rules/                        # Reglas que Claude Code debe seguir siempre
+│   ├── commit-after-step.md
+│   ├── cost-management.md
+│   └── no-modify-specs.md
+├── skills/                       # Patrones de implementación por tipo de tarea
+│   ├── crud-page.md
+│   ├── events-page.md
+│   └── supabase-queries.md
 src/
 ├── app/
 │   ├── (auth)/login/           # Login (Supabase Auth)

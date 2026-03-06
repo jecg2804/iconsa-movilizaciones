@@ -243,6 +243,7 @@ export default function ViajeDetailPage() {
         .from('people')
         .select('id, name')
         .eq('status', 'Activo')
+        .eq('app_role', 'campo')
         .order('name')
       setDrivers(data ?? [])
       setDriversLoading(false)
@@ -341,6 +342,7 @@ export default function ViajeDetailPage() {
         value: r.id,
         label: `${r.code} — ${r.description}`,
         sublabel: formatCurrency(r.rate),
+        amount: r.rate,
       })),
     [rates],
   )

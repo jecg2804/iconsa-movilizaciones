@@ -1,7 +1,7 @@
 # ICONSA — Feature Specification Document
 ## Sistema Digital de Movilizaciones (IC-LOG-PO-06)
 
-**Versión:** 3.1  
+**Versión:** 3
 **Fecha:** 06 de marzo de 2026  
 **Autor:** James Cucalón — Ingeniero Industrial  
 **Empresa:** Ingeniería Continental, S.A. (ICONSA)  

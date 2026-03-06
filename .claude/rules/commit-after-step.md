@@ -1,16 +1,27 @@
-# Commit después de cada paso
+# Commits y push automáticos en branch de desarrollo
 
-Después de completar cada paso del BUILD_PLAN (ej: 4.1, 4.2, 4.3):
+Claude Code PUEDE hacer commits Y push automáticos en `jaime/dev` y `andy/dev`.
+NUNCA hacer commits ni push directos a `main`.
+
+## Después de cada paso completado:
 
 1. Corre `npm run build` para verificar que compila.
-2. Sugiere un commit message con formato: `feat: paso X.Y — descripción breve`
-3. Espera confirmación de James antes de continuar al siguiente paso.
-4. Si el paso involucró cambios en la BD o lógica nueva, actualiza PROJECT_STATUS.md.
+2. Si el build falla, arreglar antes del siguiente paso.
+3. `git add -A` + `git commit -m "mensaje"` + `git push origin jaime/dev`
+4. Continuar al siguiente paso sin esperar aprobación.
+5. Si el paso involucró cambios en la BD o lógica nueva, actualiza PROJECT_STATUS.md.
 
-Ejemplos de buenos commits:
+## Formato de commits:
+- `fix: bug #X — descripción breve`
+- `feat: paso X.Y — descripción breve`
+- `docs: actualizar PROJECT_STATUS con estado de Fase X`
+
+## Ejemplos:
 - `feat: paso 4.1 — TripCard componente con timeline de eventos`
-- `fix: paso 3.4 — tarifa auto-rellena campo costo al seleccionar`
+- `fix: bug #3 — tarifa auto-rellena campo costo al seleccionar`
 - `docs: actualizar PROJECT_STATUS con estado de Fase 4`
 
-NUNCA acumular múltiples pasos en un solo commit.
-NUNCA hacer commit automático sin aprobación.
+## NUNCA:
+- Hacer commits a `main`
+- Hacer push a `main`
+- Acumular múltiples pasos en un solo commit
