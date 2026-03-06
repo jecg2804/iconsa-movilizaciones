@@ -1,8 +1,8 @@
 # ICONSA — Feature Specification Document
 ## Sistema Digital de Movilizaciones (IC-LOG-PO-06)
 
-**Versión:** 3.0  
-**Fecha:** 05 de marzo de 2026  
+**Versión:** 3.1  
+**Fecha:** 06 de marzo de 2026  
 **Autor:** James Cucalón — Ingeniero Industrial  
 **Empresa:** Ingeniería Continental, S.A. (ICONSA)  
 **Departamento:** Taller Chilibre / Logística  
@@ -349,7 +349,7 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 | Campo | Tipo | Requerido | Comportamiento |
 |-------|------|:---------:|---------------|
 | Descripción del material | Texto libre | ✅ | El usuario describe el material. Sin dropdown (no existe catálogo de materiales aún). |
-| Categoría de material | Dropdown | ❌ | Fase 2 — campo existe pero no requerido inicialmente. |
+| Categoría de material | Texto libre / Dropdown futuro | ❌ | Disponible en MVP como texto libre. Cuando se definan las categorías CSI, se conectará a una tabla maestra con dropdown. No requerido. |
 
 **Campos comunes a ambos tipos:**
 
@@ -368,8 +368,8 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 
 | Botón | Condición | Comportamiento |
 |-------|-----------|---------------|
-| Guardar Borrador | Modo creación o edición (Borrador) | Guarda la solicitud y todas sus líneas con estado "Borrador". Genera ID si es la primera vez. No notifica a nadie. **Redirige a `/solicitudes` después de guardar.** |
-| Enviar Solicitud | Modo creación o edición, mínimo 1 línea | Guarda todo + cambia estado a "Enviada". Activa notificación email a Charris. Calcula prioridad. A partir de aquí no se pueden agregar líneas nuevas. **Redirige a `/solicitudes` después de enviar.** |
+| Guardar Borrador | Modo creación o edición (Borrador) | Guarda la solicitud y todas sus líneas con estado "Borrador". Genera ID si es la primera vez. No notifica a nadie. **Si es creación nueva: redirige a `/solicitudes`. Si es edición: se queda en `/solicitudes/[id]` mostrando estado actualizado.** |
+| Enviar Solicitud | Modo creación o edición, mínimo 1 línea | Guarda todo + cambia estado a "Enviada". Activa notificación email a Charris. Calcula prioridad. A partir de aquí no se pueden agregar líneas nuevas. **Redirige a `/solicitudes` (lista).** |
 | Cancelar Solicitud | Solicitud en estado Borrador, Enviada, o En Proceso | Cambia estado a "Cancelada". Pide confirmación. Cancela todas las líneas pendientes. Líneas ya programadas se liberan de vuelta al backlog. |
 | Eliminar Línea | Línea visible en modo edición | Si la línea está Pendiente: se elimina directamente. Si la línea está Programada: warning "Esta línea está asignada al viaje MOV-2026-003. ¿Eliminar?" → si confirma, se remueve la asignación del viaje y se elimina la línea. |
 | Volver a Mis Solicitudes | Siempre | Navega de vuelta a `/solicitudes`. |
@@ -464,11 +464,11 @@ La pantalla tiene dos secciones principales:
 |-------|------|:---------:|---------------|
 | ID Viaje | Auto-generado | — | `MOV-{YYYY}-{###}`, secuencial por año. |
 | Fecha Programada | Selector de fecha | ✅ | Fecha en que se ejecutará el viaje. |
-| Conductor | Dropdown (lookup) | ✅ | Lista de personas (MVP: no filtrado por rol, Charris conoce a sus conductores). |
+| Conductor | Dropdown (lookup) | ✅ | Lista de personas filtrada por `app_role = 'campo'`. Muestra: Nombre. Incluye Fallback para conductores no registrados. |
 | Vehículo (Cabezal) | Dropdown (lookup) | ✅ | Lista de equipos con `type_code IN ('VHL','VHP')`. Muestra: Código – Descripción. |
 | Remolque | Dropdown (lookup) | Condicional | Filtrar por descripción CAMA/PLATAFORMA/REMOLQUE. **REQUERIDO cuando el vehículo seleccionado es un cabezal** (spectrum_code comienza con 'CAB' o description contiene 'CABEZAL'). Si el vehículo NO es cabezal (pick-up, volquete, camión grúa), se deja vacío. |
-| Tarifa de Movilización | Dropdown (lookup) | ✅ | Lista de 14 tarifas. Muestra: Código – Descripción – Monto. Auto-rellena el costo. |
-| Costo | Número / Moneda | ✅ | Auto-rellenado por tarifa, pero editable manualmente (ej: agrupaciones de grúa). |
+| Tarifa de Movilización | Dropdown (lookup) | ❌ | Lista de 14 tarifas. Muestra: Código – Descripción – Monto. Auto-rellena el costo. Opcional — no toda movilización tiene tarifa formal. |
+| Costo | Número / Moneda | ❌ | Auto-rellenado por tarifa cuando se selecciona. Editable manualmente. Opcional — se llena automáticamente si hay tarifa, o manualmente para casos especiales. |
 | Requiere Permiso ATT | Toggle (Sí/No) | ✅ | Default: No. Si Sí, se muestra badge 🔒. |
 | Requiere Escolta | Toggle (Sí/No) | ✅ | Default: No. Si Sí, se muestra badge 🚨. |
 | Notas del viaje | Texto largo | ❌ | Observaciones operativas. |
@@ -502,8 +502,8 @@ El sistema determina automáticamente el tipo basándose en las rutas de las lí
 
 | Botón | Condición | Comportamiento |
 |-------|-----------|---------------|
-| Guardar Viaje | Siempre en edición | Guarda el viaje y sus asignaciones. Las líneas asignadas cambian a estado "Programada". Las solicitudes de origen actualizan su estado según cascada (ver sección 8). Notifica a los solicitantes por email. **Redirige a `/programacion` después de guardar.** |
-| Cancelar Viaje | Viaje en estado Programado o En Ruta | Cambia estado a "Cancelado". Libera las líneas de vuelta al backlog (estado → "Pendiente"). Requiere confirmación. **Redirige a `/programacion` después de cancelar.** |
+| Guardar Viaje | Siempre en edición | Guarda el viaje y sus asignaciones. Las líneas asignadas cambian a estado "Programada". Las solicitudes de origen actualizan su estado según cascada (ver sección 8). Notifica a los solicitantes por email. **Si es creación nueva: redirige a `/programacion`. Si es edición: se queda en `/programacion/viaje/[id]`.** |
+| Cancelar Viaje | Viaje en estado Programado o En Ruta | Cambia estado a "Cancelado". Libera las líneas de vuelta al backlog (estado → "Pendiente"). Requiere confirmación. **Redirige a `/programacion`.** |
 
 **Regla de auto-relleno de tarifa→costo:** Al seleccionar una tarifa de movilización, el campo "Costo" se pre-rellena automáticamente con el valor `rate` de la tarifa seleccionada. El campo sigue siendo editable — Charris puede modificar el costo y documentar la razón en el campo de Notas (ej: agrupación de viajes de grúa, descuento, etc.).
 
@@ -679,7 +679,7 @@ Cuando un usuario usa el fallback universal (escribe texto libre en un dropdown)
 **Referencia completa:** El schema verificado está en `supabase_schema_verified.sql` y `PROJECT_STATUS.md`. Aquí se documenta la estructura lógica.
 
 ```
-TABLAS MAESTRAS (10 tablas)
+TABLAS MAESTRAS (11 tablas)
 ═══════════════════════════
 
 projects ─── id, code, name, manager, status, location, start_date, end_date,
@@ -713,6 +713,13 @@ sequences ── id, seq_type, project_id→projects, next_number
 
 suggestions ─ id, table_name, suggested_value, suggested_by→people, status,
               reviewed_by→people
+
+user_app_roles ─ id, person_id→people, app_code, role_code, is_active,
+                 granted_by→people, granted_at, notes
+                 (UNIQUE person_id + app_code + role_code)
+                 → Fundación multi-app RBAC. MVP: app_code='movilizaciones'.
+                 → Roles movilizaciones: solicitante, coordinador, operador, receptor, visor, admin
+                 → people.app_role se mantiene como shortcut para MVP; se depreca post-MVP.
 
 
 TABLAS TRANSACCIONALES (5 tablas)
@@ -1103,7 +1110,14 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | 4 | ¿Reglas exactas de edición en estados En Proceso y Parcial? | UX solicitudes | Se define con feedback de usuarios |
 | 5 | ¿Hay movilizaciones que ejecutan terceros (subcontratistas)? | Modelo de datos | Pendiente |
 | 6 | ¿Los reportes de Valderrama se digitalizan en este sistema? | Alcance futuro | Pendiente |
-| 7 | ¿Qué pasa si Charris necesita movilización urgente sin solicitud? | Flujo, excepciones | Pendiente |
+| 7 | ¿Qué pasa si Charris necesita movilización urgente sin solicitud? | Flujo, excepciones | Decisión MVP: forzar solicitud retroactiva. Fase 2: "Solicitud Express" |
+| 8 | ¿El código de confirmación es obligatorio para todas las entregas o toggle por solicitud según tipo de carga? | UX eventos | Pendiente — MVP: acepta código O nombre receptor |
+| 9 | Settings por proyecto: ¿gerentes definen receptores autorizados, personas que crean solicitudes? | Arquitectura, permisos | Post-MVP |
+| 10 | Onboarding descentralizado: ¿líderes de área registran su gente e invitan al sistema? | Arquitectura, usuarios | Post-MVP |
+| 11 | ¿Cuándo migrar de `people.app_role` a `user_app_roles` como fuente primaria de permisos? | Arquitectura multi-app | Cuando se construya la segunda app |
+| 12 | ¿Cómo se registran movilizaciones con personal/servicio externo? | Modelo de datos | MVP: `is_external=true` + costo manual + notas |
+| 13 | Integración GPS Skydata (https://app.skydatapa.com/) — ¿API disponible? ¿Métodos de conexión? | Fase 2 | Pendiente investigar |
+| 14 | Categorías CSI de materiales — ¿quién las define? ¿Cuáles son? | Modelo de datos, Fase 2 | Pendiente — James con oficina |
 
 ---
 
@@ -1157,7 +1171,8 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | 2.1 | 2026-03-04 | Cambio de toolstack: NestJS reemplaza ASP.NET Core como backend. n8n eliminado — automatizaciones viven en NestJS. Next.js PWA-ready (offline Fase 3). Python queda para data/ETL/AI. |
 | 2.1.1 | 2026-03-04 | Auditoría cross-doc: corregido acceso /mis-viajes (logistica, campo, almacen, admin). PWA aclarado (ready en toolstack, offline en Fase 3). Conteo tablas corregido (15, no 16). |
 | 2.2 | 2026-03-04 | Sincronización schema con Supabase live. 13 columnas corregidas: request_number→request_id, item_type→line_type, cost_category→category, oc_reference→po_reference, from_location_text→from_text, to_location_text→to_text, sequence_type→seq_type, current_value→next_number, trip_number→trip_id, requires_att_permit→att_permit, requires_escort→escort, line_id→request_line_id, qty_assigned→quantity_assigned. Eliminadas: trips.created_by, cost_codes.cost_type/description/is_active. Agregadas: sm_requests.date_created, sm_request_lines.unit_text, cost_codes.phase_description/full_code. |
-| 3.0 | 2026-03-05 | Correcciones post-testing Fases 0-3. Filtro equipos en solicitud corregido: solo `NOT IN ('ING')` (se estaban excluyendo VHL, VHP, TEC incorrectamente). Remolque ahora condicional: REQUERIDO cuando vehículo es cabezal (CAB###). Tarifa auto-rellena costo (editable). Redirect a pantalla anterior después de guardar/enviar solicitud y viaje. Líneas asignadas a viaje ahora muestran fecha requerida. Viajes recientes: agregar filtros por estado/fecha/conductor. Código de confirmación: cualquier rol autorizado puede ingresarlo, no solo conductor. Agregado PENDIENTE sobre toggle de código de confirmación. |
+| 3.0 | 2026-03-05 | Correcciones post-testing Fases 0-3. Filtro equipos en solicitud corregido: solo `NOT IN ('ING')`. Remolque condicional con cabezal. Tarifa auto-rellena costo. Redirect después de guardar/enviar. Líneas de viaje muestran fecha requerida. Filtros en viajes recientes. Código de confirmación por cualquier rol autorizado. |
+| 3.1 | 2026-03-06 | Tarifa y Costo cambiados a opcionales (no toda movilización tiene tarifa formal). Categoría de material disponible en MVP como texto libre (CSI pendiente). Tabla `user_app_roles` agregada como fundación multi-app RBAC (User→Role→Scope). `parent_equipment_id` agregado a equipment para relación accesorio→equipo padre. 7 nuevas preguntas abiertas documentadas. Decisiones: eventos Salida+Entrega obligatorios, código acepta código O nombre receptor, forzar solicitud retroactiva en MVP, servicios externos con is_external+costo manual. BD limpieza: 177 personas (13 del organigrama), 58 teléfonos, 23 placas, ciudades normalizadas, 4 conductores con role. |
 
 ---
 

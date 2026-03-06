@@ -444,7 +444,7 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | 2 | Crear viaje fallaba por indexes duplicados en sequences | RESUELTO | 2026-03-05 |
 | 3 | Tarifa seleccionada no pre-rellena campo Costo | PENDIENTE | 2026-03-05 |
 | 4 | Dropdowns no filtrados (conductor muestra 164 personas, equipo sin filtro) | PENDIENTE | 2026-03-05 |
-| 5 | Guardar/Enviar no redirige a pantalla anterior | PENDIENTE | 2026-03-05 |
+| 5 | Redirect después de guardar: crear nuevo → ir a lista, editar existente → quedarse en detalle | PENDIENTE | 2026-03-05 |
 | 6 | Viajes Recientes: falta columna remolque, tarifa, ruta; falta filtros | PENDIENTE | 2026-03-05 |
 | 7 | Líneas del viaje no muestran fecha requerida | PENDIENTE | 2026-03-05 |
 | 8 | Remolque siempre opcional — debe ser requerido cuando vehículo es cabezal | PENDIENTE | 2026-03-05 |

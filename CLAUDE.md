@@ -119,7 +119,7 @@ Gray:   #5A6272  (secondary text)
 7. **Monospace para IDs.** `25-506-SM-023` y `MOV-2026-042` siempre en fuente monoespaciada.
 8. **Remolque condicional.** REQUERIDO cuando vehículo es cabezal (CAB### o 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
 9. **Tarifa y Costo OPCIONALES.** No toda movilización tiene tarifa formal. Si se selecciona tarifa, pre-rellenar Costo con `rate`. Campo sigue editable.
-10. **Redirect después de guardar/enviar.** Toda acción de guardado redirige a la pantalla de lista correspondiente.
+10. **Redirect después de guardar/enviar.** Crear nuevo → redirige a lista. Editar existente → se queda en detalle mostrando estado actualizado. Enviar solicitud → siempre a lista.
 11. **Filtro equipos en solicitud:** `type_code NOT IN ('ING')`. NO excluir VHL, VHP, TEC.
 
 ## Estados y Cascada
@@ -134,31 +134,6 @@ Cascada (`cascade_request_status()`): cuando cambia una línea, re-evalúa la so
 Ver Feature Spec sección 8.4 para reglas exactas.
 
 ## Workflow para Claude Code
-
-### Tres actores — quién hace qué
-
-**Claude Chat (claude.ai)** — Planificación, diseño, discusión de lógica de negocio, auditoría de documentos, cambios directos en Supabase (tiene acceso de escritura). Si necesitas:
-- Discutir una regla de negocio no definida → pide a James que consulte con Chat
-- Cambiar schema de BD (nueva tabla, columna, trigger, policy) → Chat lo hace
-- Auditar documentación o verificar consistencia → Chat lo hace
-- Tomar decisiones de arquitectura → Chat asesora, James decide
-
-**James (humano)** — Decisiones finales, input de negocio, coordinación con equipo ICONSA, push a git, aprobación de commits. Si necesitas:
-- Clarificar un requisito de negocio → pregúntale directo
-- Aprobar un commit → espera su OK
-- Datos que solo él tiene (info de Charris, Astrid, gerencia) → pregúntale
-- Push al repo → solo James lo hace
-
-**Claude Code (tú)** — Implementación de código, testing, builds. Tú puedes:
-- Crear/editar archivos de código
-- Correr npm run build, npm run lint
-- Leer Supabase MCP (read-only, NO escribir)
-- Actualizar PROJECT_STATUS.md con estado de componentes
-- Sugerir commits (James aprueba)
-
-**Regla de oro:** Si algo involucra cambiar la BD o la lógica de negocio, PARA y dile a James que lo discuta con Chat primero. Si es solo implementación de código basada en lo que ya está en los docs, HAZLO.
-
-### Flujo por sesión
 
 **ANTES de cada sesión:**
 1. `/model sonnet` — Sonnet es el default. Solo usar `/model opus` para arquitectura compleja.

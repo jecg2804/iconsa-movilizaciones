@@ -216,8 +216,8 @@ src/
 
 **Reglas de formulario de viaje:**
 - Remolque: REQUERIDO cuando vehículo es cabezal (CAB### / 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
-- Tarifa: al seleccionar, pre-rellena campo Costo con `rate`. Costo sigue editable.
-- Guardar Viaje redirige a `/programacion`.
+- Tarifa y Costo: OPCIONALES. Al seleccionar tarifa, pre-rellena campo Costo con `rate`. Costo sigue editable.
+- Crear nuevo → redirige a lista. Editar existente → se queda en detalle.
 - Líneas asignadas deben mostrar fecha requerida de la solicitud padre.
 
 **Entregables de documentación:**
