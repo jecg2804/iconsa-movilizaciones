@@ -131,6 +131,7 @@ function LineEditor({
       } else {
         setDescription('')
       }
+      setCategory(null)
       setErrors({})
     },
     [lineType],
@@ -316,15 +317,25 @@ function LineEditor({
             />
           </>
         ) : (
-          <div className="md:col-span-2">
-            <Input
-              label="Descripcion del material"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describa el material a movilizar..."
-              error={errors.description}
-            />
-          </div>
+          <>
+            <div className="md:col-span-2">
+              <Input
+                label="Descripcion del material"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describa el material a movilizar..."
+                error={errors.description}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Input
+                label="Categoria de Material"
+                value={category ?? ''}
+                onChange={(e) => setCategory(e.target.value || null)}
+                placeholder="Ej: Agregados, Acero, Electrico, Plomeria..."
+              />
+            </div>
+          </>
         )}
 
         {/* Campos comunes */}
@@ -379,13 +390,15 @@ function LineEditor({
           searchable
         />
 
-        <Select
-          label="Categoria"
-          placeholder="Seleccionar..."
-          options={categoryOptions}
-          value={category}
-          onChange={setCategory}
-        />
+        {lineType === 'Equipo' && (
+          <Select
+            label="Categoria"
+            placeholder="Seleccionar..."
+            options={categoryOptions}
+            value={category}
+            onChange={setCategory}
+          />
+        )}
 
         <Input
           label="Referencia OC"
