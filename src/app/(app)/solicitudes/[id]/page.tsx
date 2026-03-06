@@ -43,6 +43,7 @@ function lineToInput(line: LineWithRelations): LineInput {
     unit_text: line.unit_text,
     cost_code_id: line.cost_code_id,
     category: line.category,
+    material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
   }

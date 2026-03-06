@@ -43,6 +43,7 @@ export interface LineWithRelations {
   unit_text: string | null
   cost_code_id: string | null
   category: string | null
+  material_category: string | null
   po_reference: string | null
   notes: string | null
   status: string
@@ -80,6 +81,7 @@ export interface LineInput {
   unit_text: string | null
   cost_code_id: string | null
   category: string | null
+  material_category: string | null
   po_reference: string | null
   notes: string | null
 }
@@ -231,6 +233,7 @@ function lineInputToRow(
     unit_text: line.unit_text,
     cost_code_id: line.cost_code_id,
     category: line.category,
+    material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
   }
@@ -404,6 +407,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           unit_text: (line.unit_text as string | null) ?? null,
           cost_code_id: (line.cost_code_id as string | null) ?? null,
           category: (line.category as string | null) ?? null,
+          material_category: (line.material_category as string | null) ?? null,
           po_reference: (line.po_reference as string | null) ?? null,
           notes: (line.notes as string | null) ?? null,
           status: line.status as string,
@@ -618,6 +622,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 unit_text: line.unit_text,
                 cost_code_id: line.cost_code_id,
                 category: line.category,
+                material_category: line.material_category,
                 po_reference: line.po_reference,
                 notes: line.notes,
               })

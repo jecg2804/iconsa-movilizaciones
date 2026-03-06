@@ -100,6 +100,9 @@ function LineEditor({
   const [category, setCategory] = useState<string | null>(
     initialData?.category ?? null,
   )
+  const [materialCategory, setMaterialCategory] = useState<string | null>(
+    initialData?.material_category ?? null,
+  )
   const [poReference, setPoReference] = useState(initialData?.po_reference ?? '')
   const [lineNotes, setLineNotes] = useState(initialData?.notes ?? '')
 
@@ -132,6 +135,7 @@ function LineEditor({
         setDescription('')
       }
       setCategory(null)
+      setMaterialCategory(null)
       setErrors({})
     },
     [lineType],
@@ -154,6 +158,7 @@ function LineEditor({
       unit_text: unitValue.text,
       cost_code_id: costCodeId,
       category,
+      material_category: lineType === 'Material' ? materialCategory : null,
       po_reference: poReference.trim() || null,
       notes: lineNotes.trim() || null,
     }
@@ -168,6 +173,7 @@ function LineEditor({
     unitValue,
     costCodeId,
     category,
+    materialCategory,
     poReference,
     lineNotes,
   ])
@@ -330,8 +336,8 @@ function LineEditor({
             <div className="md:col-span-2">
               <Input
                 label="Categoria de Material"
-                value={category ?? ''}
-                onChange={(e) => setCategory(e.target.value || null)}
+                value={materialCategory ?? ''}
+                onChange={(e) => setMaterialCategory(e.target.value || null)}
                 placeholder="Ej: Agregados, Acero, Electrico, Plomeria..."
               />
             </div>
@@ -390,15 +396,13 @@ function LineEditor({
           searchable
         />
 
-        {lineType === 'Equipo' && (
-          <Select
-            label="Categoria"
-            placeholder="Seleccionar..."
-            options={categoryOptions}
-            value={category}
-            onChange={setCategory}
-          />
-        )}
+        <Select
+          label="Categoria"
+          placeholder="Seleccionar..."
+          options={categoryOptions}
+          value={category}
+          onChange={setCategory}
+        />
 
         <Input
           label="Referencia OC"
