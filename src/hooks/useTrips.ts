@@ -68,6 +68,7 @@ export interface TripAssignment {
       id: string
       request_id: string | null
       project: { id: string; code: string; name: string } | null
+      date_required: string | null
     }
   } | null
 }
@@ -186,7 +187,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         to_text: (rawLine.to_text as string | null) ?? null,
         unit_text: null,
         equipment: null,
-        request: { id: '', request_id: null, project: null },
+        request: { id: '', request_id: null, date_required: null, project: null },
       }
     }
     return {
@@ -258,9 +259,10 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
         ? {
             id: rawRequest['id'] as string,
             request_id: (rawRequest['request_id'] as string | null) ?? null,
+            date_required: (rawRequest['date_required'] as string | null) ?? null,
             project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
           }
-        : { id: '', request_id: null, project: null },
+        : { id: '', request_id: null, date_required: null, project: null },
     }
   }
 
@@ -562,6 +564,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               request:request_id(
                 id,
                 request_id,
+                date_required,
                 project:project_id(id, code, name)
               )
             )

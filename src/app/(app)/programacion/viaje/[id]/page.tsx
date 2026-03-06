@@ -130,6 +130,13 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
             <span className="truncate max-w-[100px] sm:max-w-[150px]">{toName}</span>
           </div>
         )}
+
+        {/* Fecha requerida de la solicitud */}
+        {line?.request.date_required && (
+          <span className="text-xs text-iconsa-gray">
+            Requerida: {formatDate(line.request.date_required)}
+          </span>
+        )}
       </div>
 
       {/* Cantidad + estado */}
