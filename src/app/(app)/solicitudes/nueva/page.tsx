@@ -275,7 +275,7 @@ export default function NuevaSolicitudPage() {
     if (!validateForDraft()) return
     const result = await saveSolicitud(header, lines, [], 'Borrador')
     if (result) {
-      router.push(`/solicitudes/${result.id}`)
+      router.push('/solicitudes')
     }
   }, [validateForDraft, saveSolicitud, header, lines, router])
 
@@ -284,7 +284,7 @@ export default function NuevaSolicitudPage() {
     if (!validateForSend()) return
     const result = await saveSolicitud(header, lines, [], 'Enviada')
     if (result) {
-      router.push(`/solicitudes/${result.id}`)
+      router.push('/solicitudes')
     }
   }, [validateForSend, saveSolicitud, header, lines, router])
 

@@ -200,7 +200,7 @@ export default function NuevoViajePage() {
     if (!validate()) return
     const result = await saveTrip(tripData, assignments)
     if (result) {
-      router.push(`/programacion/viaje/${result.id}`)
+      router.push('/programacion')
     }
   }, [validate, saveTrip, tripData, assignments, router])
 
