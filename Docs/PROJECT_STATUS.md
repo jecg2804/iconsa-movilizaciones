@@ -20,8 +20,8 @@ Este documento es la UNICA fuente de verdad para el estado del schema, decisione
 
 Documentacion en repo (docs/):
 - [x] README.md (actualizado 2026-03-04)
-- [x] ICONSA_Feature_Specification_v3.md (v3.0, markdown, actualizado 2026-03-05)
-- [x] ICONSA_MVP_Sprint_Brief.md (v3.0, actualizado 2026-03-04)
+- [x] ICONSA_Feature_Specification_v3.md (v3.1, markdown, actualizado 2026-03-06)
+- [x] ICONSA_MVP_Sprint_Brief.md (v3.1, actualizado 2026-03-06)
 - [x] BUILD_PLAN.md (actualizado 2026-03-04)
 - [x] ICONSA_Guia_Operativa.md
 - [x] PROJECT_STATUS.md (este archivo)
@@ -113,7 +113,7 @@ Filtros app:
 | created_at | TIMESTAMPTZ | No | now() | Creacion |
 | updated_at | TIMESTAMPTZ | No | now() | Modificacion (trigger) |
 
-Datos: 164 registros (160 importados + 4 test users nuevos). 6 usuarios con auth_id y app_role asignados: admin, almacen, campo, logistica (Charris CHA082), pm×2 (Caballero, Jacome JAC161). Duplicados de Charris y Jacome mergeados en filas reales con código de empleado.
+Datos: 177 registros (160 importados Spectrum + 13 organigrama + 4 test users). 10 usuarios con app_role asignado. 42 con department, 57 con phone, ciudades normalizadas. Nombres en Title Case. Tabla user_app_roles creada con 10 roles migrados (fundación multi-app RBAC).
 Roles: admin=James, pm=ingenieros, logistica=Charris, campo=conductores, almacen=Yoseph
 
 ---
@@ -298,8 +298,9 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | mobilization_rates | COMPLETO | 14 |
 | units | COMPLETO | 11 |
 | equipment | COMPLETO | 377 |
-| people | COMPLETO | 160 |
+| people | COMPLETO | 177 |
 | cost_codes | PENDIENTE | 0 |
+| user_app_roles | COMPLETO | 10 (migrados de people.app_role) |
 | Transaccionales | VACIO | Se llenan con app |
 
 ---
@@ -401,6 +402,39 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 8. Notificaciones email via NestJS incluidas en MVP.
 9. Bitacora de Movilizaciones: Fase 2, NO MVP.
 10. Edicion en estados En Proceso/Parcial: TBD con feedback de usuarios.
+11. Tarifa y Costo en viaje: OPCIONALES. Auto-fill costo cuando se selecciona tarifa. Editable.
+12. Eventos: Salida y Entrega obligatorios. Llegada y Retorno opcionales (informativos).
+13. Código confirmación: acepta código de 4 dígitos O nombre del receptor. No bloquea si no hay código.
+14. Movilización sin solicitud: MVP fuerza solicitud retroactiva. Fase 2: "Solicitud Express".
+15. Servicios externos: `is_external=true` + costo manual + notas. Conductor/vehículo pueden ser texto libre.
+16. user_app_roles creada como fundación multi-app RBAC. Código MVP sigue usando people.app_role.
+17. people.app_role se depreca cuando se construya la segunda app (compras, almacén, etc.).
+18. parent_equipment_id agregado a equipment para relación accesorio→equipo padre (grúas).
+19. Categoría de material: campo disponible como texto libre en MVP. CSI codes en Fase 2.
+
+## SUPABASE HARDENING (completado 2026-03-06)
+
+| Fix | Estado |
+|-----|--------|
+| 20+ FK indexes creados (performance) | ✅ |
+| 5 funciones search_path asegurado | ✅ |
+| RLS policies: anónimo→bloqueado, solo authenticated | ✅ |
+| Policies duplicadas eliminadas (masters_admin_write + masters_read) | ✅ |
+| Helper function get_my_app_role() creada | ✅ |
+| user_app_roles tabla creada (multi-app RBAC) | ✅ |
+| parent_equipment_id en equipment | ✅ |
+| Triggers sequences arreglados (ON CONFLICT + case) | ✅ |
+| Indexes duplicados en sequences limpiados | ✅ |
+
+**⏳ PENDIENTE PRE-DEPLOY (NO es para MVP interno):**
+- RLS Fase 2: Reemplazar `auth_write USING(true)` con policies role-based usando `get_my_app_role()`
+  - admin: escribe en todas las tablas
+  - pm: solo INSERT/UPDATE en sm_requests/sm_request_lines de sus proyectos
+  - logistica: INSERT/UPDATE en trips, trip_line_assignments, trip_events
+  - campo/almacen: solo INSERT en trip_events
+  - Tablas maestras: solo admin puede escribir
+- Leaked Password Protection: requiere Supabase Pro plan ($25/mes)
+- Supabase plan: actualmente FREE. Upgrade a Pro cuando haya deploy real.
 
 ## BUGS CONOCIDOS
 

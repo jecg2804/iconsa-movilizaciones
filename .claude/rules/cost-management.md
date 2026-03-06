@@ -1,5 +1,3 @@
-# Gestión de costos y contexto
-
 ## Contexto
 - `/compact` al llegar a 50% de uso de contexto
 - `/clear` entre pasos no relacionados o entre fases

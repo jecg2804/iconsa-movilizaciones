@@ -41,8 +41,10 @@ CREATE TABLE public.equipment (
   meter_reading numeric,
   insurance_expiry date,
   updated_at timestamp with time zone DEFAULT now(),
+  parent_equipment_id uuid,
   CONSTRAINT equipment_pkey PRIMARY KEY (id),
-  CONSTRAINT equipment_current_project_id_fkey FOREIGN KEY (current_project_id) REFERENCES public.projects(id)
+  CONSTRAINT equipment_current_project_id_fkey FOREIGN KEY (current_project_id) REFERENCES public.projects(id),
+  CONSTRAINT equipment_parent_equipment_id_fkey FOREIGN KEY (parent_equipment_id) REFERENCES public.equipment(id)
 );
 
 CREATE TABLE public.locations (
@@ -269,3 +271,22 @@ CREATE TABLE public.units (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT units_pkey PRIMARY KEY (id)
 );
+
+CREATE TABLE public.user_app_roles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  person_id uuid NOT NULL,
+  app_code text NOT NULL,
+  role_code text NOT NULL,
+  is_active boolean DEFAULT true,
+  granted_by uuid,
+  granted_at timestamp with time zone DEFAULT now(),
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_app_roles_pkey PRIMARY KEY (id),
+  CONSTRAINT user_app_roles_unique_person_app_role UNIQUE (person_id, app_code, role_code),
+  CONSTRAINT user_app_roles_person_id_fkey FOREIGN KEY (person_id) REFERENCES public.people(id) ON DELETE CASCADE,
+  CONSTRAINT user_app_roles_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES public.people(id)
+);
+
+CREATE INDEX idx_user_app_roles_app ON public.user_app_roles(app_code, role_code) WHERE is_active = true;

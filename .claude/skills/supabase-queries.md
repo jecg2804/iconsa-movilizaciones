@@ -49,3 +49,5 @@ if (error) {
 - No usar `supabase.rpc()` sin verificar que la función existe
 - No hacer queries sin tipado (usar Database types)
 - No hardcodear UUIDs
+- No usar `user_app_roles` en código MVP — usar `people.app_role` por ahora
+- `user_app_roles` es fundación multi-app, se usa cuando se construya segunda app
