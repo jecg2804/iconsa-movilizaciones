@@ -383,6 +383,19 @@ sm_requests: project_id, status, requester_id. sm_request_lines: request_id, sta
 | app/(app)/mis-viajes/page.tsx | COMPLETADO |
 | app/(app)/mis-viajes/[id]/page.tsx | COMPLETADO |
 
+### Fase 5 — Dashboard Real (COMPLETADA — 2026-03-06)
+
+| Archivo | Estado |
+|---------|--------|
+| components/dashboard/KpiCard.tsx | COMPLETADO |
+| components/dashboard/RecentActivity.tsx | COMPLETADO |
+| app/(app)/dashboard/page.tsx | COMPLETADO |
+
+Notas Fase 5:
+- Server Component — queries paralelas con Promise.all, sin hooks adicionales
+- KPIs: Solicitudes Pendientes (Enviada+En Proceso), Ítems Sin Programar, Viajes Próximos (hoy+3días), Completadas (mes actual)
+- RecentActivity: últimas 5 solicitudes activas + viajes del día con badges de estado/prioridad
+
 Notas Fase 4:
 - useMyTrips: lista todos los viajes Programado/En Ruta sin filtro por driver_id (MVP)
 - useTripEvents: INSERT inmutable en trip_events + transiciones de estado por tipo de evento
