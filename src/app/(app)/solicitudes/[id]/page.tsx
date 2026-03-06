@@ -97,6 +97,7 @@ export default function SolicitudDetailPage() {
 
   // Datos auxiliares (people, units, costCodes) — se cargan inline
   const [people, setPeople] = useState<SelectOption[]>([])
+  const [approvers, setApprovers] = useState<SelectOption[]>([])
   const [units, setUnits] = useState<SelectOption[]>([])
   const [costCodes, setCostCodes] = useState<SelectOption[]>([])
 
@@ -126,14 +127,12 @@ export default function SolicitudDetailPage() {
   // --- Cargar people ---
   useEffect(() => {
     async function fetchPeople() {
-      const { data } = await supabase
-        .from('people')
-        .select('id, name')
-        .eq('status', 'Activo')
-        .order('name')
-      setPeople(
-        (data ?? []).map((p) => ({ value: p.id, label: p.name })),
-      )
+      const [allResult, pmResult] = await Promise.all([
+        supabase.from('people').select('id, name').eq('status', 'Activo').order('name'),
+        supabase.from('people').select('id, name').eq('status', 'Activo').eq('app_role', 'pm').order('name'),
+      ])
+      setPeople((allResult.data ?? []).map((p) => ({ value: p.id, label: p.name })))
+      setApprovers((pmResult.data ?? []).map((p) => ({ value: p.id, label: p.name })))
     }
     fetchPeople()
   }, [supabase])
@@ -430,6 +429,7 @@ export default function SolicitudDetailPage() {
           }}
           projects={projectOptions}
           people={people}
+          approvers={approvers}
           onChange={handleHeaderChange}
           currentPersonId={person?.id ?? ''}
         />
