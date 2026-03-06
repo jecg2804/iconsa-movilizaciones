@@ -122,6 +122,7 @@ export interface TripsFilter {
   status?: string | null
   dateFrom?: string | null
   dateTo?: string | null
+  conductorId?: string | null
 }
 
 // --- Constantes privadas ---
@@ -138,6 +139,7 @@ const DEFAULT_FILTER: TripsFilter = {
   status: null,
   dateFrom: null,
   dateTo: null,
+  conductorId: null,
 }
 
 // --- Helpers privados ---
@@ -163,14 +165,38 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
   const rate = unwrapRelation(row.rate as TripWithRelations['rate'] | TripWithRelations['rate'][])
   const rawAssignments = Array.isArray(row.assignments) ? row.assignments : []
 
-  // Las asignaciones de la lista no incluyen detalles de línea
-  const assignments: TripAssignment[] = (rawAssignments as Record<string, unknown>[]).map((a) => ({
-    id: a.id as string,
-    trip_id: a.trip_id as string,
-    request_line_id: a.request_line_id as string,
-    quantity_assigned: a.quantity_assigned as number,
-    line: null,
-  }))
+  // Las asignaciones de la lista incluyen datos mínimos de línea (solo from/to para ruta)
+  const assignments: TripAssignment[] = (rawAssignments as Record<string, unknown>[]).map((a) => {
+    const rawLine = a.line as Record<string, unknown> | null
+    let line: TripAssignment['line'] = null
+    if (rawLine) {
+      const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
+      const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
+      line = {
+        id: rawLine.id as string,
+        line_number: 0,
+        line_type: '',
+        description: '',
+        quantity: 0,
+        status: '',
+        from_location: fromLoc,
+        to_location: toLoc,
+        unit: null,
+        from_text: (rawLine.from_text as string | null) ?? null,
+        to_text: (rawLine.to_text as string | null) ?? null,
+        unit_text: null,
+        equipment: null,
+        request: { id: '', request_id: null, project: null },
+      }
+    }
+    return {
+      id: a.id as string,
+      trip_id: a.trip_id as string,
+      request_line_id: a.request_line_id as string,
+      quantity_assigned: a.quantity_assigned as number,
+      line,
+    }
+  })
 
   return {
     id: row.id as string,
@@ -444,7 +470,19 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           vehicle:vehicle_id(id, spectrum_code, description),
           trailer:trailer_id(id, spectrum_code, description),
           rate:rate_id(id, code, description, rate),
-          assignments:trip_line_assignments(id, trip_id, request_line_id, quantity_assigned)
+          assignments:trip_line_assignments(
+            id,
+            trip_id,
+            request_line_id,
+            quantity_assigned,
+            line:request_line_id(
+              id,
+              from_location:from_location_id(id, name),
+              to_location:to_location_id(id, name),
+              from_text,
+              to_text
+            )
+          )
         `)
         .order('scheduled_date', { ascending: false })
 
@@ -457,6 +495,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       }
       if (filters.dateTo) {
         query = query.lte('scheduled_date', filters.dateTo)
+      }
+      if (filters.conductorId) {
+        query = query.eq('driver_id', filters.conductorId)
       }
 
       const { data, error } = await query

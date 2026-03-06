@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Truck, Lock, Siren } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { canCreateTrip } from '@/lib/utils/roles'
 import { TRIP_STATUSES } from '@/lib/utils/constants'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, formatCurrency } from '@/lib/utils/format'
 import { BacklogTable } from '@/components/programacion/BacklogTable'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -21,6 +22,7 @@ type LineTypeFilter = (typeof LINE_TYPES)[number]
 
 export default function ProgramacionPage() {
   const router = useRouter()
+  const supabase = useMemo(() => createClient(), [])
   const { role, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
   const {
@@ -37,10 +39,24 @@ export default function ProgramacionPage() {
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
 
+  // Estado local: conductores para filtro de viajes
+  const [conductors, setConductors] = useState<{ id: string; name: string }[]>([])
+
+  // Fetch conductores (campo) para filtro
+  useEffect(() => {
+    supabase
+      .from('people')
+      .select('id, name')
+      .eq('status', 'Activo')
+      .eq('app_role', 'campo')
+      .order('name')
+      .then(({ data }) => setConductors(data ?? []))
+  }, [supabase])
+
   // Estado local: líneas seleccionadas para crear viaje
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
 
-  // Opciones de proyectos para el dropdown
+  // Opciones de proyectos para el dropdown del backlog
   const projectOptions: SelectOption[] = useMemo(
     () =>
       allProjects.map((p) => ({
@@ -48,6 +64,12 @@ export default function ProgramacionPage() {
         label: `${p.code} — ${p.name}`,
       })),
     [allProjects],
+  )
+
+  // Opciones de conductores para filtro de viajes
+  const conductorOptions: SelectOption[] = useMemo(
+    () => conductors.map((c) => ({ value: c.id, label: c.name })),
+    [conductors],
   )
 
   // Filtrar backlog en cliente por proyecto y tipo
@@ -171,6 +193,63 @@ export default function ProgramacionPage() {
             {row.vehicle?.description ?? '—'}
           </span>
         ),
+      },
+      {
+        key: 'trailer',
+        header: 'Remolque',
+        render: (row) => (
+          <span
+            className="max-w-[140px] truncate block text-sm text-gray-900"
+            title={row.trailer?.description ?? '—'}
+          >
+            {row.trailer?.description ?? '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'rate',
+        header: 'Tarifa',
+        render: (row) =>
+          row.rate ? (
+            <div>
+              <div className="text-sm text-gray-900">{row.rate.code}</div>
+              <div className="text-xs text-iconsa-gray">
+                {formatCurrency(row.rate.rate)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm text-iconsa-gray">—</span>
+          ),
+      },
+      {
+        key: 'route',
+        header: 'Ruta',
+        render: (row) => {
+          const origins = new Set<string>()
+          const destinations = new Set<string>()
+          for (const a of row.assignments) {
+            const from = a.line?.from_location?.name ?? a.line?.from_text ?? null
+            const to = a.line?.to_location?.name ?? a.line?.to_text ?? null
+            if (from) origins.add(from)
+            if (to) destinations.add(to)
+          }
+          if (origins.size === 0 && destinations.size === 0) {
+            return <span className="text-sm text-iconsa-gray">—</span>
+          }
+          if (origins.size > 1 || destinations.size > 1) {
+            return <span className="text-sm text-gray-900">Multi-ruta</span>
+          }
+          const from = Array.from(origins)[0] ?? ''
+          const to = Array.from(destinations)[0] ?? ''
+          return (
+            <span
+              className="max-w-[200px] truncate block text-sm text-gray-900"
+              title={`${from} → ${to}`}
+            >
+              {from} → {to}
+            </span>
+          )
+        },
       },
       {
         key: 'lines',
@@ -379,6 +458,34 @@ export default function ProgramacionPage() {
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        {/* Filtros adicionales: fecha y conductor */}
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="date"
+            value={filters.dateFrom ?? ''}
+            onChange={(e) => setFilters({ dateFrom: e.target.value || null })}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+            placeholder="Desde"
+            title="Fecha desde"
+          />
+          <input
+            type="date"
+            value={filters.dateTo ?? ''}
+            onChange={(e) => setFilters({ dateTo: e.target.value || null })}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
+            placeholder="Hasta"
+            title="Fecha hasta"
+          />
+          <div className="w-48">
+            <Select
+              placeholder="Todos los conductores"
+              options={conductorOptions}
+              value={filters.conductorId ?? null}
+              onChange={(val) => setFilters({ conductorId: val })}
+            />
           </div>
         </div>
 
