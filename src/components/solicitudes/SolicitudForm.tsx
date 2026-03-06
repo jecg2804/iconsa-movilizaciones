@@ -22,8 +22,10 @@ interface SolicitudFormProps {
   }
   /** Proyectos disponibles para el dropdown (para PM, solo sus proyectos asignados) */
   projects: SelectOption[]
-  /** Personas disponibles para los dropdowns de solicitante y aprobador */
+  /** Personas disponibles para el dropdown de solicitante */
   people: SelectOption[]
+  /** Personas disponibles para el dropdown "Aprobado por". Si no se provee, usa people. */
+  approvers?: SelectOption[]
   /** Callback cada vez que cambian los datos del header */
   onChange: (data: SolicitudInput) => void
   /** ID de la persona actualmente logueada (auto-rellena solicitante en modo creacion) */
@@ -35,9 +37,11 @@ function SolicitudForm({
   initialData,
   projects,
   people,
+  approvers,
   onChange,
   currentPersonId,
 }: SolicitudFormProps) {
+  const approverOptions = approvers ?? people
   const isReadonly = mode === 'readonly'
 
   // --- Estado interno del formulario ---
@@ -83,15 +87,6 @@ function SolicitudForm({
       const newVal = value ?? ''
       setProjectId(newVal)
       propagate({ project_id: newVal })
-    },
-    [propagate],
-  )
-
-  const handleRequesterChange = useCallback(
-    (value: string | null) => {
-      const newVal = value ?? ''
-      setRequesterId(newVal)
-      propagate({ requester_id: newVal })
     },
     [propagate],
   )
@@ -162,20 +157,20 @@ function SolicitudForm({
           searchable
         />
 
-        <Select
-          label="Solicitante"
-          placeholder="Seleccionar solicitante..."
-          options={people}
-          value={requesterId || null}
-          onChange={handleRequesterChange}
-          disabled={isReadonly}
-          searchable
-        />
+        {/* Solicitante — siempre fijo al usuario logueado, no editable */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Solicitante
+          </label>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            {people.find((p) => p.value === requesterId)?.label ?? '—'}
+          </div>
+        </div>
 
         <Select
           label="Aprobado por"
           placeholder="Seleccionar (opcional)..."
-          options={people}
+          options={approverOptions}
           value={approvedBy}
           onChange={handleApprovedByChange}
           disabled={isReadonly}
