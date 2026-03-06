@@ -183,17 +183,31 @@ export default function NuevoViajePage() {
     [rates],
   )
 
+  // --- Detectar si el vehículo es cabezal ---
+  const isCabezal = useMemo(() => {
+    const v = vehicles.find((v) => v.id === tripData.vehicle_id)
+    if (!v) return false
+    return (
+      (v.spectrum_code?.toUpperCase().startsWith('CAB') ?? false) ||
+      v.description.toUpperCase().includes('CABEZAL')
+    )
+  }, [vehicles, tripData.vehicle_id])
+
   // --- Validacion ---
   const validate = useCallback((): boolean => {
     const errors: string[] = []
     if (!tripData.scheduled_date) errors.push('Seleccione la fecha programada')
     if (!tripData.driver_id) errors.push('Seleccione un conductor')
     if (!tripData.vehicle_id) errors.push('Seleccione un vehiculo')
+    // Remolque requerido para cabezal
+    if (isCabezal && !tripData.trailer_id) {
+      errors.push('Remolque requerido para vehículo cabezal')
+    }
     // Tarifa es opcional — no toda movilización tiene tarifa formal
     if (assignments.length === 0) errors.push('Seleccione al menos una linea')
     setValidationErrors(errors)
     return errors.length === 0
-  }, [tripData, assignments])
+  }, [tripData, assignments, isCabezal])
 
   // --- Guardar viaje ---
   const handleSave = useCallback(async () => {
@@ -281,6 +295,7 @@ export default function NuevoViajePage() {
           rates={rateOptions}
           onChange={setTripData}
           onRateChange={handleRateChange}
+          isTrailerRequired={isCabezal}
         />
       </div>
 

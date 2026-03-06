@@ -273,6 +273,16 @@ export default function ViajeDetailPage() {
     fetchRates()
   }, [supabase])
 
+  // --- Detectar si el vehículo seleccionado es cabezal ---
+  const isCabezal = useMemo(() => {
+    const v = vehicles.find((v) => v.id === tripData.vehicle_id)
+    if (!v) return false
+    return (
+      (v.spectrum_code?.toUpperCase().startsWith('CAB') ?? false) ||
+      v.description.toUpperCase().includes('CABEZAL')
+    )
+  }, [vehicles, tripData.vehicle_id])
+
   // --- Modo del formulario ---
   const mode = useMemo(() => {
     if (!trip) return 'readonly' as const
@@ -369,6 +379,10 @@ export default function ViajeDetailPage() {
   // --- Guardar cambios ---
   const handleSave = useCallback(async () => {
     if (!trip) return
+    // Validar remolque para cabezal
+    if (isCabezal && !tripData.trailer_id) {
+      return // El TripForm ya muestra el warning visual; no avanzar
+    }
     const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds)
     if (success) {
       // Refrescar datos del viaje
@@ -491,6 +505,7 @@ export default function ViajeDetailPage() {
           rates={rateOptions}
           onChange={handleTripDataChange}
           onRateChange={handleRateChange}
+          isTrailerRequired={isCabezal}
         />
       </div>
 
