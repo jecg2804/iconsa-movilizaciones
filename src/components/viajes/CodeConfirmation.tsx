@@ -16,6 +16,8 @@ export function CodeConfirmation({ expectedCode, onConfirm, onCancel }: CodeConf
   const [receivedByName, setReceivedByName] = useState('')
   const [showMismatchWarning, setShowMismatchWarning] = useState(false)
 
+  const canConfirm = code.trim().length > 0 || receivedByName.trim().length > 0
+
   const handleConfirm = () => {
     // Validación interna: comparar con expectedCode (sin mostrarlo en UI)
     if (expectedCode && code.trim() && code.trim() !== expectedCode) {
@@ -54,7 +56,7 @@ export function CodeConfirmation({ expectedCode, onConfirm, onCancel }: CodeConf
         <Input
           label="Nombre del receptor"
           type="text"
-          placeholder="Nombre de quien recibe (opcional)"
+          placeholder="Requerido si no hay código"
           value={receivedByName}
           onChange={(e) => setReceivedByName(e.target.value)}
         />
@@ -67,7 +69,7 @@ export function CodeConfirmation({ expectedCode, onConfirm, onCancel }: CodeConf
             Código incorrecto. ¿Desea confirmar la entrega de todas formas?
           </p>
           <div className="mt-3 flex gap-2">
-            <Button variant="primary" onClick={handleConfirmAnyway}>
+            <Button variant="primary" onClick={handleConfirmAnyway} disabled={!canConfirm}>
               Confirmar de todas formas
             </Button>
             <Button variant="ghost" onClick={() => setShowMismatchWarning(false)}>
@@ -80,7 +82,7 @@ export function CodeConfirmation({ expectedCode, onConfirm, onCancel }: CodeConf
       {/* Acciones principales */}
       {!showMismatchWarning && (
         <div className="flex gap-2">
-          <Button variant="primary" onClick={handleConfirm}>
+          <Button variant="primary" onClick={handleConfirm} disabled={!canConfirm}>
             Confirmar Entrega
           </Button>
           <Button variant="ghost" onClick={onCancel}>
