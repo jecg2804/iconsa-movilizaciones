@@ -174,6 +174,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     if (rawLine) {
       const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
       const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
+      const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
       line = {
         id: rawLine.id as string,
         line_number: 0,
@@ -188,7 +189,14 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         to_text: (rawLine.to_text as string | null) ?? null,
         unit_text: null,
         equipment: null,
-        request: { id: '', request_id: null, date_required: null, project: null },
+        request: rawRequest
+          ? {
+              id: rawRequest['id'] as string,
+              request_id: (rawRequest['request_id'] as string | null) ?? null,
+              date_required: null,
+              project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+            }
+          : { id: '', request_id: null, date_required: null, project: null },
       }
     }
     return {
@@ -485,7 +493,12 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               from_location:from_location_id(id, name),
               to_location:to_location_id(id, name),
               from_text,
-              to_text
+              to_text,
+              request:request_id(
+                id,
+                request_id,
+                project:project_id(id, code, name)
+              )
             )
           )
         `)

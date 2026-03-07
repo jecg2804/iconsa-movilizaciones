@@ -53,6 +53,9 @@ export default function ProgramacionPage() {
       .then(({ data }) => setConductors(data ?? []))
   }, [supabase])
 
+  // Estado local: filtro de proyecto para viajes
+  const [tripProjectFilter, setTripProjectFilter] = useState<string | null>(null)
+
   // Estado local: líneas seleccionadas para crear viaje
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
 
@@ -82,6 +85,14 @@ export default function ProgramacionPage() {
       return matchesProject && matchesType
     })
   }, [backlog, projectFilter, typeFilter])
+
+  // Filtrar viajes por proyecto (client-side)
+  const filteredTrips = useMemo(() => {
+    if (!tripProjectFilter) return trips
+    return trips.filter((trip) =>
+      trip.assignments.some((a) => a.line?.request?.project?.id === tripProjectFilter),
+    )
+  }, [trips, tripProjectFilter])
 
   // Líneas que están actualmente visibles y seleccionadas
   const visibleSelectedCount = useMemo(() => {
@@ -461,8 +472,17 @@ export default function ProgramacionPage() {
           </div>
         </div>
 
-        {/* Filtros adicionales: fecha y conductor */}
+        {/* Filtros adicionales: proyecto, fecha y conductor */}
         <div className="flex flex-wrap items-center gap-3">
+          <div className="w-full sm:w-64">
+            <Select
+              placeholder="Todos los proyectos"
+              options={projectOptions}
+              value={tripProjectFilter}
+              onChange={setTripProjectFilter}
+              disabled={projectsLoading}
+            />
+          </div>
           <input
             type="date"
             value={filters.dateFrom ?? ''}
@@ -498,7 +518,7 @@ export default function ProgramacionPage() {
 
         <DataTable<TripWithRelations>
           columns={columns}
-          data={trips}
+          data={filteredTrips}
           keyExtractor={(row) => row.id}
           onRowClick={handleTripRowClick}
           loading={listLoading}
