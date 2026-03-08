@@ -25,18 +25,6 @@ interface TripEvent {
   notes: string | null
 }
 
-// --- Helpers ---
-
-function nowLocalDateTimeString(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
-}
-
 // --- Componente de fila de asignacion (solo lectura) ---
 
 function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignments'][number] }) {
@@ -107,7 +95,6 @@ interface EventModalProps {
 }
 
 function EventModal({ eventType, confirmationCode, onConfirm, onClose, loading }: EventModalProps) {
-  const [timestamp, setTimestamp] = useState(nowLocalDateTimeString)
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
 
@@ -115,24 +102,24 @@ function EventModal({ eventType, confirmationCode, onConfirm, onClose, loading }
     (codeUsed: string, receivedByName: string) => {
       onConfirm({
         event_type: eventType,
-        event_timestamp: new Date(timestamp).toISOString(),
+        event_timestamp: new Date().toISOString(),
         location: location.trim() || null,
         notes: notes.trim() || null,
         confirmation_code_used: codeUsed || null,
         received_by_name: receivedByName || null,
       })
     },
-    [eventType, timestamp, location, notes, onConfirm],
+    [eventType, location, notes, onConfirm],
   )
 
   const handleDirectConfirm = useCallback(() => {
     onConfirm({
       event_type: eventType,
-      event_timestamp: new Date(timestamp).toISOString(),
+      event_timestamp: new Date().toISOString(),
       location: location.trim() || null,
       notes: notes.trim() || null,
     })
-  }, [eventType, timestamp, location, notes, onConfirm])
+  }, [eventType, location, notes, onConfirm])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
@@ -142,14 +129,6 @@ function EventModal({ eventType, confirmationCode, onConfirm, onClose, loading }
         </h3>
 
         <div className="space-y-3">
-          {/* Timestamp */}
-          <Input
-            label="Fecha y hora"
-            type="datetime-local"
-            value={timestamp}
-            onChange={(e) => setTimestamp(e.target.value)}
-          />
-
           {/* Ubicacion */}
           <Input
             label="Ubicación (opcional)"
