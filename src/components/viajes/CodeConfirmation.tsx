@@ -1,34 +1,52 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { SelectWithFallback, type SelectWithFallbackValue } from '@/components/ui/SelectWithFallback'
+import type { SelectOption } from '@/components/ui/Select'
 
 interface CodeConfirmationProps {
   /** Código esperado — usado SOLO para validación interna. NUNCA mostrar en UI. */
   expectedCode: string | null
-  onConfirm: (codeUsed: string, receivedByName: string) => void
+  /** Opciones para el dropdown de receptor */
+  receiverOptions: SelectOption[]
+  onConfirm: (codeUsed: string, receivedById: string | null, receivedByName: string) => void
   onCancel: () => void
 }
 
-export function CodeConfirmation({ expectedCode, onConfirm, onCancel }: CodeConfirmationProps) {
+export function CodeConfirmation({
+  expectedCode,
+  receiverOptions,
+  onConfirm,
+  onCancel,
+}: CodeConfirmationProps) {
   const [code, setCode] = useState('')
-  const [receivedByName, setReceivedByName] = useState('')
-  const [showMismatchWarning, setShowMismatchWarning] = useState(false)
+  const [receiver, setReceiver] = useState<SelectWithFallbackValue>({ id: null, text: null })
+  const [showHelp, setShowHelp] = useState(false)
 
-  const canConfirm = code.trim().length > 0 || receivedByName.trim().length > 0
+  // Validación del código
+  const codeComplete = code.trim().length === 4
+  const codeCorrect = codeComplete && expectedCode !== null && code.trim() === expectedCode
+  const codeIncorrect = codeComplete && expectedCode !== null && code.trim() !== expectedCode
+
+  // Receptor lleno: seleccionó del dropdown (id) o escribió texto (text)
+  const receiverFilled = (receiver.id !== null) || (receiver.text !== null && receiver.text.trim().length > 0)
+
+  // Nombre del receptor para denormalización
+  const receiverName = useMemo(() => {
+    if (receiver.id) {
+      const opt = receiverOptions.find((o) => o.value === receiver.id)
+      return opt?.label ?? ''
+    }
+    return receiver.text?.trim() ?? ''
+  }, [receiver, receiverOptions])
+
+  const canConfirm = codeCorrect && receiverFilled
 
   const handleConfirm = () => {
-    // Validación interna: comparar con expectedCode (sin mostrarlo en UI)
-    if (expectedCode && code.trim() && code.trim() !== expectedCode) {
-      setShowMismatchWarning(true)
-      return
-    }
-    onConfirm(code.trim(), receivedByName.trim())
-  }
-
-  const handleConfirmAnyway = () => {
-    onConfirm(code.trim(), receivedByName.trim())
+    if (!canConfirm) return
+    onConfirm(code.trim(), receiver.id, receiverName)
   }
 
   return (
@@ -46,50 +64,54 @@ export function CodeConfirmation({ expectedCode, onConfirm, onCancel }: CodeConf
           maxLength={4}
           placeholder="0000"
           value={code}
-          onChange={(e) => {
-            setCode(e.target.value.replace(/\D/g, ''))
-            setShowMismatchWarning(false)
-          }}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+          error={codeIncorrect ? 'Código incorrecto. Verifique con el solicitante.' : undefined}
         />
 
-        {/* Nombre del receptor */}
-        <Input
-          label="Nombre del receptor"
-          type="text"
-          placeholder="Requerido si no hay código"
-          value={receivedByName}
-          onChange={(e) => setReceivedByName(e.target.value)}
+        {/* Mensaje de código correcto */}
+        {codeCorrect && (
+          <p className="text-sm font-medium text-iconsa-green">Código verificado ✓</p>
+        )}
+
+        {/* Recibido por — SelectWithFallback */}
+        <SelectWithFallback
+          label="Recibido por"
+          placeholder="Seleccionar receptor..."
+          options={receiverOptions}
+          value={receiver}
+          onChange={setReceiver}
+          fallbackLabel="No está en la lista"
+          fallbackPlaceholder="Nombre del receptor"
         />
       </div>
 
-      {/* Warning de código incorrecto */}
-      {showMismatchWarning && (
-        <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3">
-          <p className="text-sm font-medium text-yellow-800">
-            Código incorrecto. ¿Desea confirmar la entrega de todas formas?
+      {/* Link de ayuda */}
+      <button
+        type="button"
+        onClick={() => setShowHelp(!showHelp)}
+        className="text-xs font-medium text-iconsa-blue hover:underline"
+      >
+        ¿No tiene el código?
+      </button>
+
+      {showHelp && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <p className="text-sm text-blue-800">
+            Contacte al solicitante o al coordinador de logística para obtener el código de confirmación.
+            La entrega no puede registrarse sin el código correcto.
           </p>
-          <div className="mt-3 flex gap-2">
-            <Button variant="primary" onClick={handleConfirmAnyway} disabled={!canConfirm}>
-              Confirmar de todas formas
-            </Button>
-            <Button variant="ghost" onClick={() => setShowMismatchWarning(false)}>
-              Corregir código
-            </Button>
-          </div>
         </div>
       )}
 
-      {/* Acciones principales */}
-      {!showMismatchWarning && (
-        <div className="flex gap-2">
-          <Button variant="primary" onClick={handleConfirm} disabled={!canConfirm}>
-            Confirmar Entrega
-          </Button>
-          <Button variant="ghost" onClick={onCancel}>
-            Cancelar
-          </Button>
-        </div>
-      )}
+      {/* Acciones */}
+      <div className="flex gap-2">
+        <Button variant="primary" onClick={handleConfirm} disabled={!canConfirm}>
+          Confirmar Entrega
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
     </div>
   )
 }

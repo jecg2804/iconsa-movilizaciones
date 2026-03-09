@@ -89,23 +89,25 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
 interface EventModalProps {
   eventType: TripEventType
   confirmationCode: string | null
+  receiverOptions: Array<{ value: string; label: string }>
   onConfirm: (input: TripEventInput) => void
   onClose: () => void
   loading: boolean
 }
 
-function EventModal({ eventType, confirmationCode, onConfirm, onClose, loading }: EventModalProps) {
+function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, onClose, loading }: EventModalProps) {
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
 
   const handleConfirmCode = useCallback(
-    (codeUsed: string, receivedByName: string) => {
+    (codeUsed: string, receivedById: string | null, receivedByName: string) => {
       onConfirm({
         event_type: eventType,
         event_timestamp: new Date().toISOString(),
         location: location.trim() || null,
         notes: notes.trim() || null,
         confirmation_code_used: codeUsed || null,
+        received_by_id: receivedById ?? null,
         received_by_name: receivedByName || null,
       })
     },
@@ -160,6 +162,7 @@ function EventModal({ eventType, confirmationCode, onConfirm, onClose, loading }
             <p className="mb-3 text-sm font-medium text-gray-900">Verificar entrega</p>
             <CodeConfirmation
               expectedCode={confirmationCode}
+              receiverOptions={receiverOptions}
               onConfirm={handleConfirmCode}
               onCancel={onClose}
             />
@@ -199,11 +202,92 @@ export default function MisViajesDetailPage() {
   // Estado del modal de registro de evento
   const [activeEvent, setActiveEvent] = useState<TripEventType | null>(null)
 
+  // Opciones de receptor para entrega
+  const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
+
   // --- Carga inicial del viaje ---
   const loadTrip = useCallback(async () => {
     const data = await fetchTrip(id)
     setTrip(data)
   }, [id, fetchTrip])
+
+  // --- Fetch receptores del proyecto destino ---
+  const loadReceivers = useCallback(async (tripData: TripWithRelations) => {
+    // Recopilar to_location_id de las líneas del viaje
+    const toLocationIds = new Set<string>()
+    for (const a of tripData.assignments) {
+      if (a.line?.to_location?.id) {
+        toLocationIds.add(a.line.to_location.id)
+      }
+    }
+
+    if (toLocationIds.size === 0) {
+      // Sin ubicaciones de destino — mostrar logistica/admin/almacen
+      const { data: fallbackPeople } = await supabase
+        .from('people')
+        .select('id, name')
+        .in('app_role', ['almacen', 'logistica', 'admin'])
+        .eq('status', 'Activo')
+        .order('name')
+      setReceiverOptions((fallbackPeople ?? []).map((p) => ({ value: p.id, label: p.name })))
+      return
+    }
+
+    // Buscar project_id de las ubicaciones destino
+    const { data: locations } = await supabase
+      .from('locations')
+      .select('id, project_id')
+      .in('id', Array.from(toLocationIds))
+
+    const projectIds = new Set<string>()
+    let hasNonProjectDest = false
+    for (const loc of locations ?? []) {
+      if (loc.project_id) {
+        projectIds.add(loc.project_id)
+      } else {
+        hasNonProjectDest = true
+      }
+    }
+
+    const people: Array<{ value: string; label: string }> = []
+
+    // Personas asignadas a proyectos destino
+    if (projectIds.size > 0) {
+      const { data: personProjects } = await supabase
+        .from('person_projects')
+        .select('person_id, people(id, name)')
+        .in('project_id', Array.from(projectIds))
+        .eq('is_active', true)
+
+      const seen = new Set<string>()
+      for (const pp of personProjects ?? []) {
+        const person = Array.isArray(pp.people) ? pp.people[0] : pp.people
+        if (person && !seen.has(person.id)) {
+          seen.add(person.id)
+          people.push({ value: person.id, label: person.name })
+        }
+      }
+    }
+
+    // Si destino no tiene proyecto (Chilibre, externo) agregar almacen/logistica/admin
+    if (hasNonProjectDest || projectIds.size === 0) {
+      const { data: fallbackPeople } = await supabase
+        .from('people')
+        .select('id, name')
+        .in('app_role', ['almacen', 'logistica', 'admin'])
+        .eq('status', 'Activo')
+
+      const seen = new Set(people.map((p) => p.value))
+      for (const p of fallbackPeople ?? []) {
+        if (!seen.has(p.id)) {
+          people.push({ value: p.id, label: p.name })
+        }
+      }
+    }
+
+    people.sort((a, b) => a.label.localeCompare(b.label))
+    setReceiverOptions(people)
+  }, [supabase])
 
   // --- Carga de eventos ---
   const loadEvents = useCallback(async () => {
@@ -238,11 +322,17 @@ export default function MisViajesDetailPage() {
   useEffect(() => {
     async function init() {
       setPageLoading(true)
-      await Promise.all([loadTrip(), loadEvents()])
+      const tripData = await fetchTrip(id)
+      setTrip(tripData)
+      await loadEvents()
+      if (tripData) {
+        await loadReceivers(tripData)
+      }
       setPageLoading(false)
     }
     void init()
-  }, [loadTrip, loadEvents])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
 
   // --- Logica de secuencia de eventos ---
   const hasSalida = events.some((e) => e.event_type === 'Salida')
@@ -282,10 +372,13 @@ export default function MisViajesDetailPage() {
       const success = await registerEvent(input, lineIds)
       if (success) {
         setActiveEvent(null)
-        await Promise.all([loadTrip(), loadEvents()])
+        // Recargar viaje y eventos
+        const tripData = await fetchTrip(id)
+        setTrip(tripData)
+        await loadEvents()
       }
     },
-    [registerEvent, assignedLineIds, loadTrip, loadEvents],
+    [registerEvent, assignedLineIds, fetchTrip, id, loadEvents],
   )
 
   // --- Guards ---
@@ -460,6 +553,7 @@ export default function MisViajesDetailPage() {
         <EventModal
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}
+          receiverOptions={receiverOptions}
           onConfirm={handleRegisterEvent}
           onClose={() => setActiveEvent(null)}
           loading={registering}

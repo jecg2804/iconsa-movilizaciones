@@ -14,6 +14,7 @@ export interface TripEventInput {
   location?: string | null
   notes?: string | null
   confirmation_code_used?: string | null
+  received_by_id?: string | null
   received_by_name?: string | null
 }
 
@@ -45,6 +46,7 @@ export function useTripEvents(tripId: string) {
           location: input.location ?? null,
           registered_by: person?.id ?? null,
           confirmation_code_used: input.confirmation_code_used ?? null,
+          received_by_id: input.received_by_id ?? null,
           received_by_name: input.received_by_name ?? null,
           notes: input.notes ?? null,
         })
