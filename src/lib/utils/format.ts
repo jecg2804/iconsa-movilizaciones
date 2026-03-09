@@ -3,10 +3,24 @@ import { es } from 'date-fns/locale'
 import type { Priority } from './constants'
 
 /**
+ * Parsea un string de fecha como fecha LOCAL (no UTC).
+ * "2026-03-10" → 10 de marzo local (no 9 de marzo por timezone).
+ */
+function parseLocalDate(date: string | Date): Date {
+  if (date instanceof Date) return date
+  // Fechas tipo "YYYY-MM-DD" se parsean como UTC por JS.
+  // Agregar T00:00:00 fuerza interpretación como hora local.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return new Date(date + 'T00:00:00')
+  }
+  return new Date(date)
+}
+
+/**
  * Formatea fecha a dd/MM/yyyy (estilo panameño).
  */
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  const d = parseLocalDate(date)
   return format(d, 'dd/MM/yyyy', { locale: es })
 }
 
@@ -14,7 +28,7 @@ export function formatDate(date: string | Date): string {
  * Formatea fecha y hora a dd/MM/yyyy HH:mm.
  */
 export function formatDateTime(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date
+  const d = parseLocalDate(date)
   return format(d, 'dd/MM/yyyy HH:mm', { locale: es })
 }
 
@@ -36,7 +50,7 @@ export function formatCurrency(amount: number): string {
  * Normal: 8+ días
  */
 export function calculatePriority(dateRequired: string | Date): Priority {
-  const required = typeof dateRequired === 'string' ? new Date(dateRequired) : dateRequired
+  const required = parseLocalDate(dateRequired)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
