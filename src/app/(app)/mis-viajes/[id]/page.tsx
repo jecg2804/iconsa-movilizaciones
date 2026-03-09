@@ -22,6 +22,7 @@ interface TripEvent {
   event_type: string
   event_timestamp: string
   registered_by: { name: string } | null
+  received_by_name: string | null
   notes: string | null
 }
 
@@ -298,6 +299,7 @@ export default function MisViajesDetailPage() {
         event_type,
         event_timestamp,
         registered_by:registered_by(name),
+        received_by_name,
         notes
       `)
       .eq('trip_id', id)
@@ -312,6 +314,7 @@ export default function MisViajesDetailPage() {
           event_type: row.event_type as string,
           event_timestamp: row.event_timestamp as string,
           registered_by: registeredBy as { name: string } | null,
+          received_by_name: (row.received_by_name as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
         }
       })

@@ -7,6 +7,7 @@ interface EventItem {
   event_type: string
   event_timestamp: string
   registered_by: { name: string } | null
+  received_by_name: string | null
   notes: string | null
 }
 
@@ -91,6 +92,12 @@ export function EventTimeline({ events }: EventTimelineProps) {
             {event.registered_by && (
               <p className="mt-0.5 text-xs text-iconsa-gray">
                 Registrado por {event.registered_by.name}
+              </p>
+            )}
+
+            {event.event_type === 'Entrega' && event.received_by_name && (
+              <p className="mt-0.5 text-xs font-medium text-iconsa-green">
+                Recibido por: {event.received_by_name}
               </p>
             )}
 
