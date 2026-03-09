@@ -1,7 +1,7 @@
 # ICONSA — Sprint Brief: MVP Movilizaciones
 ## Documento de Contexto para Desarrollo con Claude Code
 
-**Versión:** 3.2 | **Fecha:** 06 Marzo 2026
+**Versión:** 3.3 | **Fecha:** 08 Marzo 2026
 **Stack:** Next.js (frontend/Vercel) + NestJS (backend/Railway) + Supabase (DB/Auth) + TypeScript + Tailwind CSS
 **Builder:** James Cucalón (con Claude Code)
 
@@ -69,7 +69,7 @@ ASTIBAL (25-504) está cerrado y no aparece en el sistema.
 - **Registrar eventos secuenciales:**
   1. **Salida** — marca salida (timestamp) → viaje "En Ruta", líneas "En Tránsito"
   2. **Llegada** — marca llegada al destino → informativo
-  3. **Entrega** — confirma con **código de 4 dígitos** → líneas "Entregada", cascada actualiza solicitud
+  3. **Entrega** — código de 4 dígitos **MUST be correct** + receptor dropdown → líneas "Entregada", cascada actualiza solicitud
   4. **Retorno** — marca regreso a Chilibre → viaje "Completado"
 - **Código de confirmación (tipo Uber):** 4 dígitos generados al crear viaje. Receptor proporciona código al conductor.
 
@@ -358,7 +358,7 @@ MVAPX1=$5,000  MVCGRU=$300
 - No se restringe por driver_id del viaje.
 
 ### Dashboard
-- Métricas adaptativas por rol. pm=KPIs de sus proyectos. logistica/admin=global+chart+backlog. campo=redirect a /mis-viajes.
+- Métricas operativas. Dashboard único para todos. 4 KPIs + chart por proyecto + backlog crítico + solicitudes recientes + viajes hoy.
 
 ### Notificaciones (MVP: email vía NestJS)
 - Solicitud enviada → Charris
@@ -426,7 +426,7 @@ Gray:    #5A6272 (secondary text)
 
 Documentación clave:
 - `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo
-- `ICONSA_Feature_Specification_v3.md` — reglas de negocio, estados, transiciones (v3.2)
+- `ICONSA_Feature_Specification_v3.md` — reglas de negocio, estados, transiciones (v3.3)
 - `BUILD_PLAN.md` — plan de construcción con 6 fases
 - `supabase_schema_verified.sql` — schema SQL definitivo para generación de tipos
 

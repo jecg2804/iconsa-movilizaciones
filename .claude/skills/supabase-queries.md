@@ -30,6 +30,9 @@ if (filtro.statuses.length > 0) query = query.in('status', filtro.statuses)
 - Solicitud (ingeniero escoge equipo): `type_code NOT IN ('ING')`
 - Vehículo (Charris): `type_code IN ('VHL','VHP')`
 - Remolque: `spectrum_code LIKE 'REM%'` (NO por descripción)
+- **Search**: buscar en spectrum_code Y description con `.or()`:
+  `.or(`spectrum_code.ilike.%${search}%,description.ilike.%${search}%`)`
+- **Label dropdown**: `"{spectrum_code} — {description}"` ej: "CAB930 — CABEZAL 350 HP"
 
 ## Filtros de personas
 - Conductor: `.eq('app_role', 'campo')`

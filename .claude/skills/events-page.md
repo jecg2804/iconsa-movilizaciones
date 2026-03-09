@@ -19,7 +19,7 @@ src/app/(app)/mis-viajes/[id]/page.tsx      — Detalle + registro de eventos
 ```
 1. SALIDA (obligatorio) → Viaje: En Ruta, Líneas: En Tránsito
 2. LLEGADA (opcional) → Informativo, actualiza timeline
-3. ENTREGA (obligatorio) → Código O nombre receptor. Líneas: Entregada
+3. ENTREGA (obligatorio) → Código MUST be correct + receptor dropdown. Líneas: Entregada
 4. RETORNO (opcional) → Viaje: Completado. Calcula duración.
 5. INCIDENCIA (cualquier momento) → No cambia estados
 ```
@@ -30,10 +30,14 @@ src/app/(app)/mis-viajes/[id]/page.tsx      — Detalle + registro de eventos
 - Se puede saltar Llegada y Retorno (son informativos)
 - CUALQUIER usuario con rol logistica, campo, o almacen puede registrar eventos
 - Sin restricción por driver_id en MVP
-- Evento de Entrega: acepta código de confirmación O nombre del receptor
-- Código de confirmación: 4 dígitos, generado al crear viaje (trips.confirmation_code)
-- Si código no coincide: warning pero permite continuar
+- Evento de Entrega: código de 4 dígitos MUST be correct (sin bypass)
+- Receptor: dropdown de personas del proyecto destino con fallback texto libre
+- received_by_id UUID vincula receptor a tabla people (NULL si fallback)
+- Código visible para pm/logistica/admin. NUNCA para campo/almacen
+- PM ve código en /solicitudes/[id] sección Viajes Programados
+- Timestamps: now() automático, NO editable. El usuario no puede cambiar cuándo ocurrió.
 - trip_events son INMUTABLES — una vez creados, no se editan ni eliminan
+- confirmation_code se genera al crear viaje (frontend + trigger BD como safety net)
 
 ## Cascada de estados
 Cuando se registra un evento, el trigger `cascade_request_status()` re-evalúa:

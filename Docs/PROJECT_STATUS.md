@@ -1,6 +1,6 @@
-# ICONSA Movilizaciones - Estado del Proyecto
+![alt text](image.png)# ICONSA Movilizaciones - Estado del Proyecto
 
-Ultima actualizacion: 2026-03-06
+Ultima actualizacion: 2026-03-08
 
 Actualizar este archivo despues de CADA paso completado.
 Este documento es la UNICA fuente de verdad para el estado del schema, decisiones, y progreso.
@@ -181,7 +181,7 @@ id, trip_id FK (CASCADE), request_line_id FK, quantity_assigned DECIMAL, created
 
 ### TABLA: trip_events (eventos — INMUTABLES)
 
-id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, registered_by FK, confirmation_code_used TEXT, received_by_id FK people (NUEVA 2026-03-07), received_by_name TEXT, notes TEXT, created_at. NO updated_at.
+id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, registered_by FK, confirmation_code_used TEXT, received_by_id FK people (UUID, nullable — solo Entrega), received_by_name TEXT, notes TEXT, created_at. NO updated_at.
 
 ---
 
@@ -191,7 +191,9 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 |---------|-------------|
 | update_updated_at() | Setea updated_at = now() en BEFORE UPDATE |
 | generate_request_id() | Auto {project_code}-SM-### (off-by-one corregido) |
-| generate_trip_id() | Auto MOV-YYYY-### + codigo 4 digitos (off-by-one corregido) |
+| generate_trip_id() | Auto MOV-YYYY-### (off-by-one corregido) |
+| generate_confirmation_code() | Auto 4 digitos random si NULL en BEFORE INSERT trips (safety net) |
+| generate_full_code() | Auto {proyecto}-{fase} todo con dashes en BEFORE INSERT/UPDATE cost_codes |
 | calculate_priority() | Vencida/Urgente/Proxima/Normal basado en date_required |
 | cascade_request_status() | Actualiza header basado en estados de lineas |
 | get_my_app_role() | Helper SECURITY DEFINER: retorna app_role del usuario auth |
@@ -207,7 +209,7 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 | 2 — Solicitudes | COMPLETADA | 2026-03-05 |
 | 3 — Programacion | COMPLETADA | 2026-03-05 |
 | 4 — Ejecucion/Eventos | COMPLETADA | 2026-03-06 |
-| 5 — Dashboard | COMPLETADA (por rol + chart + backlog) | 2026-03-07 |
+| 5 — Dashboard | COMPLETADA (basico, mejora pendiente) | 2026-03-06 |
 | 6 — Admin Masters | PENDIENTE | - |
 
 Bugs #3-8 corregidos 2026-03-06.
@@ -217,7 +219,7 @@ Bugs #3-8 corregidos 2026-03-06.
 | Ruta | Actor | Estado |
 |------|-------|--------|
 | /login | Todos | ✅ |
-| /dashboard | pm/logistica/admin/almacen (campo→redirect) | ✅ (por rol + chart + backlog) |
+| /dashboard | Todos | ✅ (basico, mejora por rol pendiente) |
 | /solicitudes | pm, admin, logistica | ✅ |
 | /solicitudes/nueva | pm, admin | ✅ |
 | /solicitudes/[id] | pm, admin, logistica | ✅ |
@@ -231,29 +233,15 @@ Bugs #3-8 corregidos 2026-03-06.
 
 ---
 
-## COMPLETADO 2026-03-07 (sesion de mejoras)
-
-- Timestamps de eventos NO editables (usa now() automatico)
-- CodeConfirmation reescrito: codigo 4 digitos OBLIGATORIO, sin bypass, receptor via SelectWithFallback
-- received_by_id FK people agregado a trip_events (cambio BD por James)
-- Fetch receptores dinamico: personas del proyecto destino, fallback almacen/logistica/admin
-- Codigo confirmacion visible para pm/logistica/admin, NO para campo/almacen
-- EventTimeline muestra "Recibido por: {nombre}" en eventos Entrega
-- Cost codes en cascada: Fase → Categoria dinamica desde cost_code_categories (Bug #11 resuelto)
-- Dashboard adaptativo: pm=KPIs sus proyectos, logistica/admin=global+chart+backlog, campo=redirect
-- Chart "Solicitudes Activas por Proyecto" (Recharts BarChart)
-- Tabla "Backlog Critico" con lineas pendientes vencidas
-
 ## PENDIENTE PARA CLAUDE CODE (proxima sesion)
 
-1. **Regenerar database.ts**: cost_categories y cost_code_categories no estan en tipos generados (necesita SUPABASE_ACCESS_TOKEN)
-2. **UX**: Keyboard navigation en Select.tsx
-3. **Datos pendientes**: Asignar 10 ingenieros (pm) a sus proyectos en person_projects (James con info de oficina el lunes)
-4. **Admin Masters**: Fase 6 — CRUD tablas maestras
+1. **Datos pendientes**: Asignar 10 ingenieros (pm) a sus proyectos en person_projects
+2. **UX por discutir**: Backlog con mas contexto visual, columna "FECHA" ambigua en viajes recientes
+3. **Fase 6**: Admin Masters (CRUD tablas maestras)
 
 ---
 
-## DECISIONES TOMADAS (27)
+## DECISIONES TOMADAS (34)
 
 1. PM ve TODAS las solicitudes, CREA/EDITA solo SUS proyectos.
 2. Enviada: editar existentes, NO agregar lineas nuevas.
@@ -267,13 +255,13 @@ Bugs #3-8 corregidos 2026-03-06.
 10. En Proceso/Parcial: TBD.
 11. Tarifa y Costo OPCIONALES.
 12. Salida y Entrega obligatorios. Llegada y Retorno opcionales.
-13. Codigo confirmacion: 4 digitos O nombre receptor.
+13. Codigo confirmacion: MUST be correct, sin bypass. Receptor dropdown personas proyecto + fallback. received_by_id FK people.
 14. Sin solicitud: fuerza retroactiva en MVP.
 15. Servicios externos: is_external + costo manual.
 16. user_app_roles: fundacion multi-app, MVP usa people.app_role.
 17. parent_equipment_id: accesorio→equipo padre.
 18. Categoria material: texto libre MVP, CSI Fase 2.
-19. Cost codes cascada: proyecto→fase→categoria desde Sage.
+19. Cost codes cascada: proyecto→fase→categoria desde Spectrum
 20. cost_categories: 8 estandar, subconjunto por fase via cost_code_categories.
 21. Solicitante: auto-fill, NO editable.
 22. Aprobado por: filtrado app_role='pm'.
@@ -281,8 +269,14 @@ Bugs #3-8 corregidos 2026-03-06.
 24. ASTIBAL: Cerrado.
 25. Taller Chilibre = Almacen Central.
 26. Commits: auto push a jaime/dev.
-27. Dashboard MVP: por rol + 1 chart + backlog critico. PowerBI-level con Metabase post-MVP.
-28. Codigo confirmacion OBLIGATORIO (sin bypass). Receptor via dropdown personas del proyecto destino + fallback texto.
+27. Dashboard MVP: operativo unico para todos, NO por rol.
+28. Timestamps eventos: now() automatico, NO editable.
+29. PM ve codigo en /solicitudes/[id] seccion Viajes Programados.
+30. Codigo visible para pm/logistica/admin. NUNCA campo/almacen.
+31. full_code con dashes (no puntos). Trigger generate_full_code().
+32. Search equipos por spectrum_code Y description.
+33. Keyboard navigation en Select (arrow keys + enter).
+34. Claude Code NO tiene acceso a Supabase.
 
 ---
 
@@ -300,7 +294,7 @@ Bugs #3-8 corregidos 2026-03-06.
 | 8 | Remolque siempre opcional | 2026-03-06 |
 | 9 | IDs off-by-one | 2026-03-06 |
 | 10 | Remolque incluye camiones | 2026-03-06 |
-| 11 | Categoria costo eliminada al agregar Categoria Material | CORREGIDO 2026-03-07 |
+| 11 | Categoria costo eliminada al agregar Categoria Material | PENDIENTE |
 
 ---
 
