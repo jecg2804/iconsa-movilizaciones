@@ -406,7 +406,7 @@ export default function MisViajesDetailPage() {
   }
 
   // Código de confirmación solo visible para logistica y admin
-  const canSeeConfirmationCode = role === 'logistica' || role === 'admin'
+  const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
