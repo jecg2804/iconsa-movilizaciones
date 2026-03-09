@@ -1,9 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { FileText, Package, Truck, CheckCircle } from 'lucide-react'
+import Link from 'next/link'
+import { FileText, Package, Truck, CheckCircle, AlertTriangle } from 'lucide-react'
 import { ROLE_LABELS, type AppRole } from '@/lib/utils/constants'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
+import { SolicitudesByProjectChart, type ProjectData } from '@/components/dashboard/SolicitudesByProjectChart'
+import { Badge } from '@/components/ui/Badge'
+import { formatDate } from '@/lib/utils/format'
 import type { RecentSolicitud, RecentTrip } from '@/components/dashboard/RecentActivity'
 
 export default async function DashboardPage() {
@@ -17,7 +21,7 @@ export default async function DashboardPage() {
 
   const { data: person } = await supabase
     .from('people')
-    .select('name, app_role')
+    .select('id, name, app_role')
     .eq('auth_id', user.id)
     .single()
 
@@ -25,7 +29,21 @@ export default async function DashboardPage() {
 
   const role = person.app_role as AppRole
 
-  // Fechas para los queries
+  // campo redirige a /mis-viajes
+  if (role === 'campo') redirect('/mis-viajes')
+
+  // Obtener proyectos del PM para filtrar
+  let pmProjectIds: string[] = []
+  if (role === 'pm') {
+    const { data: assignments } = await supabase
+      .from('person_projects')
+      .select('project_id')
+      .eq('person_id', person.id)
+      .eq('is_active', true)
+    pmProjectIds = (assignments ?? []).map((a) => a.project_id)
+  }
+
+  // Fechas para queries
   const today = new Date().toISOString().split('T')[0]
   const firstOfMonth = new Date(
     new Date().getFullYear(),
@@ -37,8 +55,53 @@ export default async function DashboardPage() {
   const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split('T')[0]
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0]
 
-  // Queries paralelas para los KPIs
+  // Queries base — PM filtra por sus proyectos
+  const buildPendientesQuery = () => {
+    const q = supabase
+      .from('sm_requests')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['Enviada', 'En Proceso'])
+    if (role === 'pm' && pmProjectIds.length > 0) return q.in('project_id', pmProjectIds)
+    return q
+  }
+
+  const buildSinProgramarQuery = () => {
+    const q = supabase
+      .from('sm_request_lines')
+      .select('id, request_id, sm_requests!inner(project_id)', { count: 'exact', head: true })
+      .eq('status', 'Pendiente')
+    if (role === 'pm' && pmProjectIds.length > 0) return q.in('sm_requests.project_id', pmProjectIds)
+    return q
+  }
+
+  const buildCompletadasQuery = () => {
+    const q = supabase
+      .from('sm_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'Completada')
+      .gte('updated_at', firstOfMonth)
+    if (role === 'pm' && pmProjectIds.length > 0) return q.in('project_id', pmProjectIds)
+    return q
+  }
+
+  const buildRecentSolicitudesQuery = () => {
+    const q = supabase
+      .from('sm_requests')
+      .select(
+        'id, request_id, status, priority, date_required, project:projects(code, name), requester:people!requester_id(name)',
+      )
+      .in('status', ['Borrador', 'Enviada', 'En Proceso', 'Parcial'])
+      .order('updated_at', { ascending: false })
+      .limit(5)
+    if (role === 'pm' && pmProjectIds.length > 0) return q.in('project_id', pmProjectIds)
+    return q
+  }
+
+  // Queries paralelas
   const [
     pendientesResult,
     sinProgramarResult,
@@ -47,44 +110,18 @@ export default async function DashboardPage() {
     recentSolicitudesResult,
     viajesHoyResult,
   ] = await Promise.all([
-    // KPI 1: Solicitudes en estados activos (Enviada + En Proceso)
-    supabase
-      .from('sm_requests')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['Enviada', 'En Proceso']),
-
-    // KPI 2: Líneas pendientes de programar
-    supabase
-      .from('sm_request_lines')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'Pendiente'),
-
-    // KPI 3: Viajes activos para hoy y próximos 3 días
+    buildPendientesQuery(),
+    buildSinProgramarQuery(),
+    // KPI 3: Viajes (global para todos)
     supabase
       .from('trips')
       .select('id', { count: 'exact', head: true })
       .in('status', ['Programado', 'En Ruta'])
       .gte('scheduled_date', today)
       .lte('scheduled_date', threeDaysLater),
-
-    // KPI 4: Solicitudes completadas este mes
-    supabase
-      .from('sm_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'Completada')
-      .gte('updated_at', firstOfMonth),
-
-    // Solicitudes activas recientes (últimas 5)
-    supabase
-      .from('sm_requests')
-      .select(
-        'id, request_id, status, priority, date_required, project:projects(code, name), requester:people!requester_id(name)',
-      )
-      .in('status', ['Borrador', 'Enviada', 'En Proceso', 'Parcial'])
-      .order('updated_at', { ascending: false })
-      .limit(5),
-
-    // Viajes de hoy
+    buildCompletadasQuery(),
+    buildRecentSolicitudesQuery(),
+    // Viajes hoy (global)
     supabase
       .from('trips')
       .select(
@@ -101,11 +138,10 @@ export default async function DashboardPage() {
   const viajesCount = viajesResult.count ?? 0
   const completadasCount = completadasResult.count ?? 0
 
-  // Extraer arrays para actividad reciente con tipos seguros
+  // Mapear solicitudes recientes
   const rawSolicitudes = recentSolicitudesResult.data ?? []
   const rawTrips = viajesHoyResult.data ?? []
 
-  // Mapear a tipos de RecentActivity (aplanar relaciones que Supabase retorna como array o objeto)
   const recentSolicitudes: RecentSolicitud[] = rawSolicitudes.map((s) => ({
     id: s.id,
     request_id: s.request_id,
@@ -125,11 +161,80 @@ export default async function DashboardPage() {
     vehicle: Array.isArray(t.vehicle) ? (t.vehicle[0] ?? null) : t.vehicle,
   }))
 
-  // Mes actual para sublabel
   const mesActual = new Date().toLocaleString('es-PA', {
     month: 'long',
     year: 'numeric',
   })
+
+  // --- Datos adicionales para logistica/admin/almacen ---
+  const isGlobalRole = role === 'logistica' || role === 'admin' || role === 'almacen'
+
+  let chartData: ProjectData[] = []
+  let backlogCritico: Array<{
+    id: string
+    description: string
+    project_code: string
+    request_id: string
+    date_required: string
+    priority: string
+    line_type: string
+  }> = []
+
+  if (isGlobalRole) {
+    // Chart: solicitudes activas por proyecto
+    const { data: chartRaw } = await supabase
+      .from('sm_requests')
+      .select('project_id, project:projects(code, name)')
+      .in('status', ['Enviada', 'En Proceso', 'Parcial'])
+
+    if (chartRaw) {
+      const countsByProject = new Map<string, { code: string; name: string; count: number }>()
+      for (const row of chartRaw) {
+        const proj = Array.isArray(row.project) ? row.project[0] : row.project
+        if (!proj) continue
+        const key = row.project_id
+        const existing = countsByProject.get(key)
+        if (existing) {
+          existing.count++
+        } else {
+          countsByProject.set(key, { code: proj.code, name: proj.name, count: 1 })
+        }
+      }
+      chartData = Array.from(countsByProject.values()).sort((a, b) => b.count - a.count)
+    }
+
+    // Backlog crítico: líneas pendientes cuya solicitud tiene date_required vencida o >7 días sin programar
+    const { data: backlogRaw } = await supabase
+      .from('sm_request_lines')
+      .select(
+        'id, description, line_type, sm_requests!inner(request_id, date_required, priority, project:projects(code))',
+      )
+      .eq('status', 'Pendiente')
+      .order('created_at', { ascending: true })
+      .limit(10)
+
+    if (backlogRaw) {
+      backlogCritico = backlogRaw
+        .map((row) => {
+          const req = Array.isArray(row.sm_requests) ? row.sm_requests[0] : row.sm_requests
+          if (!req) return null
+          const proj = Array.isArray(req.project) ? req.project[0] : req.project
+          // Solo mostrar si la fecha requerida ya pasó o fue hace más de 7 días sin programar
+          const dateRequired = req.date_required
+          if (dateRequired > sevenDaysAgo && dateRequired > today) return null
+          return {
+            id: row.id,
+            description: row.description,
+            project_code: proj?.code ?? '',
+            request_id: req.request_id ?? '',
+            date_required: dateRequired,
+            priority: req.priority ?? 'Normal',
+            line_type: row.line_type,
+          }
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 sm:px-6 sm:pt-6">
@@ -139,6 +244,9 @@ export default async function DashboardPage() {
           Bienvenido, <span className="font-medium text-gray-700">{person.name}</span>
           {' · '}
           {ROLE_LABELS[role]}
+          {role === 'pm' && pmProjectIds.length > 0 && (
+            <span className="text-xs text-gray-400"> (mis proyectos)</span>
+          )}
         </p>
       </div>
 
@@ -173,6 +281,68 @@ export default async function DashboardPage() {
           color="green"
         />
       </div>
+
+      {/* Chart + Backlog Crítico — solo logistica/admin/almacen */}
+      {isGlobalRole && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Chart: Solicitudes por Proyecto */}
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-3">
+              <h2 className="text-sm font-semibold text-gray-900">
+                Solicitudes Activas por Proyecto
+              </h2>
+            </div>
+            <div className="p-4">
+              <SolicitudesByProjectChart data={chartData} />
+            </div>
+          </div>
+
+          {/* Backlog Crítico */}
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+              <AlertTriangle className="h-4 w-4 text-iconsa-orange" />
+              <h2 className="text-sm font-semibold text-gray-900">Backlog Crítico</h2>
+            </div>
+
+            {backlogCritico.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm text-iconsa-gray">No hay líneas críticas pendientes</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-50">
+                {backlogCritico.map((item) => (
+                  <li key={item.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {item.description}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-iconsa-gray">
+                          <span className="font-mono font-semibold text-navy">{item.request_id}</span>
+                          <span>{item.project_code}</span>
+                          <span>Req. {formatDate(item.date_required)}</span>
+                        </div>
+                      </div>
+                      <Badge variant="priority" label={item.priority} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {backlogCritico.length > 0 && (
+              <div className="border-t border-gray-100 px-4 py-2">
+                <Link
+                  href="/programacion"
+                  className="text-xs font-medium text-iconsa-blue hover:underline"
+                >
+                  Ver backlog completo →
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Actividad reciente */}
       <RecentActivity solicitudes={recentSolicitudes} trips={recentTrips} />
