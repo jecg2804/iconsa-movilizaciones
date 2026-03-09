@@ -181,7 +181,7 @@ id, trip_id FK (CASCADE), request_line_id FK, quantity_assigned DECIMAL, created
 
 ### TABLA: trip_events (eventos — INMUTABLES)
 
-id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, registered_by FK, confirmation_code_used TEXT, received_by_name TEXT, notes TEXT, created_at. NO updated_at.
+id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, registered_by FK, confirmation_code_used TEXT, received_by_id FK people (NUEVA 2026-03-07), received_by_name TEXT, notes TEXT, created_at. NO updated_at.
 
 ---
 
@@ -207,7 +207,7 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 | 2 — Solicitudes | COMPLETADA | 2026-03-05 |
 | 3 — Programacion | COMPLETADA | 2026-03-05 |
 | 4 — Ejecucion/Eventos | COMPLETADA | 2026-03-06 |
-| 5 — Dashboard | COMPLETADA (basico, mejora pendiente) | 2026-03-06 |
+| 5 — Dashboard | COMPLETADA (por rol + chart + backlog) | 2026-03-07 |
 | 6 — Admin Masters | PENDIENTE | - |
 
 Bugs #3-8 corregidos 2026-03-06.
@@ -217,7 +217,7 @@ Bugs #3-8 corregidos 2026-03-06.
 | Ruta | Actor | Estado |
 |------|-------|--------|
 | /login | Todos | ✅ |
-| /dashboard | Todos | ✅ (basico, mejora por rol pendiente) |
+| /dashboard | pm/logistica/admin/almacen (campo→redirect) | ✅ (por rol + chart + backlog) |
 | /solicitudes | pm, admin, logistica | ✅ |
 | /solicitudes/nueva | pm, admin | ✅ |
 | /solicitudes/[id] | pm, admin, logistica | ✅ |
@@ -231,13 +231,25 @@ Bugs #3-8 corregidos 2026-03-06.
 
 ---
 
+## COMPLETADO 2026-03-07 (sesion de mejoras)
+
+- Timestamps de eventos NO editables (usa now() automatico)
+- CodeConfirmation reescrito: codigo 4 digitos OBLIGATORIO, sin bypass, receptor via SelectWithFallback
+- received_by_id FK people agregado a trip_events (cambio BD por James)
+- Fetch receptores dinamico: personas del proyecto destino, fallback almacen/logistica/admin
+- Codigo confirmacion visible para pm/logistica/admin, NO para campo/almacen
+- EventTimeline muestra "Recibido por: {nombre}" en eventos Entrega
+- Cost codes en cascada: Fase → Categoria dinamica desde cost_code_categories (Bug #11 resuelto)
+- Dashboard adaptativo: pm=KPIs sus proyectos, logistica/admin=global+chart+backlog, campo=redirect
+- Chart "Solicitudes Activas por Proyecto" (Recharts BarChart)
+- Tabla "Backlog Critico" con lineas pendientes vencidas
+
 ## PENDIENTE PARA CLAUDE CODE (proxima sesion)
 
-1. **Cost codes en cascada**: dropdown Fase filtra por project_id, dropdown Categoria filtra por cost_code_categories, restaurar dropdown eliminado, auto-generar full_code
-2. **Filtros personas**: Solicitante no editable, Aprobado por filtrado app_role='pm', Remolque por spectrum_code LIKE 'REM%'
-3. **Dashboard por rol**: pm=sus proyectos, logistica/admin=global+chart+backlog, campo=redirect mis-viajes
-4. **UX**: Keyboard navigation en Select.tsx, Categoria Material solo visible para Material
-5. **Datos pendientes**: Asignar 10 ingenieros (pm) a sus proyectos en person_projects (James con info de oficina el lunes)
+1. **Regenerar database.ts**: cost_categories y cost_code_categories no estan en tipos generados (necesita SUPABASE_ACCESS_TOKEN)
+2. **UX**: Keyboard navigation en Select.tsx
+3. **Datos pendientes**: Asignar 10 ingenieros (pm) a sus proyectos en person_projects (James con info de oficina el lunes)
+4. **Admin Masters**: Fase 6 — CRUD tablas maestras
 
 ---
 
@@ -270,6 +282,7 @@ Bugs #3-8 corregidos 2026-03-06.
 25. Taller Chilibre = Almacen Central.
 26. Commits: auto push a jaime/dev.
 27. Dashboard MVP: por rol + 1 chart + backlog critico. PowerBI-level con Metabase post-MVP.
+28. Codigo confirmacion OBLIGATORIO (sin bypass). Receptor via dropdown personas del proyecto destino + fallback texto.
 
 ---
 
@@ -287,7 +300,7 @@ Bugs #3-8 corregidos 2026-03-06.
 | 8 | Remolque siempre opcional | 2026-03-06 |
 | 9 | IDs off-by-one | 2026-03-06 |
 | 10 | Remolque incluye camiones | 2026-03-06 |
-| 11 | Categoria costo eliminada al agregar Categoria Material | PENDIENTE |
+| 11 | Categoria costo eliminada al agregar Categoria Material | CORREGIDO 2026-03-07 |
 
 ---
 
