@@ -1,7 +1,7 @@
 # ICONSA — Sprint Brief: MVP Movilizaciones
 ## Documento de Contexto para Desarrollo con Claude Code
 
-**Versión:** 3.0 | **Fecha:** 04 Marzo 2026
+**Versión:** 3.2 | **Fecha:** 06 Marzo 2026
 **Stack:** Next.js (frontend/Vercel) + NestJS (backend/Railway) + Supabase (DB/Auth) + TypeScript + Tailwind CSS
 **Builder:** James Cucalón (con Claude Code)
 
@@ -18,10 +18,13 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 ### Proyectos Activos
 | Código | Nombre | Gerente |
 |--------|--------|---------|
-| 25-504 | Astillero de Balboa (ASTIBAL) | Ariel González |
+| 24-404 | Costa Norte | César Caballero |
 | 25-505 | Paraíso | César Caballero |
 | 25-506 | Muelle 14 | Franklin Marciaga |
-| 24-404 | Costa Norte | César Caballero |
+| 26-604 | Inyecciones Metro | TBD |
+| 26-605 | Micropilotes Multiplaza | TBD |
+
+ASTIBAL (25-504) está cerrado y no aparece en el sistema.
 
 ---
 
@@ -355,7 +358,7 @@ MVAPX1=$5,000  MVCGRU=$300
 - No se restringe por driver_id del viaje.
 
 ### Dashboard
-- Métricas globales. Todos los roles ven las mismas métricas.
+- Métricas adaptativas por rol. pm=KPIs de sus proyectos. logistica/admin=global+chart+backlog. campo=redirect a /mis-viajes.
 
 ### Notificaciones (MVP: email vía NestJS)
 - Solicitud enviada → Charris
@@ -423,18 +426,20 @@ Gray:    #5A6272 (secondary text)
 
 Documentación clave:
 - `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo
-- `ICONSA_Feature_Specification_v3.md` — reglas de negocio, estados, transiciones
+- `ICONSA_Feature_Specification_v3.md` — reglas de negocio, estados, transiciones (v3.2)
 - `BUILD_PLAN.md` — plan de construcción con 6 fases
 - `supabase_schema_verified.sql` — schema SQL definitivo para generación de tipos
 
 Datos ya importados:
 - equipment: 377 registros (tabla unificada equipos+vehículos)
-- people: 160 registros (pendiente asignar roles a ~15-20)
-- projects: 4 registros
+- people: 177 registros (11 pm, 5 campo, 1 logistica, 1 admin, 1 almacen)
+- projects: 6 registros (5 activos + ASTIBAL cerrado)
 - mobilization_rates: 14 registros
-- locations: 9 registros
+- locations: 7 activas (Taller Chilibre, Oficina Central, 5 proyectos)
 - units: 11 registros
-- cost_codes: PENDIENTE importar
+- cost_codes: 98 fases importadas de Sage (5 proyectos)
+- cost_categories: 8 categorías estándar (CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB)
+- cost_code_categories: 530 combinaciones válidas fase↔categoría
 
 ---
 

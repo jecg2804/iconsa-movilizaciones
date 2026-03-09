@@ -35,7 +35,7 @@ src/
 ├── app/
 │   ├── (auth)/login/           # Login (Supabase Auth)
 │   ├── (app)/                  # Layout autenticado (sidebar + topbar + guard)
-│   │   ├── dashboard/          # KPIs globales (todos los roles)
+│   │   ├── dashboard/          # KPIs adaptativo por rol
 │   │   ├── solicitudes/        # CRUD solicitudes (pm, logistica, admin)
 │   │   ├── programacion/       # Backlog + viajes (logistica, admin)
 │   │   ├── mis-viajes/         # Ejecución/eventos (logistica, campo, almacen, admin)
@@ -61,11 +61,11 @@ src/
 |-----------|---------------|
 | @Docs/BUILD_PLAN.md | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
 | @Docs/ICONSA_MVP_Sprint_Brief.md | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
-| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados. |
-| @Docs/PROJECT_STATUS.md | Schema actual de BD (16 tablas), estado de cada componente. |
+| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados (v3.2). |
+| @Docs/PROJECT_STATUS.md | Schema actual de BD (18 tablas), estado de cada componente, decisiones. |
 | @Docs/supabase_schema_verified.sql | SQL exacto del schema verificado contra Supabase live. |
 
-**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.1 para reglas de negocio.
+**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.2 para reglas de negocio.
 
 ## Coding Conventions
 
@@ -85,9 +85,10 @@ src/
 - Todos los IDs son UUID (`gen_random_uuid()`).
 - Todas las tablas tienen `created_at` y `updated_at` con trigger automático.
 - RLS habilitado en todas las tablas.
-- Tabla `equipment` es UNIFICADA (equipos + vehículos). Vehículos = `type_code IN ('VHL','VHP')`.
-- **No crear tablas nuevas.** El schema de 16 tablas ya está definido y verificado.
+- Tabla `equipment` es UNIFICADA (equipos + vehículos). Vehículos = `type_code IN ('VHL','VHP')`. Remolques = `spectrum_code LIKE 'REM%'`.
+- **18 tablas definidas y verificadas.** No crear tablas nuevas sin discusión con James (vía Chat).
 - **user_app_roles** existe como fundación multi-app RBAC pero el código MVP usa `people.app_role`. No migrar a user_app_roles todavía.
+- **cost_codes** filtrar por `project_id`. **cost_categories** filtrar via `cost_code_categories` por `cost_code_id` seleccionado.
 
 ### Archivos
 - Componentes: `PascalCase.tsx` (ej: `SolicitudForm.tsx`)
@@ -111,25 +112,29 @@ Gray:   #5A6272  (secondary text)
 
 | Rol | Código | Acceso principal |
 |-----|--------|-----------------|
-| Ingeniero de Proyecto | `pm` | Solicitudes (CRUD sus proyectos, VER todas), Programación (lectura), Dashboard |
-| Coordinador Logística | `logistica` | Todo excepto Admin y crear solicitudes |
-| Conductor | `campo` | Mis Viajes + eventos, Dashboard |
-| Almacenista | `almacen` | Mis Viajes + eventos, Dashboard |
-| Administrador | `admin` | Todo |
+| Ingeniero de Proyecto | `pm` | Solicitudes (CRUD sus proyectos, VER todas), Programación (lectura), Dashboard (sus proyectos) |
+| Coordinador Logística | `logistica` | Todo excepto Admin y crear solicitudes. Dashboard global. |
+| Conductor | `campo` | Mis Viajes + eventos. Dashboard redirige a /mis-viajes. |
+| Almacenista | `almacen` | Mis Viajes + eventos, Dashboard global. |
+| Administrador | `admin` | Todo. Dashboard global + charts + backlog crítico. |
 
 ## Reglas Críticas (NUNCA violar)
 
 1. **PM ve TODAS las solicitudes** de todos los proyectos. Filtro default = su proyecto. Solo CREA/EDITA para SUS proyectos (via `person_projects`).
 2. **NO agregar líneas después de Borrador.** Enviada = editar existentes, no agregar nuevas.
 3. **Eventos: sin restricción por driver_id en MVP.** Cualquier logistica/campo/almacen registra eventos.
-4. **Dashboard: métricas globales.** Todos los roles ven lo mismo. Sin restricción por rol.
+4. **Dashboard adaptativo por rol.** pm=KPIs de sus proyectos. logistica/admin=global+chart+backlog. campo=redirect a /mis-viajes.
 5. **UI 100% español.** Botones, labels, mensajes, placeholders — todo en español.
 6. **Mobile-first.** Los ingenieros y conductores usan celulares.
 7. **Monospace para IDs.** `25-506-SM-023` y `MOV-2026-042` siempre en fuente monoespaciada.
-8. **Remolque condicional.** REQUERIDO cuando vehículo es cabezal (CAB### o 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
+8. **Remolque condicional.** REQUERIDO cuando vehículo es cabezal (CAB### o 'CABEZAL'). Filtrar remolques por `spectrum_code LIKE 'REM%'`. Opcional para pick-up, volquete, camión grúa.
 9. **Tarifa y Costo OPCIONALES.** No toda movilización tiene tarifa formal. Si se selecciona tarifa, pre-rellenar Costo con `rate`. Campo sigue editable.
-10. **Redirect después de guardar/enviar.** Crear nuevo → redirige a lista. Editar existente → se queda en detalle mostrando estado actualizado. Enviar solicitud → siempre a lista.
+10. **Redirect después de guardar/enviar.** Crear nuevo → redirige a lista. Editar existente → se queda en detalle. Enviar solicitud → siempre a lista.
 11. **Filtro equipos en solicitud:** `type_code NOT IN ('ING')`. NO excluir VHL, VHP, TEC.
+12. **Solicitante NO editable.** Auto-fill con usuario logueado. El campo es disabled/readonly.
+13. **Aprobado por filtrado.** Dropdown filtra por `app_role = 'pm'` (11 personas de proyecto).
+14. **Cost codes en cascada desde BD.** Proyecto → Fase (cost_codes filtrado por project_id) → Categoría (cost_categories filtrado via cost_code_categories) → Código auto-generado: `{proyecto}-{fase}-{categoría}`.
+15. **Código de confirmación NUNCA visible para campo/almacen.** Solo logistica y admin ven el código en mis-viajes/[id]. El conductor debe pedirle el código al receptor.
 
 ## Estados y Cascada
 
@@ -147,30 +152,42 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 **ANTES de cada sesión:**
 1. `/model sonnet` — Sonnet es el default. Solo usar `/model opus` para arquitectura compleja.
 2. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
+3. Lee `@Docs/PROJECT_STATUS.md` sección "PENDIENTE PARA CLAUDE CODE" para ver tareas priorizadas.
 
 **DURANTE la sesión:**
-3. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-4. Verifica columnas y relaciones en `@Docs/PROJECT_STATUS.md` o via Supabase MCP.
-5. Implementa. Corre `npm run build` para verificar que compila sin errores.
-6. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
+4. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
+5. Verifica columnas y relaciones en `@Docs/PROJECT_STATUS.md` o via Supabase MCP (read-only).
+6. Implementa. Corre `npm run build` para verificar que compila sin errores.
+7. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
 
 **DESPUÉS de cada paso completado:**
-7. Sugiere commit message: `feat: paso X.Y — descripción`
-8. Espera aprobación de James antes de continuar al siguiente paso.
-9. `/clear` entre pasos no relacionados. NUNCA acumular múltiples fases en una sesión.
+8. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
+9. Formato commit: `feat: paso X.Y — descripción` o `fix: bug #X — descripción`.
+10. Continuar al siguiente paso sin esperar aprobación.
+11. `/clear` entre fases no relacionadas.
 
 **NUNCA:**
-- No hagas commits automáticos. James revisa y commitea.
-- No modifiques archivos en Docs/ que sean specs de referencia (Feature Spec, BUILD_PLAN, Sprint Brief).
+- No hacer commits ni push a `main`. Solo `jaime/dev` o `andy/dev`.
+- No modificar archivos en Docs/ que sean specs de referencia (Feature Spec, BUILD_PLAN, Sprint Brief).
 - Solo PROJECT_STATUS.md es editable por Claude Code.
+- No crear tablas nuevas en Supabase. Cambios de BD se discuten con James vía Chat.
+
+## Tres actores — quién hace qué
+
+**Claude Chat (claude.ai):** Planificación, diseño, discusión de lógica de negocio, auditoría de documentos, cambios directos en Supabase (tiene acceso de escritura). Si Claude Code necesita un cambio de BD → James consulta con Chat primero.
+
+**James (humano):** Decisiones finales, input de negocio, coordinación con equipo ICONSA, aprobación de cambios. Push a git solo desde `jaime/dev`.
+
+**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, leer Supabase MCP (read-only, NO escribir), actualizar PROJECT_STATUS.md, hacer commit+push automático a jaime/dev.
+
+**Regla de oro:** Si algo involucra cambiar BD o lógica de negocio no documentada → STOP y dile a James que consulte con Chat. Si es solo implementación de código basada en lo que ya está en docs → HAZLO.
 
 ## Git
 
 - `main` — Estable. Solo docs y código aprobado.
-- `jaime/dev` — Branch de James.
+- `jaime/dev` — Branch de James. Commits auto-push habilitado.
 - `andy/dev` — Branch de Andy.
 - Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `chore:` — mensaje en español.
-- Ejemplo: `feat: crear formulario de solicitud con líneas`
 
 ## Dominio
 
@@ -179,7 +196,22 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 - **Viaje (Trip):** Salida física de un vehículo. ID: `MOV-{YYYY}-{###}`. Puede llevar líneas de múltiples solicitudes (many-to-many via `trip_line_assignments`).
 - **Backlog:** Todas las líneas pendientes de programar. Vista principal de Charris.
 - **Charris:** Carlos Charris — Coordinador de Logística. Usuario más importante del sistema.
-- **Chilibre:** Taller central de ICONSA. Origen/destino principal.
+- **Chilibre:** Taller central de ICONSA (= Almacén Central). Origen/destino principal.
+- **Fase / Código de Costo:** Línea presupuestaria de Sage/Spectrum. Cada proyecto tiene sus propias fases. Tabla `cost_codes`.
+- **Categoría de Costo:** Tipo de gasto: CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB. Tabla `cost_categories`. Cada fase usa un subconjunto via `cost_code_categories`.
+- **Código de Costo Completo:** `{proyecto}-{fase}-{categoría}`. Ejemplo: `25-506-03.0130-EQI`. Auto-generado.
 - **Fallback:** Texto libre cuando un valor no existe en un dropdown. Crea sugerencia para admin en tabla `suggestions`.
 - **Cascada:** Trigger que actualiza estado de solicitud basándose en estados de sus líneas.
-- **Código de confirmación:** 4 dígitos generados al crear viaje. Tipo Uber — receptor da el código al conductor para confirmar entrega.
+- **Código de confirmación:** 4 dígitos generados al crear viaje. Tipo Uber — receptor da el código al conductor para confirmar entrega. NUNCA visible para campo/almacen en la UI.
+
+## Proyectos Activos (5)
+
+| Código | Nombre | Fases |
+|--------|--------|:-----:|
+| 24-404 | Costa Norte | 49 |
+| 25-505 | Paraíso | 23 |
+| 25-506 | Muelle 14 | 11 |
+| 26-604 | Inyecciones Metro | 7 |
+| 26-605 | Micropilotes Multiplaza | 8 |
+
+ASTIBAL (25-504) está cerrado. No aparece en dropdowns (filtro `status = 'Activo'`).

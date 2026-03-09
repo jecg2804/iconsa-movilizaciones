@@ -42,6 +42,7 @@ export interface LineWithRelations {
   unit_id: string | null
   unit_text: string | null
   cost_code_id: string | null
+  cost_category_id: string | null
   category: string | null
   material_category: string | null
   po_reference: string | null
@@ -56,6 +57,7 @@ export interface LineWithRelations {
   to_location: { id: string; name: string } | null
   unit: { id: string; code: string; description: string | null } | null
   cost_code: { id: string; phase_code: string; phase_description: string | null; full_code: string | null } | null
+  cost_category: { id: string; code: string; description: string | null } | null
 }
 
 export interface SolicitudInput {
@@ -80,6 +82,7 @@ export interface LineInput {
   unit_id: string | null
   unit_text: string | null
   cost_code_id: string | null
+  cost_category_id: string | null
   category: string | null
   material_category: string | null
   po_reference: string | null
@@ -232,6 +235,7 @@ function lineInputToRow(
     unit_id: line.unit_id,
     unit_text: line.unit_text,
     cost_code_id: line.cost_code_id,
+    cost_category_id: line.cost_category_id,
     category: line.category,
     material_category: line.material_category,
     po_reference: line.po_reference,
@@ -362,7 +366,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
             from_location:locations!sm_request_lines_from_location_id_fkey(id, name),
             to_location:locations!sm_request_lines_to_location_id_fkey(id, name),
             unit:units!sm_request_lines_unit_id_fkey(id, code, description),
-            cost_code:cost_codes!sm_request_lines_cost_code_id_fkey(id, phase_code, phase_description, full_code)
+            cost_code:cost_codes!sm_request_lines_cost_code_id_fkey(id, phase_code, phase_description, full_code),
+            cost_category:cost_categories!sm_request_lines_cost_category_id_fkey(id, code, description)
           )
         `)
         .eq('id', id)
@@ -389,6 +394,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         const toLoc = line.to_location as LineWithRelations['to_location']
         const unit = line.unit as LineWithRelations['unit']
         const costCode = line.cost_code as LineWithRelations['cost_code']
+        const costCategory = line.cost_category as LineWithRelations['cost_category']
 
         return {
           id: line.id as string,
@@ -406,6 +412,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           unit_id: (line.unit_id as string | null) ?? null,
           unit_text: (line.unit_text as string | null) ?? null,
           cost_code_id: (line.cost_code_id as string | null) ?? null,
+          cost_category_id: (line.cost_category_id as string | null) ?? null,
           category: (line.category as string | null) ?? null,
           material_category: (line.material_category as string | null) ?? null,
           po_reference: (line.po_reference as string | null) ?? null,
@@ -420,6 +427,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           to_location: toLoc ? (Array.isArray(toLoc) ? toLoc[0] : toLoc) : null,
           unit: unit ? (Array.isArray(unit) ? unit[0] : unit) : null,
           cost_code: costCode ? (Array.isArray(costCode) ? costCode[0] : costCode) : null,
+          cost_category: costCategory ? (Array.isArray(costCategory) ? costCategory[0] : costCategory) : null,
         }
       })
 
@@ -621,6 +629,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 unit_id: line.unit_id,
                 unit_text: line.unit_text,
                 cost_code_id: line.cost_code_id,
+                cost_category_id: line.cost_category_id,
                 category: line.category,
                 material_category: line.material_category,
                 po_reference: line.po_reference,

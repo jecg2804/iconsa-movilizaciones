@@ -1,7 +1,7 @@
 # ICONSA — Feature Specification Document
 ## Sistema Digital de Movilizaciones (IC-LOG-PO-06)
 
-**Versión:** 3
+**Versión:** 3.2
 **Fecha:** 06 de marzo de 2026  
 **Autor:** James Cucalón — Ingeniero Industrial  
 **Empresa:** Ingeniería Continental, S.A. (ICONSA)  
@@ -120,13 +120,13 @@ El procedimiento de movilizaciones maneja el movimiento de equipos (grúas, exca
 | Fuente | Datos | Cantidad | Calidad |
 |--------|-------|----------|---------|
 | Spectrum (ERP) | Equipos + Vehículos (tabla unificada) | 377 | Media — limpiada e importada |
-| Spectrum | Empleados | 160 | Importada — pendiente asignar roles y departamentos |
-| Spectrum | Códigos de costo por proyecto | ~124 | Buena — pendiente importar |
+| Spectrum | Empleados | 160 + 13 organigrama + 4 test = 177 | Importada — 11 pm, 5 campo, 1 logistica, 1 admin, 1 almacen |
+| Spectrum | Códigos de costo por proyecto | 98 fases / 530 combos | Buena — importada de Sage Phase Listings |
 | Reconstrucción manual (PDFs) | Solicitudes históricas | 501 líneas / 174 solicitudes | Media — campos limitados |
 | Papel | Notas de entrega | 61 | Mala — sin vínculos a solicitudes |
 | Papel | Movilizaciones | 13 | Muy mala — mayoría de campos vacíos |
 | Definición interna | Tarifas de movilización | 14 códigos | Importada |
-| Definición interna | Proyectos activos | 4 | Importada |
+| Definición interna | Proyectos activos | 5 (+ 1 cerrado) | Importada |
 
 ### 2.5 — Sistemas existentes (que NO se reemplazan)
 
@@ -134,7 +134,7 @@ El procedimiento de movilizaciones maneja el movimiento de equipos (grúas, exca
 |---------|-----|------------|
 | Spectrum (Viewpoint/Trimble) | ERP de construcción — contabilidad, job costing, payroll, equipos (parcial) | Fuente maestra de equipos, empleados, códigos de costo. Integración futura (no en MVP). |
 | Fleetwise | Gestión de flota, integrado con Spectrum | José Miguel lo opera. Complementario, no se reemplaza. |
-| Sage | Contabilidad / facturación | Downstream — recibe datos de facturación. |
+| Sage | Contabilidad / facturación | No existe en ICONSA. Spectrum maneja contabilidad. |
 | Basecamp | Comunicación entre equipos de proyecto | Se quiere reemplazar con Teams eventualmente. |
 
 ---
@@ -149,7 +149,7 @@ El procedimiento de movilizaciones maneja el movimiento de equipos (grúas, exca
 - Programación de viajes: agrupar líneas, asignar conductor/vehículo/remolque/fecha
 - Clasificación automática del tipo de movilización (movilización / desmovilización / movimiento interno)
 - Registro de eventos de ejecución (salida, llegada, entrega con código de confirmación, retorno)
-- Dashboard con métricas operativas globales (todos los roles ven las mismas métricas)
+- Dashboard con métricas operativas adaptativo por rol (pm ve sus proyectos, logistica/admin ve todo, campo redirige a mis-viajes)
 - Prioridad auto-calculada por cercanía de fecha requerida
 - Notificaciones básicas (email vía NestJS)
 - Gestión de tablas maestras (CRUD de proyectos, equipos, ubicaciones, personas, tarifas)
@@ -202,7 +202,7 @@ NOTA: Aunque estos módulos están fuera del alcance, el modelo de datos DEBE di
 
 | Rol | Nombre interno | Usuarios típicos | Cantidad estimada |
 |-----|---------------|-------------------|-------------------|
-| Ingeniero de Proyecto | `pm` | Edward Rodríguez, Jenniffer Troetsch, Hector Pino, Juan Jácome, David Ríos, Madeleine Lange, Yanelys Sánchez, Lourdes Domingo, César Caballero | ~10 |
+| Ingeniero de Proyecto | `pm` | César Caballero, Andrés Solís, Edward Rodríguez, Ariel González, David Ríos, Juan Jácome, Ángel Pérez, Velideth González, Madeleine Lange, Jenniffer Troetsch, Marisa Pozza | ~11 |
 | Coordinador de Logística | `logistica` | Carlos Charris | 1 (crítico) |
 | Conductor | `campo` | Coco, Bonilla, Monchi, Rafael, + 1–2 más | ~5 |
 | Almacenista | `almacen` | Yoseph Caballero | 1 |
@@ -305,8 +305,8 @@ A diferencia de Power Apps (donde cada usuario necesita licencia), este sistema 
 | Campo | Tipo | Requerido | Comportamiento |
 |-------|------|:---------:|---------------|
 | Proyecto | Dropdown (lookup) | ✅ | Lista de proyectos activos. Para `pm`, solo muestra proyectos asignados al usuario. Al seleccionar, filtra los códigos de costo disponibles en las líneas. |
-| Solicitante | Dropdown (lookup) | ✅ | Lista de personas. Auto-rellena con el usuario actual, pero se puede cambiar (ej: un asistente crea la solicitud a nombre de otro). |
-| Aprobado por | Dropdown (lookup) | ❌ | Lista de personas (típicamente gerentes de proyecto). No es bloqueante. |
+| Solicitante | Texto (solo lectura) | ✅ | Se auto-rellena con el usuario logueado. **NO editable.** El valor se envía como requester_id del usuario actual. |
+| Aprobado por | Dropdown (lookup) | ❌ | Lista de personas con `app_role = 'pm'` (personal de proyecto: gerentes, superintendentes, ingenieros). No es bloqueante. |
 | Fecha Requerida | Selector de fecha | ✅ | Fecha en que se necesita el material/equipo en destino. El sistema calcula prioridad automáticamente. |
 | Fecha Creada | Texto (solo lectura) | — | Se auto-llena con la fecha y hora de creación. No editable. |
 | Notas generales | Texto largo | ❌ | Observaciones libres sobre la solicitud completa. |
@@ -359,8 +359,9 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 | Hasta | Dropdown con búsqueda + texto libre | ✅ | Mismo comportamiento que "Desde". |
 | Cantidad | Número positivo | ✅ | Cantidad a movilizar. |
 | Unidad | Dropdown | ✅ | Opciones: und, ml, m², m³, kg, ton, gal, ft, juegos, pzas, qq. Incluye Fallback. |
-| Fase / Código de Costo | Dropdown filtrado | ✅ | Filtrado por el proyecto seleccionado en la cabecera. Muestra: Código – Descripción. |
-| Categoría de Costo | Dropdown | ❌ | Opciones: ICS, EQI, EQA, MAT, SAL, OTR, CON, SUB. Complementa el código de costo. |
+| Fase / Código de Costo | Dropdown filtrado | ✅ | Tabla `cost_codes`, filtrado por `project_id` del proyecto seleccionado en la cabecera. Muestra: Código – Descripción. 98 fases importadas de Sage. |
+| Categoría de Costo | Dropdown filtrado | ✅ | Tabla `cost_categories`, filtrado por `cost_code_categories` según la fase seleccionada. Solo muestra las categorías válidas para esa fase de ese proyecto. Se guarda en `sm_request_lines.cost_category_id`. |
+| Código de Costo Generado | Auto-generado (solo lectura) | — | Se genera automáticamente: `{proyecto}-{fase}-{categoría}`. Ejemplo: `25-506-03.0130-EQI`. Se guarda en `sm_request_lines.full_cost_code` o se calcula al vuelo. |
 | Nota de línea | Texto | ❌ | Nota específica para esta línea. |
 | Orden de Compra | Texto libre | ❌ | MVP: campo de texto. Fase 2: dropdown que busca OC. |
 
@@ -466,7 +467,7 @@ La pantalla tiene dos secciones principales:
 | Fecha Programada | Selector de fecha | ✅ | Fecha en que se ejecutará el viaje. |
 | Conductor | Dropdown (lookup) | ✅ | Lista de personas filtrada por `app_role = 'campo'`. Muestra: Nombre. Incluye Fallback para conductores no registrados. |
 | Vehículo (Cabezal) | Dropdown (lookup) | ✅ | Lista de equipos con `type_code IN ('VHL','VHP')`. Muestra: Código – Descripción. |
-| Remolque | Dropdown (lookup) | Condicional | Filtrar por descripción CAMA/PLATAFORMA/REMOLQUE. **REQUERIDO cuando el vehículo seleccionado es un cabezal** (spectrum_code comienza con 'CAB' o description contiene 'CABEZAL'). Si el vehículo NO es cabezal (pick-up, volquete, camión grúa), se deja vacío. |
+| Remolque | Dropdown (lookup) | Condicional | Filtrar por `spectrum_code LIKE 'REM%'` (8 remolques de la flota). **REQUERIDO cuando el vehículo seleccionado es un cabezal** (spectrum_code comienza con 'CAB' o description contiene 'CABEZAL'). Si el vehículo NO es cabezal (pick-up, volquete, camión grúa), se deja vacío. |
 | Tarifa de Movilización | Dropdown (lookup) | ❌ | Lista de 14 tarifas. Muestra: Código – Descripción – Monto. Auto-rellena el costo. Opcional — no toda movilización tiene tarifa formal. |
 | Costo | Número / Moneda | ❌ | Auto-rellenado por tarifa cuando se selecciona. Editable manualmente. Opcional — se llena automáticamente si hay tarifa, o manualmente para casos especiales. |
 | Requiere Permiso ATT | Toggle (Sí/No) | ✅ | Default: No. Si Sí, se muestra badge 🔒. |
@@ -608,24 +609,36 @@ La Nota de Entrega como documento formal exportable a PDF (IC-LOG-04-04) es Fase
 ### 5.4 — Módulo: Dashboard y Reportes
 
 **URL:** `/dashboard`  
-**Acceso:** Todos los roles — métricas globales, sin restricción por rol
+**Acceso:** Todos los roles — adaptativo por rol
 
-#### 5.4.1 — KPIs principales (tarjetas)
+#### 5.4.1 — Comportamiento por rol
+
+| Rol | Comportamiento del Dashboard |
+|-----|-----|
+| `pm` | KPIs filtrados por SUS proyectos asignados. Tabla "Mis Solicitudes Activas". |
+| `logistica`, `admin` | KPIs globales + chart "Solicitudes por Proyecto" (barras, Recharts) + tabla "Backlog Crítico" (líneas pendientes >7 días). |
+| `campo` | Redirect directo a `/mis-viajes`. No necesitan dashboard. |
+| `almacen` | Igual que logistica/admin por ahora. |
+
+#### 5.4.2 — KPIs principales (tarjetas)
 
 | KPI | Descripción |
 |-----|-------------|
-| Solicitudes Pendientes | Solicitudes en estado Enviada + En Proceso |
+| Solicitudes Pendientes | Solicitudes en estado Enviada + En Proceso (filtrado por proyecto si pm) |
 | Líneas Sin Programar | Total de líneas en estado Pendiente |
 | Viajes Programados | Viajes para hoy y los próximos 3 días |
 | Completadas Este Mes | Solicitudes completadas en el mes actual |
+| Tasa de Cumplimiento | % de solicitudes entregadas a tiempo este mes (Fase 2: con datos históricos) |
+| Tiempo Promedio | Días promedio solicitud→entrega (Fase 2: con datos históricos) |
 
-**Nota:** Todos los usuarios ven las mismas métricas globales. No hay restricción por rol en el dashboard para el MVP.
+#### 5.4.3 — Vistas adicionales
 
-#### 5.4.2 — Vistas adicionales
-
-- **Solicitudes recientes:** Últimas 10 solicitudes con estado y prioridad.
+- **Solicitudes recientes:** Últimas 5 solicitudes activas con estado y prioridad.
 - **Viajes del día:** Viajes programados para hoy con estado.
-- **Actividad reciente:** Timeline de los últimos eventos del sistema.
+- **Chart: Solicitudes por Proyecto:** Barras horizontales mostrando solicitudes activas por proyecto (solo para logistica/admin).
+- **Backlog Crítico:** Líneas pendientes con más de 7 días sin programar (solo para logistica/admin).
+
+**NOTA:** Dashboards avanzados (tendencias históricas, utilización de flota, costos acumulados, análisis de conductores) se implementan con Metabase post-MVP cuando haya suficiente data real (~3 meses de operación).
 
 #### 5.4.3 — Bitácora de Movilizaciones (Fase 2)
 
@@ -646,12 +659,13 @@ CRUD (Crear, Leer, Actualizar, Desactivar) para:
 
 | Tabla Maestra | Campos principales | Registros actuales |
 |--------------|-------------------|-------------------|
-| Proyectos | Código, Nombre, Gerente, Estado | 4 |
+| Proyectos | Código, Nombre, Gerente, Estado | 6 (5 activos) |
 | Equipos + Vehículos (tabla unificada) | Código Spectrum, Tipo, Descripción, Marca, Modelo, type_code, Placa, Estado | 377 |
-| Personas | Código, Nombre, Departamento, Cargo, Teléfono, Email, Rol del sistema, Estado | 160 |
-| Ubicaciones | Nombre, Tipo, Proyecto asociado, Activo | 9 |
+| Personas | Código, Nombre, Departamento, Cargo, Teléfono, Email, Rol del sistema, Estado | 177 |
+| Ubicaciones | Nombre, Tipo, Proyecto asociado, Activo | 7 activas |
 | Tarifas de Movilización | Código, Descripción, Tarifa (B/.) | 14 |
-| Códigos de Costo | Código, Fase, Descripción, Proyecto, Activo | Pendiente |
+| Fases / Códigos de Costo | Código fase, Descripción, Proyecto, full_code | 98 (importados de Sage) |
+| Categorías de Costo | Código (ICS,EQI,etc), Descripción, Activo | 8 |
 | Unidades de Medida | Código, Descripción | 11 |
 
 NOTA: Los registros no se eliminan — se desactivan. Esto preserva integridad referencial con datos históricos.
@@ -679,7 +693,7 @@ Cuando un usuario usa el fallback universal (escribe texto libre en un dropdown)
 **Referencia completa:** El schema verificado está en `supabase_schema_verified.sql` y `PROJECT_STATUS.md`. Aquí se documenta la estructura lógica.
 
 ```
-TABLAS MAESTRAS (11 tablas)
+TABLAS MAESTRAS (13 tablas)
 ═══════════════════════════
 
 projects ─── id, code, name, manager, status, location, start_date, end_date,
@@ -697,8 +711,10 @@ equipment ── id, spectrum_code, description, equipment_type, type_code,
 (UNIFICADA)  brand, model, serial_number, year, status, current_location,
              plate, capacity, inspection_type, current_project_id→projects,
              weight_class, acquisition_type, last_inspection_date,
-             next_inspection_due, meter_reading, insurance_expiry, notes
+             next_inspection_due, meter_reading, insurance_expiry, notes,
+             parent_equipment_id→equipment (accesorio→padre)
              → Vehículos = type_code IN ('VHL','VHP')
+             → Remolques = spectrum_code LIKE 'REM%'
 
 locations ── id, name, location_type, address, project_id→projects,
              is_active, contact_name, contact_phone, notes
@@ -708,6 +724,16 @@ mobilization_rates ── id, code, description, rate, is_active
 units ────── id, code, description
 
 cost_codes ─ id, project_id→projects, phase_code, phase_description, full_code
+
+cost_categories ── id, code (UNIQUE), description, is_active
+                   → 8 categorías estándar: CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB
+                   → Globales — las mismas para todos los proyectos
+
+cost_code_categories ── id, cost_code_id→cost_codes (CASCADE),
+(tabla puente)          cost_category_id→cost_categories (CASCADE)
+                        UNIQUE(cost_code_id, cost_category_id)
+                        → Define qué categorías son válidas para cada fase de cada proyecto
+                        → 530 combinaciones importadas de Sage Phase Listings
 
 sequences ── id, seq_type, project_id→projects, next_number
 
@@ -737,7 +763,9 @@ sm_request_lines ── id, request_id→sm_requests, line_number, line_type,
                     to_location_id→locations, to_text,
                     quantity, unit_id→units, unit_text,
                     cost_code_id→cost_codes,
-                    category, po_reference, notes, status,
+                    cost_category_id→cost_categories,
+                    category (LEGACY), material_category,
+                    po_reference, notes, status,
                     qty_scheduled, qty_delivered
                     │
                     │ N:M (via trip_line_assignments)
@@ -770,6 +798,8 @@ trip_events ──── id, trip_id→trips, event_type, event_timestamp,
 | Línea → Viaje | N:M | Una línea puede estar en múltiples viajes (entregas parciales). Un viaje puede llevar líneas de múltiples solicitudes. La tabla `trip_line_assignments` es el puente, con `quantity_assigned` por asignación. |
 | Viaje → Eventos | 1:N | Un viaje tiene múltiples eventos secuenciales |
 | Persona → Proyectos | N:M | Via `person_projects`. Determina qué proyectos puede crear/editar un PM. |
+| Proyecto → Fases | 1:N | Via `cost_codes`. Cada proyecto tiene sus fases de Sage. |
+| Fase → Categorías | N:M | Via `cost_code_categories`. Define qué categorías de costo son válidas para cada fase. Cascada en UI: Proyecto → Fase → Categorías válidas. |
 
 ### 6.3 — Índices
 
@@ -1136,7 +1166,9 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | **Escolta** | Acompañamiento policial o de tránsito para cargas sobre-dimensionadas. |
 | **Fallback Universal** | Mecanismo que permite texto libre cuando no se encuentra un valor en un dropdown, creando una sugerencia para admin. |
 | **Cascada de Estados** | Lógica automática que actualiza el estado de una solicitud basándose en el estado combinado de todas sus líneas. |
-| **Código de Costo** | Clasificación contable de Spectrum. Formato: {Proyecto}-{Fase}-{TipoCosto}. |
+| **Código de Costo** | Clasificación contable de Spectrum. Formato: {Proyecto}-{Fase}-{Categoría}. Ejemplo: 25-506-03.0130-EQI. Se genera automáticamente al seleccionar Fase + Categoría en el formulario de línea. |
+| **Categoría de Costo** | Tipo de gasto: CON (Contratistas), EQA (Equipo Alquilado), EQI (Equipo ICONSA), ICS (ICONSA internos), MAT (Materiales), OTR (Otros), SAL (Salarios), SUB (Subcontratos). Tabla `cost_categories`. |
+| **Fase (Cost Code)** | Línea presupuestaria de un proyecto en Sage/Spectrum. Ejemplo: 01-7113 (Movilización). Cada proyecto tiene sus propias fases. Tabla `cost_codes`. |
 | **Spectrum** | ERP de construcción (Viewpoint/Trimble) usado por ICONSA. |
 | **Chilibre** | Ubicación del taller central de ICONSA. |
 | **Charris** | Carlos Charris — Coordinador de Logística en Chilibre. Usuario principal del módulo de programación. |
@@ -1173,6 +1205,7 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | 2.2 | 2026-03-04 | Sincronización schema con Supabase live. 13 columnas corregidas: request_number→request_id, item_type→line_type, cost_category→category, oc_reference→po_reference, from_location_text→from_text, to_location_text→to_text, sequence_type→seq_type, current_value→next_number, trip_number→trip_id, requires_att_permit→att_permit, requires_escort→escort, line_id→request_line_id, qty_assigned→quantity_assigned. Eliminadas: trips.created_by, cost_codes.cost_type/description/is_active. Agregadas: sm_requests.date_created, sm_request_lines.unit_text, cost_codes.phase_description/full_code. |
 | 3.0 | 2026-03-05 | Correcciones post-testing Fases 0-3. Filtro equipos en solicitud corregido: solo `NOT IN ('ING')`. Remolque condicional con cabezal. Tarifa auto-rellena costo. Redirect después de guardar/enviar. Líneas de viaje muestran fecha requerida. Filtros en viajes recientes. Código de confirmación por cualquier rol autorizado. |
 | 3.1 | 2026-03-06 | Tarifa y Costo cambiados a opcionales (no toda movilización tiene tarifa formal). Categoría de material disponible en MVP como texto libre (CSI pendiente). Tabla `user_app_roles` agregada como fundación multi-app RBAC (User→Role→Scope). `parent_equipment_id` agregado a equipment para relación accesorio→equipo padre. 7 nuevas preguntas abiertas documentadas. Decisiones: eventos Salida+Entrega obligatorios, código acepta código O nombre receptor, forzar solicitud retroactiva en MVP, servicios externos con is_external+costo manual. BD limpieza: 177 personas (13 del organigrama), 58 teléfonos, 23 placas, ciudades normalizadas, 4 conductores con role. |
+| 3.2 | 2026-03-06 | Cost codes en cascada desde BD: `cost_categories` (8 estándar) y `cost_code_categories` (530 combos válidos) importadas de Sage Phase Listings. 98 fases importadas para 5 proyectos. 2 proyectos nuevos (26-604 Inyecciones Metro, 26-605 Micropilotes Multiplaza). ASTIBAL (25-504) cerrado. Solicitante: auto-fill NO editable. Aprobado por: filtrado por `app_role='pm'`. Remolque: filtro `spectrum_code LIKE 'REM%'`. Dashboard adaptativo por rol (pm=sus proyectos, campo=redirect, logistica/admin=global+chart+backlog). Taller Chilibre fusionado con Almacén Central. 11 personas con app_role=pm. Triggers off-by-one corregidos. Columnas nuevas en sm_request_lines: cost_category_id FK, material_category TEXT. |
 
 ---
 

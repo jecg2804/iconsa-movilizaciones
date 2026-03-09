@@ -29,12 +29,31 @@ if (filtro.statuses.length > 0) query = query.in('status', filtro.statuses)
 ## Filtros de equipos
 - Solicitud (ingeniero escoge equipo): `type_code NOT IN ('ING')`
 - Vehículo (Charris): `type_code IN ('VHL','VHP')`
-- Remolque: filtrar por description ILIKE '%CAMA%' OR '%PLATAFORMA%' OR '%REMOLQUE%'
+- Remolque: `spectrum_code LIKE 'REM%'` (NO por descripción)
 
 ## Filtros de personas
-- Conductor: filtrar por app_role = 'campo' O por lista específica de Charris (TBD)
-- Solicitante: mostrar personas con app_role IN ('pm', 'admin')
-- Aprobado por: mismo que solicitante
+- Conductor: `.eq('app_role', 'campo')`
+- Solicitante: auto-fill con usuario logueado, NO editable (disabled en UI)
+- Aprobado por: `.eq('app_role', 'pm')` — solo personal de proyecto
+
+## Cost codes en cascada
+```typescript
+// 1. Fetch fases filtradas por proyecto seleccionado
+const { data: phases } = await supabase
+  .from('cost_codes')
+  .select('id, phase_code, phase_description, full_code')
+  .eq('project_id', selectedProjectId)
+  .order('phase_code')
+
+// 2. Fetch categorías válidas para la fase seleccionada
+const { data: validCats } = await supabase
+  .from('cost_code_categories')
+  .select('cost_category_id, cost_categories(id, code, description)')
+  .eq('cost_code_id', selectedCostCodeId)
+
+// 3. Guardar en sm_request_lines
+// Usar cost_code_id y cost_category_id (FK), NO el campo 'category' (LEGACY)
+```
 
 ## Manejo de errores
 ```typescript
@@ -49,5 +68,6 @@ if (error) {
 - No usar `supabase.rpc()` sin verificar que la función existe
 - No hacer queries sin tipado (usar Database types)
 - No hardcodear UUIDs
-- No usar `user_app_roles` en código MVP — usar `people.app_role` por ahora
-- `user_app_roles` es fundación multi-app, se usa cuando se construya segunda app
+- No hardcodear categorías de costo (ICS, EQI, etc.) — leer de cost_categories
+- No usar el campo `category` TEXT para nuevas líneas — es LEGACY
+- No usar `user_app_roles` en código MVP — usar `people.app_role`

@@ -44,6 +44,7 @@ function lineToInput(line: LineWithRelations): LineInput {
     unit_id: line.unit_id,
     unit_text: line.unit_text,
     cost_code_id: line.cost_code_id,
+    cost_category_id: line.cost_category_id,
     category: line.category,
     material_category: line.material_category,
     po_reference: line.po_reference,
@@ -424,10 +425,11 @@ export default function SolicitudDetailPage() {
         fromDisplay: originalLine?.from_location?.name ?? line.from_text ?? '',
         toDisplay: originalLine?.to_location?.name ?? line.to_text ?? '',
         unitDisplay: originalLine?.unit?.code ?? line.unit_text ?? '',
-        costCodeDisplay:
-          originalLine?.cost_code?.full_code ??
-          originalLine?.cost_code?.phase_code ??
-          '',
+        costCodeDisplay: (() => {
+          const phase = originalLine?.cost_code?.full_code ?? originalLine?.cost_code?.phase_code ?? ''
+          const cat = originalLine?.cost_category?.code ?? ''
+          return cat ? `${phase}-${cat}` : phase
+        })(),
       }
     },
     [solicitud],

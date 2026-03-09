@@ -215,7 +215,7 @@ src/
 **Cancelación de viaje:** Líneas regresan a Pendiente. Cascada re-evalúa solicitudes.
 
 **Reglas de formulario de viaje:**
-- Remolque: REQUERIDO cuando vehículo es cabezal (CAB### / 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
+- Remolque: filtrar por `spectrum_code LIKE 'REM%'`. REQUERIDO cuando vehículo es cabezal (CAB### / 'CABEZAL'). Opcional para pick-up, volquete, camión grúa.
 - Tarifa y Costo: OPCIONALES. Al seleccionar tarifa, pre-rellena campo Costo con `rate`. Costo sigue editable.
 - Crear nuevo → redirige a lista. Editar existente → se queda en detalle.
 - Líneas asignadas deben mostrar fecha requerida de la solicitud padre.
@@ -253,7 +253,7 @@ src/
 |------|-----------|----------|
 | 5.1 | `components/dashboard/KpiCard.tsx` | Tarjeta de métrica |
 | 5.2 | `components/dashboard/RecentActivity.tsx` | Últimas solicitudes/viajes |
-| 5.3 | `app/(app)/dashboard/page.tsx` | Dashboard real con KPIs globales |
+| 5.3 | `app/(app)/dashboard/page.tsx` | Dashboard adaptativo por rol (pm=sus proyectos, logistica/admin=global+chart+backlog, campo=redirect) |
 
 **KPIs:** Solicitudes pendientes, líneas sin programar, viajes hoy/semana, completadas mes.
 
@@ -295,7 +295,7 @@ src/
 4. Cancelar viaje libera líneas → regresan a Pendiente.
 5. Cancelar solicitud → cancela pendientes, libera programadas.
 6. Eventos: cualquier logistica/campo/almacen. No filtrar por driver_id.
-7. Dashboard: métricas globales, sin restricción por rol.
+7. Dashboard: adaptativo por rol. pm=sus proyectos, logistica/admin=global+chart+backlog, campo=redirect a /mis-viajes.
 8. Warning duplicados: visual, no bloqueante.
 9. Notificaciones email (NestJS): enviada→Charris, programada→PM, completada→PM, vencida→ambos.
 
