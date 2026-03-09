@@ -100,6 +100,11 @@ export default function SolicitudDetailPage() {
   const [sendError, setSendError] = useState<string | null>(null)
 
   // Viajes asociados a esta solicitud
+  interface TripLineInfo {
+    description: string
+    line_type: string
+    quantity_assigned: number
+  }
   interface AssociatedTrip {
     id: string
     trip_id: string | null
@@ -108,6 +113,7 @@ export default function SolicitudDetailPage() {
     confirmation_code: string | null
     driver: { name: string } | null
     vehicle: { description: string; spectrum_code: string | null } | null
+    lines: TripLineInfo[]
   }
   const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
 
@@ -155,6 +161,8 @@ export default function SolicitudDetailPage() {
         .from('trip_line_assignments')
         .select(`
           trip_id,
+          quantity_assigned,
+          sm_request_lines!inner(description, line_type),
           trips!inner(
             id,
             trip_id,
@@ -169,21 +177,34 @@ export default function SolicitudDetailPage() {
 
       if (!data) return
 
-      // Deduplicar viajes (una solicitud puede tener múltiples líneas en el mismo viaje)
-      const seen = new Set<string>()
-      const trips: AssociatedTrip[] = []
+      // Agrupar líneas por viaje
+      const tripMap = new Map<string, AssociatedTrip>()
       for (const row of data as unknown as Record<string, unknown>[]) {
         const trip = Array.isArray(row.trips) ? row.trips[0] : row.trips
         if (!trip) continue
         const t = trip as Record<string, unknown>
         const tripUuid = t.id as string
-        if (seen.has(tripUuid)) continue
-        seen.add(tripUuid)
+
+        // Extraer info de la línea asignada
+        const lineRaw = Array.isArray(row.sm_request_lines) ? row.sm_request_lines[0] : row.sm_request_lines
+        const lineInfo: TripLineInfo | null = lineRaw
+          ? {
+              description: (lineRaw as Record<string, unknown>).description as string,
+              line_type: (lineRaw as Record<string, unknown>).line_type as string,
+              quantity_assigned: row.quantity_assigned as number,
+            }
+          : null
+
+        const existing = tripMap.get(tripUuid)
+        if (existing) {
+          if (lineInfo) existing.lines.push(lineInfo)
+          continue
+        }
 
         const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
         const vehicle = Array.isArray(t.vehicle) ? t.vehicle[0] : t.vehicle
 
-        trips.push({
+        tripMap.set(tripUuid, {
           id: tripUuid,
           trip_id: (t.trip_id as string | null) ?? null,
           scheduled_date: t.scheduled_date as string,
@@ -191,9 +212,10 @@ export default function SolicitudDetailPage() {
           confirmation_code: (t.confirmation_code as string | null) ?? null,
           driver: driver as { name: string } | null,
           vehicle: vehicle as { description: string; spectrum_code: string | null } | null,
+          lines: lineInfo ? [lineInfo] : [],
         })
       }
-      trips.sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
+      const trips = Array.from(tripMap.values()).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
       setAssociatedTrips(trips)
     }
     fetchTrips()
@@ -639,6 +661,22 @@ export default function SolicitudDetailPage() {
                     </span>
                   )}
                 </div>
+                {/* Líneas asignadas al viaje */}
+                {t.lines.length > 0 && (
+                  <ul className="mt-2 space-y-0.5">
+                    {t.lines.map((line, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                        <span className="text-xs">
+                          {line.line_type === 'Equipo' ? '🔧' : '📦'}
+                        </span>
+                        <span className="truncate">{line.description}</span>
+                        <span className="shrink-0 text-xs text-iconsa-gray">
+                          ×{line.quantity_assigned}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {/* Código de confirmación — visible para pm, logistica, admin */}
                 {(role === 'pm' || role === 'logistica' || role === 'admin') && t.confirmation_code && (
                   <div className="mt-2 flex items-center gap-2 rounded-lg bg-navy/5 border border-navy/20 px-3 py-1.5">
