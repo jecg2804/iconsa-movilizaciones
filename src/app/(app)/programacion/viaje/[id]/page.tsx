@@ -337,8 +337,7 @@ export default function ViajeDetailPage() {
     () =>
       vehicles.map((v) => ({
         value: v.id,
-        label: v.description,
-        sublabel: v.spectrum_code ?? undefined,
+        label: `${v.spectrum_code ?? ''} – ${v.description}`.trim(),
       })),
     [vehicles],
   )
@@ -347,8 +346,7 @@ export default function ViajeDetailPage() {
     () =>
       trailers.map((t) => ({
         value: t.id,
-        label: t.description,
-        sublabel: t.spectrum_code ?? undefined,
+        label: `${t.spectrum_code ?? ''} – ${t.description}`.trim(),
       })),
     [trailers],
   )
