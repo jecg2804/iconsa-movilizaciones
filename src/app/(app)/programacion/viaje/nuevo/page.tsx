@@ -83,6 +83,7 @@ export default function NuevoViajePage() {
         .from('people')
         .select('id, name')
         .eq('status', 'Activo')
+        .eq('app_role', 'campo')
         .order('name')
       setDrivers(data ?? [])
       setDriversLoading(false)
@@ -155,8 +156,7 @@ export default function NuevoViajePage() {
     () =>
       vehicles.map((v) => ({
         value: v.id,
-        label: v.description,
-        sublabel: v.spectrum_code ?? undefined,
+        label: `${v.spectrum_code ?? ''} – ${v.description}`.trim(),
       })),
     [vehicles],
   )
@@ -165,8 +165,7 @@ export default function NuevoViajePage() {
     () =>
       trailers.map((t) => ({
         value: t.id,
-        label: t.description,
-        sublabel: t.spectrum_code ?? undefined,
+        label: `${t.spectrum_code ?? ''} – ${t.description}`.trim(),
       })),
     [trailers],
   )
@@ -177,9 +176,20 @@ export default function NuevoViajePage() {
         value: r.id,
         label: `${r.code} — ${r.description}`,
         sublabel: formatCurrency(r.rate),
+        amount: r.rate,
       })),
     [rates],
   )
+
+  // --- Detectar si el vehículo es cabezal ---
+  const isCabezal = useMemo(() => {
+    const v = vehicles.find((v) => v.id === tripData.vehicle_id)
+    if (!v) return false
+    return (
+      (v.spectrum_code?.toUpperCase().startsWith('CAB') ?? false) ||
+      v.description.toUpperCase().includes('CABEZAL')
+    )
+  }, [vehicles, tripData.vehicle_id])
 
   // --- Validacion ---
   const validate = useCallback((): boolean => {
@@ -187,18 +197,22 @@ export default function NuevoViajePage() {
     if (!tripData.scheduled_date) errors.push('Seleccione la fecha programada')
     if (!tripData.driver_id) errors.push('Seleccione un conductor')
     if (!tripData.vehicle_id) errors.push('Seleccione un vehiculo')
-    if (!tripData.rate_id) errors.push('Seleccione una tarifa de movilizacion')
+    // Remolque requerido para cabezal
+    if (isCabezal && !tripData.trailer_id) {
+      errors.push('Remolque requerido para vehículo cabezal')
+    }
+    // Tarifa es opcional — no toda movilización tiene tarifa formal
     if (assignments.length === 0) errors.push('Seleccione al menos una linea')
     setValidationErrors(errors)
     return errors.length === 0
-  }, [tripData, assignments])
+  }, [tripData, assignments, isCabezal])
 
   // --- Guardar viaje ---
   const handleSave = useCallback(async () => {
     if (!validate()) return
     const result = await saveTrip(tripData, assignments)
     if (result) {
-      router.push(`/programacion/viaje/${result.id}`)
+      router.push('/programacion')
     }
   }, [validate, saveTrip, tripData, assignments, router])
 
@@ -279,6 +293,7 @@ export default function NuevoViajePage() {
           rates={rateOptions}
           onChange={setTripData}
           onRateChange={handleRateChange}
+          isTrailerRequired={isCabezal}
         />
       </div>
 

@@ -1,8 +1,8 @@
 # ICONSA — Feature Specification Document
 ## Sistema Digital de Movilizaciones (IC-LOG-PO-06)
 
-**Versión:** 2.1  
-**Fecha:** 04 de marzo de 2026  
+**Versión:** 3.3
+**Fecha:** 08 de marzo de 2026  
 **Autor:** James Cucalón — Ingeniero Industrial  
 **Empresa:** Ingeniería Continental, S.A. (ICONSA)  
 **Departamento:** Taller Chilibre / Logística  
@@ -27,7 +27,7 @@
 8. [Estados y Transiciones](#8-estados-y-transiciones)
 9. [Notificaciones y Automatizaciones](#9-notificaciones-y-automatizaciones)
 10. [Requisitos No Funcionales](#10-requisitos-no-funcionales)
-11. [Alcance del MVP vs Futuro](#11-alcance-del-mvp-vs-futuro)
+11. [Alcance — Qué está construido y qué sigue](#11-alcance--qué-está-construido-y-qué-sigue)
 12. [Preguntas Abiertas](#12-preguntas-abiertas)
 13. [Glosario](#13-glosario)
 
@@ -120,13 +120,13 @@ El procedimiento de movilizaciones maneja el movimiento de equipos (grúas, exca
 | Fuente | Datos | Cantidad | Calidad |
 |--------|-------|----------|---------|
 | Spectrum (ERP) | Equipos + Vehículos (tabla unificada) | 377 | Media — limpiada e importada |
-| Spectrum | Empleados | 160 | Importada — pendiente asignar roles y departamentos |
-| Spectrum | Códigos de costo por proyecto | ~124 | Buena — pendiente importar |
+| Spectrum | Empleados | 160 + 13 organigrama + 4 test = 177 | Importada — 11 pm, 5 campo, 1 logistica, 1 admin, 1 almacen |
+| Spectrum | Códigos de costo por proyecto | 98 fases / 530 combos | Buena — importada de Sage Phase Listings |
 | Reconstrucción manual (PDFs) | Solicitudes históricas | 501 líneas / 174 solicitudes | Media — campos limitados |
 | Papel | Notas de entrega | 61 | Mala — sin vínculos a solicitudes |
 | Papel | Movilizaciones | 13 | Muy mala — mayoría de campos vacíos |
 | Definición interna | Tarifas de movilización | 14 códigos | Importada |
-| Definición interna | Proyectos activos | 4 | Importada |
+| Definición interna | Proyectos activos | 5 (+ 1 cerrado) | Importada |
 
 ### 2.5 — Sistemas existentes (que NO se reemplazan)
 
@@ -134,12 +134,14 @@ El procedimiento de movilizaciones maneja el movimiento de equipos (grúas, exca
 |---------|-----|------------|
 | Spectrum (Viewpoint/Trimble) | ERP de construcción — contabilidad, job costing, payroll, equipos (parcial) | Fuente maestra de equipos, empleados, códigos de costo. Integración futura (no en MVP). |
 | Fleetwise | Gestión de flota, integrado con Spectrum | José Miguel lo opera. Complementario, no se reemplaza. |
-| Sage | Contabilidad / facturación | Downstream — recibe datos de facturación. |
+| Sage | Contabilidad / facturación | No existe en ICONSA. Spectrum maneja contabilidad. |
 | Basecamp | Comunicación entre equipos de proyecto | Se quiere reemplazar con Teams eventualmente. |
 
 ---
 
 ## 3. Alcance del Sistema
+
+> **NOTA:** Esta sección define el alcance teórico por fase. Para el estado real de qué está construido y funcionando, ver **Sección 11**.
 
 ### 3.1 — Dentro del alcance (MVP)
 
@@ -149,7 +151,7 @@ El procedimiento de movilizaciones maneja el movimiento de equipos (grúas, exca
 - Programación de viajes: agrupar líneas, asignar conductor/vehículo/remolque/fecha
 - Clasificación automática del tipo de movilización (movilización / desmovilización / movimiento interno)
 - Registro de eventos de ejecución (salida, llegada, entrega con código de confirmación, retorno)
-- Dashboard con métricas operativas globales (todos los roles ven las mismas métricas)
+- Dashboard operativo con KPIs, chart por proyecto, backlog crítico (todos los roles ven lo mismo)
 - Prioridad auto-calculada por cercanía de fecha requerida
 - Notificaciones básicas (email vía NestJS)
 - Gestión de tablas maestras (CRUD de proyectos, equipos, ubicaciones, personas, tarifas)
@@ -202,7 +204,7 @@ NOTA: Aunque estos módulos están fuera del alcance, el modelo de datos DEBE di
 
 | Rol | Nombre interno | Usuarios típicos | Cantidad estimada |
 |-----|---------------|-------------------|-------------------|
-| Ingeniero de Proyecto | `pm` | Edward Rodríguez, Jenniffer Troetsch, Hector Pino, Juan Jácome, David Ríos, Madeleine Lange, Yanelys Sánchez, Lourdes Domingo, César Caballero | ~10 |
+| Ingeniero de Proyecto | `pm` | César Caballero, Andrés Solís, Edward Rodríguez, Ariel González, David Ríos, Juan Jácome, Ángel Pérez, Velideth González, Madeleine Lange, Jenniffer Troetsch, Marisa Pozza | ~11 |
 | Coordinador de Logística | `logistica` | Carlos Charris | 1 (crítico) |
 | Conductor | `campo` | Coco, Bonilla, Monchi, Rafael, + 1–2 más | ~5 |
 | Almacenista | `almacen` | Yoseph Caballero | 1 |
@@ -305,8 +307,8 @@ A diferencia de Power Apps (donde cada usuario necesita licencia), este sistema 
 | Campo | Tipo | Requerido | Comportamiento |
 |-------|------|:---------:|---------------|
 | Proyecto | Dropdown (lookup) | ✅ | Lista de proyectos activos. Para `pm`, solo muestra proyectos asignados al usuario. Al seleccionar, filtra los códigos de costo disponibles en las líneas. |
-| Solicitante | Dropdown (lookup) | ✅ | Lista de personas. Auto-rellena con el usuario actual, pero se puede cambiar (ej: un asistente crea la solicitud a nombre de otro). |
-| Aprobado por | Dropdown (lookup) | ❌ | Lista de personas (típicamente gerentes de proyecto). No es bloqueante. |
+| Solicitante | Texto (solo lectura) | ✅ | Se auto-rellena con el usuario logueado. **NO editable.** El valor se envía como requester_id del usuario actual. |
+| Aprobado por | Dropdown (lookup) | ❌ | Lista de personas con `app_role = 'pm'` (personal de proyecto: gerentes, superintendentes, ingenieros). No es bloqueante. |
 | Fecha Requerida | Selector de fecha | ✅ | Fecha en que se necesita el material/equipo en destino. El sistema calcula prioridad automáticamente. |
 | Fecha Creada | Texto (solo lectura) | — | Se auto-llena con la fecha y hora de creación. No editable. |
 | Notas generales | Texto largo | ❌ | Observaciones libres sobre la solicitud completa. |
@@ -320,8 +322,8 @@ La tabla de líneas es el corazón del formulario. Cada línea representa un ít
 
 | # | Tipo | Descripción | Desde | Hasta | Cant. | Und. | Código Costo | Estado | Acciones |
 |---|------|-------------|-------|-------|-------|------|-------------|--------|----------|
-| 1 | 🔧 | Grúa 318 – Liebherr LTM 1060 | Taller Chilibre | Muelle 14 | 1 | und | 25-506-01.7113-EQI | Pendiente | ✏️ 🗑️ |
-| 2 | 📦 | Boom 40ft para Grúa 318 | Taller Chilibre | Muelle 14 | 1 | und | 25-506-01.7113-EQI | Pendiente | ✏️ 🗑️ |
+| 1 | 🔧 | Grúa 318 – Liebherr LTM 1060 | Taller Chilibre | Muelle 14 | 1 | und | 25-506-01-7113-EQI | Pendiente | ✏️ 🗑️ |
+| 2 | 📦 | Boom 40ft para Grúa 318 | Taller Chilibre | Muelle 14 | 1 | und | 25-506-01-7113-EQI | Pendiente | ✏️ 🗑️ |
 
 - Acciones (editar/eliminar) solo visibles en modo edición.
 - Badge de tipo: 🔧 Equipo (azul) / 📦 Material (dorado).
@@ -341,7 +343,7 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 
 | Campo | Tipo | Requerido | Comportamiento |
 |-------|------|:---------:|---------------|
-| Equipo | Dropdown con búsqueda (lookup) | ✅ | Busca en tabla de equipos (377+ registros). Filtro: `type_code NOT IN ('ING','VHL','VHP','TEC')`. Muestra: Código – Descripción. Incluye Fallback. |
+| Equipo | Dropdown con búsqueda (lookup) | ✅ | Busca en tabla de equipos (377+ registros). Filtro: `type_code NOT IN ('ING')`. Muestra: Código – Descripción. Incluye Fallback. |
 | Descripción | Texto (auto-rellenado) | ✅ | Se llena automáticamente al seleccionar equipo. Editable si se usa fallback. |
 
 **Si Tipo = Material:**
@@ -349,7 +351,7 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 | Campo | Tipo | Requerido | Comportamiento |
 |-------|------|:---------:|---------------|
 | Descripción del material | Texto libre | ✅ | El usuario describe el material. Sin dropdown (no existe catálogo de materiales aún). |
-| Categoría de material | Dropdown | ❌ | Fase 2 — campo existe pero no requerido inicialmente. |
+| Categoría de material | Texto libre / Dropdown futuro | ❌ | Disponible en MVP como texto libre. Cuando se definan las categorías CSI, se conectará a una tabla maestra con dropdown. No requerido. |
 
 **Campos comunes a ambos tipos:**
 
@@ -359,8 +361,9 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 | Hasta | Dropdown con búsqueda + texto libre | ✅ | Mismo comportamiento que "Desde". |
 | Cantidad | Número positivo | ✅ | Cantidad a movilizar. |
 | Unidad | Dropdown | ✅ | Opciones: und, ml, m², m³, kg, ton, gal, ft, juegos, pzas, qq. Incluye Fallback. |
-| Fase / Código de Costo | Dropdown filtrado | ✅ | Filtrado por el proyecto seleccionado en la cabecera. Muestra: Código – Descripción. |
-| Categoría de Costo | Dropdown | ❌ | Opciones: ICS, EQI, EQA, MAT, SAL, OTR, CON, SUB. Complementa el código de costo. |
+| Fase / Código de Costo | Dropdown filtrado | ✅ | Tabla `cost_codes`, filtrado por `project_id` del proyecto seleccionado en la cabecera. Muestra: Código – Descripción. 98 fases importadas de Sage. |
+| Categoría de Costo | Dropdown filtrado | ✅ | Tabla `cost_categories`, filtrado por `cost_code_categories` según la fase seleccionada. Solo muestra las categorías válidas para esa fase de ese proyecto. Se guarda en `sm_request_lines.cost_category_id`. |
+| Código de Costo Generado | Auto-generado (solo lectura) | — | Se genera automáticamente: `{proyecto}-{fase}-{categoría}`. Ejemplo: `25-506-01-3100-EQI`. Formato todo con dashes (consistente con Spectrum). Trigger `generate_full_code()` en BD. |
 | Nota de línea | Texto | ❌ | Nota específica para esta línea. |
 | Orden de Compra | Texto libre | ❌ | MVP: campo de texto. Fase 2: dropdown que busca OC. |
 
@@ -368,8 +371,8 @@ Se abre como panel expandible debajo del botón (o como overlay lateral). No nav
 
 | Botón | Condición | Comportamiento |
 |-------|-----------|---------------|
-| Guardar Borrador | Modo creación o edición (Borrador) | Guarda la solicitud y todas sus líneas con estado "Borrador". Genera ID si es la primera vez. No notifica a nadie. |
-| Enviar Solicitud | Modo creación o edición, mínimo 1 línea | Guarda todo + cambia estado a "Enviada". Activa notificación email a Charris. Calcula prioridad. A partir de aquí no se pueden agregar líneas nuevas. |
+| Guardar Borrador | Modo creación o edición (Borrador) | Guarda la solicitud y todas sus líneas con estado "Borrador". Genera ID si es la primera vez. No notifica a nadie. **Si es creación nueva: redirige a `/solicitudes`. Si es edición: se queda en `/solicitudes/[id]` mostrando estado actualizado.** |
+| Enviar Solicitud | Modo creación o edición, mínimo 1 línea | Guarda todo + cambia estado a "Enviada". Activa notificación email a Charris. Calcula prioridad. A partir de aquí no se pueden agregar líneas nuevas. **Redirige a `/solicitudes` (lista).** |
 | Cancelar Solicitud | Solicitud en estado Borrador, Enviada, o En Proceso | Cambia estado a "Cancelada". Pide confirmación. Cancela todas las líneas pendientes. Líneas ya programadas se liberan de vuelta al backlog. |
 | Eliminar Línea | Línea visible en modo edición | Si la línea está Pendiente: se elimina directamente. Si la línea está Programada: warning "Esta línea está asignada al viaje MOV-2026-003. ¿Eliminar?" → si confirma, se remueve la asignación del viaje y se elimina la línea. |
 | Volver a Mis Solicitudes | Siempre | Navega de vuelta a `/solicitudes`. |
@@ -442,6 +445,11 @@ La pantalla tiene dos secciones principales:
 - Badges: Permiso ATT (🔒), Escolta (🚨)
 - Estado del viaje (Programado / En Ruta / Completado / Cancelado)
 
+**Filtros de viajes recientes:**
+- Estado (Programado / En Ruta / Completado / Cancelado)
+- Rango de fechas
+- Conductor
+
 **Acciones:**
 - Click en viaje → ver/editar detalle del viaje.
 - Botón "+ Crear Nuevo Viaje" → pantalla de creación de viaje.
@@ -459,11 +467,11 @@ La pantalla tiene dos secciones principales:
 |-------|------|:---------:|---------------|
 | ID Viaje | Auto-generado | — | `MOV-{YYYY}-{###}`, secuencial por año. |
 | Fecha Programada | Selector de fecha | ✅ | Fecha en que se ejecutará el viaje. |
-| Conductor | Dropdown (lookup) | ✅ | Lista de personas (MVP: no filtrado por rol, Charris conoce a sus conductores). |
+| Conductor | Dropdown (lookup) | ✅ | Lista de personas filtrada por `app_role = 'campo'`. Muestra: Nombre. Incluye Fallback para conductores no registrados. |
 | Vehículo (Cabezal) | Dropdown (lookup) | ✅ | Lista de equipos con `type_code IN ('VHL','VHP')`. Muestra: Código – Descripción. |
-| Remolque | Dropdown (lookup) | ❌ | Filtrar por descripción CAMA/PLATAFORMA/REMOLQUE. Si no aplica, se deja vacío. |
-| Tarifa de Movilización | Dropdown (lookup) | ✅ | Lista de 14 tarifas. Muestra: Código – Descripción – Monto. Auto-rellena el costo. |
-| Costo | Número / Moneda | ✅ | Auto-rellenado por tarifa, pero editable manualmente (ej: agrupaciones de grúa). |
+| Remolque | Dropdown (lookup) | Condicional | Filtrar por `spectrum_code LIKE 'REM%'` (8 remolques de la flota). **REQUERIDO cuando el vehículo seleccionado es un cabezal** (spectrum_code comienza con 'CAB' o description contiene 'CABEZAL'). Si el vehículo NO es cabezal (pick-up, volquete, camión grúa), se deja vacío. |
+| Tarifa de Movilización | Dropdown (lookup) | ❌ | Lista de 14 tarifas. Muestra: Código – Descripción – Monto. Auto-rellena el costo. Opcional — no toda movilización tiene tarifa formal. |
+| Costo | Número / Moneda | ❌ | Auto-rellenado por tarifa cuando se selecciona. Editable manualmente. Opcional — se llena automáticamente si hay tarifa, o manualmente para casos especiales. |
 | Requiere Permiso ATT | Toggle (Sí/No) | ✅ | Default: No. Si Sí, se muestra badge 🔒. |
 | Requiere Escolta | Toggle (Sí/No) | ✅ | Default: No. Si Sí, se muestra badge 🚨. |
 | Notas del viaje | Texto largo | ❌ | Observaciones operativas. |
@@ -472,10 +480,10 @@ La pantalla tiene dos secciones principales:
 
 **Tabla de asignaciones** — cada fila es una línea de solicitud asignada a este viaje:
 
-| Solicitud | Línea # | Descripción | Cantidad Asignada | Unidad | Desde | Hasta |
-|-----------|---------|-------------|-------------------|--------|-------|-------|
-| 25-506-SM-023 | 1 | Grúa 318 – Liebherr | 1 | und | Taller Chilibre | Muelle 14 |
-| 25-506-SM-023 | 2 | Boom 40ft para Grúa 318 | 1 | und | Taller Chilibre | Muelle 14 |
+| Solicitud | Línea # | Descripción | Cantidad Asignada | Unidad | Desde | Hasta | Fecha Req. |
+|-----------|---------|-------------|-------------------|--------|-------|-------|------------|
+| 25-506-SM-023 | 1 | Grúa 318 – Liebherr | 1 | und | Taller Chilibre | Muelle 14 | 10/03/2026 |
+| 25-506-SM-023 | 2 | Boom 40ft para Grúa 318 | 1 | und | Taller Chilibre | Muelle 14 | 10/03/2026 |
 
 **Acción "Agregar Líneas":** Abre un selector que muestra todas las líneas pendientes del backlog. Charris puede seleccionar múltiples líneas. Para cada línea, puede ajustar la "Cantidad Asignada" (que puede ser menor que la cantidad solicitada — esto habilita viajes parciales).
 
@@ -497,8 +505,10 @@ El sistema determina automáticamente el tipo basándose en las rutas de las lí
 
 | Botón | Condición | Comportamiento |
 |-------|-----------|---------------|
-| Guardar Viaje | Siempre en edición | Guarda el viaje y sus asignaciones. Las líneas asignadas cambian a estado "Programada". Las solicitudes de origen actualizan su estado según cascada (ver sección 8). Notifica a los solicitantes por email. |
-| Cancelar Viaje | Viaje en estado Programado o En Ruta | Cambia estado a "Cancelado". Libera las líneas de vuelta al backlog (estado → "Pendiente"). Requiere confirmación. |
+| Guardar Viaje | Siempre en edición | Guarda el viaje y sus asignaciones. Las líneas asignadas cambian a estado "Programada". Las solicitudes de origen actualizan su estado según cascada (ver sección 8). Notifica a los solicitantes por email. **Si es creación nueva: redirige a `/programacion`. Si es edición: se queda en `/programacion/viaje/[id]`.** |
+| Cancelar Viaje | Viaje en estado Programado o En Ruta | Cambia estado a "Cancelado". Libera las líneas de vuelta al backlog (estado → "Pendiente"). Requiere confirmación. **Redirige a `/programacion`.** |
+
+**Regla de auto-relleno de tarifa→costo:** Al seleccionar una tarifa de movilización, el campo "Costo" se pre-rellena automáticamente con el valor `rate` de la tarifa seleccionada. El campo sigue siendo editable — Charris puede modificar el costo y documentar la razón en el campo de Notas (ej: agrupación de viajes de grúa, descuento, etc.).
 
 **Reglas de edición de viaje:**
 - **Programado:** Edición completa (conductor, vehículo, fecha, agregar/remover líneas).
@@ -552,7 +562,7 @@ Cada evento tiene:
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
 | Tipo de evento | Predefinido | Salida, Llegada, Entrega, Retorno, Incidencia |
-| Fecha y hora | Auto (Now) + editable | Se pre-llena con la fecha/hora actual. Editable para correcciones. |
+| Fecha y hora | Auto (Now), NO editable | Se auto-llena con la fecha/hora actual. **NO editable.** El usuario no puede modificar cuándo ocurrió el evento. |
 | Registrado por | Auto (usuario actual) | Persona que registra el evento. |
 | Ubicación | Texto | Donde ocurre el evento. |
 | Notas | Texto libre | Observaciones sobre el evento. |
@@ -585,11 +595,36 @@ Cada evento tiene:
 
 #### 5.3.3 — Código de Confirmación de Entrega (tipo Uber)
 
-- Se genera automáticamente al crear el viaje (4 dígitos random).
-- Solo visible para: el solicitante original y Charris.
-- Al entregar, el conductor ingresa el código que le da el receptor en el proyecto.
-- Si el código coincide → entrega confirmada, queda registro auditable.
-- Si no coincide → warning, pero permite continuar (para casos donde receptor no tiene el código).
+**Concepto:** El código es un mecanismo de **delegación de autoridad**. El PM decide quién puede recibir al compartir el código.
+
+- Se genera automáticamente al crear el viaje (4 dígitos random). Trigger de BD como safety net si el frontend no lo genera.
+- **Quién ve el código:**
+
+| Rol | /solicitudes/[id] | /mis-viajes/[id] | /programacion/viaje/[id] |
+|-----|:--:|:--:|:--:|
+| pm (solicitante) | ✅ | ❌ | ❌ |
+| logistica | ✅ | ✅ | ✅ |
+| admin | ✅ | ✅ | ✅ |
+| campo | ❌ | ❌ | ❌ |
+| almacen | ❌ | ❌ | ❌ |
+
+- El PM ve el código en `/solicitudes/[id]` sección "Viajes Programados" cuando la solicitud está en estado En Proceso, Parcial o Completada.
+- El PM comparte el código con quien él designe como receptor en el proyecto (WhatsApp, llamada, en persona). Esto crea cadena de responsabilidad.
+- Al registrar el evento de Entrega, el modal muestra:
+  1. **Código de 4 dígitos** — REQUERIDO. **DEBE coincidir exactamente.** Si no coincide → mensaje rojo "Código incorrecto. Verifique con el solicitante." Botón DISABLED. **NO hay opción de continuar sin código correcto.**
+  2. **Recibido por** — Dropdown de personas asignadas al proyecto destino (via `person_projects`), con fallback "No está en lista" → texto libre. REQUERIDO.
+  3. **Notas** — opcional.
+- Si el código coincide y el receptor está seleccionado → botón habilitado → entrega confirmada.
+- Se guarda: `confirmation_code_used` (código ingresado), `received_by_id` (UUID de persona si seleccionada del dropdown, NULL si fallback), `received_by_name` (nombre), `registered_by` (usuario logueado, auto).
+- Los eventos son **INMUTABLES** — una vez creados, no se editan ni eliminan.
+
+**Edge cases:**
+- Nadie conoce el código: link "¿No tiene el código?" muestra mensaje: "Comuníquese con el solicitante o el coordinador de logística." NO hay bypass.
+- Destino sin proyecto asociado (Taller Chilibre, externo): dropdown muestra personas con `app_role IN ('almacen', 'logistica', 'admin')`.
+- Receptor no tiene cuenta: usa fallback "No está en lista" → texto libre. `received_by_id` queda NULL.
+- Múltiples destinos en un viaje: unir personas de todos los proyectos destino en el dropdown.
+
+- **PENDIENTE Fase 2:** Notificación automática del código al PM por email/WhatsApp. Receptores autorizados configurables por proyecto.
 
 #### 5.3.4 — Nota de Entrega Formal (Fase 2)
 
@@ -600,24 +635,25 @@ La Nota de Entrega como documento formal exportable a PDF (IC-LOG-04-04) es Fase
 ### 5.4 — Módulo: Dashboard y Reportes
 
 **URL:** `/dashboard`  
-**Acceso:** Todos los roles — métricas globales, sin restricción por rol
+**Acceso:** Todos los roles — dashboard operativo único, todos ven lo mismo
 
 #### 5.4.1 — KPIs principales (tarjetas)
 
 | KPI | Descripción |
 |-----|-------------|
 | Solicitudes Pendientes | Solicitudes en estado Enviada + En Proceso |
-| Líneas Sin Programar | Total de líneas en estado Pendiente |
-| Viajes Programados | Viajes para hoy y los próximos 3 días |
-| Completadas Este Mes | Solicitudes completadas en el mes actual |
-
-**Nota:** Todos los usuarios ven las mismas métricas globales. No hay restricción por rol en el dashboard para el MVP.
+| Ítems Sin Programar | Total de líneas en estado Pendiente |
+| Viajes Próximos | Viajes para hoy y los próximos 3 días |
+| Completadas (mes) | Solicitudes completadas en el mes actual |
 
 #### 5.4.2 — Vistas adicionales
 
-- **Solicitudes recientes:** Últimas 10 solicitudes con estado y prioridad.
-- **Viajes del día:** Viajes programados para hoy con estado.
-- **Actividad reciente:** Timeline de los últimos eventos del sistema.
+- **Solicitudes Activas por Proyecto:** Chart de barras horizontales (Recharts) mostrando solicitudes activas por proyecto.
+- **Backlog Crítico:** Tabla de líneas pendientes con más de 7 días sin programar, con fecha requerida, descripción, proyecto, solicitante.
+- **Solicitudes Recientes:** Últimas 5 solicitudes activas con estado y prioridad.
+- **Viajes Hoy:** Viajes programados para hoy con estado.
+
+**NOTA:** Dashboards avanzados (tendencias históricas, utilización de flota, costos acumulados) se implementan con Metabase post-MVP cuando haya suficiente data real.
 
 #### 5.4.3 — Bitácora de Movilizaciones (Fase 2)
 
@@ -638,12 +674,13 @@ CRUD (Crear, Leer, Actualizar, Desactivar) para:
 
 | Tabla Maestra | Campos principales | Registros actuales |
 |--------------|-------------------|-------------------|
-| Proyectos | Código, Nombre, Gerente, Estado | 4 |
+| Proyectos | Código, Nombre, Gerente, Estado | 6 (5 activos) |
 | Equipos + Vehículos (tabla unificada) | Código Spectrum, Tipo, Descripción, Marca, Modelo, type_code, Placa, Estado | 377 |
-| Personas | Código, Nombre, Departamento, Cargo, Teléfono, Email, Rol del sistema, Estado | 160 |
-| Ubicaciones | Nombre, Tipo, Proyecto asociado, Activo | 9 |
+| Personas | Código, Nombre, Departamento, Cargo, Teléfono, Email, Rol del sistema, Estado | 177 |
+| Ubicaciones | Nombre, Tipo, Proyecto asociado, Activo | 7 activas |
 | Tarifas de Movilización | Código, Descripción, Tarifa (B/.) | 14 |
-| Códigos de Costo | Código, Fase, Descripción, Proyecto, Activo | Pendiente |
+| Fases / Códigos de Costo | Código fase, Descripción, Proyecto, full_code | 98 (importados de Sage) |
+| Categorías de Costo | Código (ICS,EQI,etc), Descripción, Activo | 8 |
 | Unidades de Medida | Código, Descripción | 11 |
 
 NOTA: Los registros no se eliminan — se desactivan. Esto preserva integridad referencial con datos históricos.
@@ -671,7 +708,7 @@ Cuando un usuario usa el fallback universal (escribe texto libre en un dropdown)
 **Referencia completa:** El schema verificado está en `supabase_schema_verified.sql` y `PROJECT_STATUS.md`. Aquí se documenta la estructura lógica.
 
 ```
-TABLAS MAESTRAS (10 tablas)
+TABLAS MAESTRAS (13 tablas)
 ═══════════════════════════
 
 projects ─── id, code, name, manager, status, location, start_date, end_date,
@@ -689,8 +726,10 @@ equipment ── id, spectrum_code, description, equipment_type, type_code,
 (UNIFICADA)  brand, model, serial_number, year, status, current_location,
              plate, capacity, inspection_type, current_project_id→projects,
              weight_class, acquisition_type, last_inspection_date,
-             next_inspection_due, meter_reading, insurance_expiry, notes
+             next_inspection_due, meter_reading, insurance_expiry, notes,
+             parent_equipment_id→equipment (accesorio→padre)
              → Vehículos = type_code IN ('VHL','VHP')
+             → Remolques = spectrum_code LIKE 'REM%'
 
 locations ── id, name, location_type, address, project_id→projects,
              is_active, contact_name, contact_phone, notes
@@ -701,10 +740,27 @@ units ────── id, code, description
 
 cost_codes ─ id, project_id→projects, phase_code, phase_description, full_code
 
+cost_categories ── id, code (UNIQUE), description, is_active
+                   → 8 categorías estándar: CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB
+                   → Globales — las mismas para todos los proyectos
+
+cost_code_categories ── id, cost_code_id→cost_codes (CASCADE),
+(tabla puente)          cost_category_id→cost_categories (CASCADE)
+                        UNIQUE(cost_code_id, cost_category_id)
+                        → Define qué categorías son válidas para cada fase de cada proyecto
+                        → 530 combinaciones importadas de Sage Phase Listings
+
 sequences ── id, seq_type, project_id→projects, next_number
 
 suggestions ─ id, table_name, suggested_value, suggested_by→people, status,
               reviewed_by→people
+
+user_app_roles ─ id, person_id→people, app_code, role_code, is_active,
+                 granted_by→people, granted_at, notes
+                 (UNIQUE person_id + app_code + role_code)
+                 → Fundación multi-app RBAC. MVP: app_code='movilizaciones'.
+                 → Roles movilizaciones: solicitante, coordinador, operador, receptor, visor, admin
+                 → people.app_role se mantiene como shortcut para MVP; se depreca post-MVP.
 
 
 TABLAS TRANSACCIONALES (5 tablas)
@@ -722,7 +778,9 @@ sm_request_lines ── id, request_id→sm_requests, line_number, line_type,
                     to_location_id→locations, to_text,
                     quantity, unit_id→units, unit_text,
                     cost_code_id→cost_codes,
-                    category, po_reference, notes, status,
+                    cost_category_id→cost_categories,
+                    category (LEGACY), material_category,
+                    po_reference, notes, status,
                     qty_scheduled, qty_delivered
                     │
                     │ N:M (via trip_line_assignments)
@@ -744,7 +802,7 @@ trips ───────────│
                  ▼
 trip_events ──── id, trip_id→trips, event_type, event_timestamp,
 (INMUTABLES)     location, registered_by→people, confirmation_code_used,
-                 received_by_name, notes
+                 received_by_id→people, received_by_name, notes
 ```
 
 ### 6.2 — Relaciones clave
@@ -755,6 +813,8 @@ trip_events ──── id, trip_id→trips, event_type, event_timestamp,
 | Línea → Viaje | N:M | Una línea puede estar en múltiples viajes (entregas parciales). Un viaje puede llevar líneas de múltiples solicitudes. La tabla `trip_line_assignments` es el puente, con `quantity_assigned` por asignación. |
 | Viaje → Eventos | 1:N | Un viaje tiene múltiples eventos secuenciales |
 | Persona → Proyectos | N:M | Via `person_projects`. Determina qué proyectos puede crear/editar un PM. |
+| Proyecto → Fases | 1:N | Via `cost_codes`. Cada proyecto tiene sus fases de Sage. |
+| Fase → Categorías | N:M | Via `cost_code_categories`. Define qué categorías de costo son válidas para cada fase. Cascada en UI: Proyecto → Fase → Categorías válidas. |
 
 ### 6.3 — Índices
 
@@ -1029,59 +1089,80 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 - El sistema debe manejar 10,000+ registros por tabla transaccional
 
 ### 10.7 — Mantenibilidad
-- El código debe ser entendible por un developer de nivel medio con ayuda de IA
-- Un ingeniero no-developer (como James) debe poder administrar el sistema sin tocar código
+- El código debe ser entendible
 
 ---
 
-## 11. Alcance del MVP vs Futuro
+## 11. Alcance — Qué está construido y qué sigue
 
-### 11.1 — MVP
+### 11.1 — Construido (MVP actual)
 
-| Incluido | No incluido |
-|----------|------------|
-| Autenticación con roles y RLS | Facturación mensual |
-| Crear/editar/enviar solicitudes con líneas | Nota de Entrega PDF formal |
-| Warning de líneas duplicadas (visual, no bloqueante) | Bitácora de Movilizaciones (vista filtrable) |
-| Backlog de líneas para Charris | Inspecciones de equipo |
-| Programación de viajes (crear, asignar líneas) | Two-Week Look-Ahead (calendario) |
-| Registro de eventos (salida, llegada, entrega con código, retorno) | Integración OC (lookup a OC/líneas) |
-| Dashboard con KPIs globales | Categorías CSI de materiales |
-| Gestión de tablas maestras | Exportación a PDF |
-| Fallback universal | WhatsApp notifications |
-| Notificaciones por email (NestJS) | Offline / PWA |
-| Auto-IDs, prioridad auto-calculada | Códigos QR |
-| Clasificación automática tipo movilización | GPS de flota |
-| Código de confirmación tipo Uber | Accesorios de equipos |
+| Feature | Estado |
+|---------|--------|
+| Autenticación con roles y RLS (5 roles) | ✅ |
+| Solicitudes: crear, editar, enviar, líneas, estados, cascada | ✅ |
+| Warning de líneas duplicadas (visual, no bloqueante) | ✅ |
+| Backlog de líneas con prioridad visual | ✅ |
+| Programación de viajes (asignar líneas, conductor, vehículo, remolque, tarifa) | ✅ |
+| Registro de eventos (salida, llegada, entrega, retorno, incidencia) | ✅ |
+| Sistema de entrega con código 4 dígitos (must be correct) + receptor dropdown | ✅ |
+| PM ve código de confirmación en solicitud | ✅ |
+| Dashboard operativo (4 KPIs + chart + backlog crítico) | ✅ |
+| Cost codes en cascada: Fase → Categoría desde BD (98 fases, 530 combos) | ✅ |
+| Auto-IDs (solicitud por proyecto, viaje por año) | ✅ |
+| Prioridad auto-calculada (Vencida/Urgente/Próxima/Normal) | ✅ |
+| Fallback universal en dropdowns + sugerencias | ✅ |
+| Timestamps automáticos no editables | ✅ |
+| Search de equipos por código Spectrum + descripción | ✅ |
+| Keyboard navigation (arrow keys + enter) en dropdowns | ✅ |
+| Filtros en programación (proyecto, estado, conductor, fecha) | ✅ |
+| Filtros en mis viajes (estado, fecha, conductor) | ✅ |
+| Solicitante auto-fill no editable | ✅ |
+| Aprobado por filtrado por app_role=pm | ✅ |
+| Remolque requerido para cabezal, filtrado por REM% | ✅ |
+| Categoría de material (texto libre) | ✅ |
+| Clasificación automática tipo movilización | ✅ |
 
-### 11.2 — Fase 2
+### 11.2 — Próximo (pendiente pre-lanzamiento)
 
-- Facturación mensual semi-automática
-- Nota de Entrega como documento PDF formal
+- Notificaciones email (solicitud enviada→Charris, programada→PM, completada→PM)
+- Asignar ingenieros a sus proyectos en person_projects
+- Admin Masters: CRUD de tablas maestras
+- RLS policies reales (actualmente USING(true))
+- Testing con usuarios reales y datos de producción
+
+### 11.3 — Fase 2 (post-lanzamiento)
+
+- Facturación mensual semi-automática con revisión humana
+- Nota de Entrega como documento PDF formal (IC-LOG-04-04)
 - Bitácora de Movilizaciones (vista tabular filtrable con exportación)
-- Inspección de equipos (42 ítems)
-- Two-Week Look-Ahead (calendario)
-- Integración OC (lookup a OC y selección de línea)
-- Categorías CSI de materiales
-- Accesorios de equipos
-- Exportación a PDF
-- GPS de flota
+- Inspección de equipos (42 ítems, posiblemente KoboToolbox)
+- Two-Week Look-Ahead (vista calendario)
+- Integración OC (vincular línea de solicitud a línea de OC)
+- Categorías CSI de materiales (reemplaza texto libre)
+- Accesorios de equipos como entidad separada
+- Exportación a PDF (solicitudes, viajes, reportes)
+- GPS de flota (Skydata — pendiente investigar API)
+- Receptores autorizados configurables por proyecto
+- Notificación automática del código al PM y receptores (email)
+- Dashboards avanzados (Metabase)
 
-### 11.3 — Fase 3
+### 11.4 — Fase 3
 
 - Módulo de Inventario/Almacén (IC-LOG-PO-04)
-- WhatsApp Business API
-- Dashboards avanzados (Metabase)
+- WhatsApp Business API para notificaciones
 - Integración con Spectrum (lectura)
 - Códigos QR para equipos
 - PWA para uso offline en campo
+- Receptor confirma entrega independientemente en app
 
-### 11.4 — Futuro (6+ meses)
+### 11.5 — Futuro (6+ meses)
 
-- Módulos adicionales: Compras, Mantenimiento, Herramientas, Combustible, Equipos Menores
+- Módulos adicionales: Compras (IC-LOG-PO-01), Mantenimiento (IC-EQ-PO-01), Herramientas (IC-EQ-PO-04), Combustible (IC-EQ-PO-06), Equipos Menores (IC-LOG-PO-05)
 - Integración bidireccional con Spectrum
-- App nativa (si se justifica)
+- Onboarding descentralizado (gerentes registran su gente)
 - Analítica predictiva
+- App nativa (si se justifica)
 
 ---
 
@@ -1095,7 +1176,14 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | 4 | ¿Reglas exactas de edición en estados En Proceso y Parcial? | UX solicitudes | Se define con feedback de usuarios |
 | 5 | ¿Hay movilizaciones que ejecutan terceros (subcontratistas)? | Modelo de datos | Pendiente |
 | 6 | ¿Los reportes de Valderrama se digitalizan en este sistema? | Alcance futuro | Pendiente |
-| 7 | ¿Qué pasa si Charris necesita movilización urgente sin solicitud? | Flujo, excepciones | Pendiente |
+| 7 | ¿Qué pasa si Charris necesita movilización urgente sin solicitud? | Flujo, excepciones | Decisión MVP: forzar solicitud retroactiva. Fase 2: "Solicitud Express" |
+| 8 | ¿El código de confirmación es obligatorio para todas las entregas o toggle por solicitud según tipo de carga? | UX eventos | **RESUELTO:** Código SIEMPRE obligatorio y DEBE coincidir. Receptor seleccionado de dropdown (personas del proyecto) con fallback texto. `received_by_id` vincula a people. |
+| 9 | Settings por proyecto: ¿gerentes definen receptores autorizados, personas que crean solicitudes? | Arquitectura, permisos | Post-MVP |
+| 10 | Onboarding descentralizado: ¿líderes de área registran su gente e invitan al sistema? | Arquitectura, usuarios | Post-MVP |
+| 11 | ¿Cuándo migrar de `people.app_role` a `user_app_roles` como fuente primaria de permisos? | Arquitectura multi-app | Cuando se construya la segunda app |
+| 12 | ¿Cómo se registran movilizaciones con personal/servicio externo? | Modelo de datos | MVP: `is_external=true` + costo manual + notas |
+| 13 | Integración GPS Skydata (https://app.skydatapa.com/) — ¿API disponible? ¿Métodos de conexión? | Fase 2 | Pendiente investigar |
+| 14 | Categorías CSI de materiales — ¿quién las define? ¿Cuáles son? | Modelo de datos, Fase 2 | Pendiente — James con oficina |
 
 ---
 
@@ -1114,7 +1202,9 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | **Escolta** | Acompañamiento policial o de tránsito para cargas sobre-dimensionadas. |
 | **Fallback Universal** | Mecanismo que permite texto libre cuando no se encuentra un valor en un dropdown, creando una sugerencia para admin. |
 | **Cascada de Estados** | Lógica automática que actualiza el estado de una solicitud basándose en el estado combinado de todas sus líneas. |
-| **Código de Costo** | Clasificación contable de Spectrum. Formato: {Proyecto}-{Fase}-{TipoCosto}. |
+| **Código de Costo** | Clasificación contable de Spectrum. Formato: {Proyecto}-{Fase}-{Categoría}. Ejemplo: 25-506-01-3100-EQI. Todo con dashes (consistente con Spectrum). Se genera automáticamente al seleccionar Fase + Categoría en el formulario de línea. Trigger `generate_full_code()` en BD. |
+| **Categoría de Costo** | Tipo de gasto: CON (Contratistas), EQA (Equipo Alquilado), EQI (Equipo ICONSA), ICS (ICONSA internos), MAT (Materiales), OTR (Otros), SAL (Salarios), SUB (Subcontratos). Tabla `cost_categories`. |
+| **Fase (Cost Code)** | Línea presupuestaria de un proyecto en Sage/Spectrum. Ejemplo: 01-7113 (Movilización). Cada proyecto tiene sus propias fases. Tabla `cost_codes`. |
 | **Spectrum** | ERP de construcción (Viewpoint/Trimble) usado por ICONSA. |
 | **Chilibre** | Ubicación del taller central de ICONSA. |
 | **Charris** | Carlos Charris — Coordinador de Logística en Chilibre. Usuario principal del módulo de programación. |
@@ -1149,6 +1239,10 @@ El trigger NO modifica solicitudes en estado Borrador o Cancelada.
 | 2.1 | 2026-03-04 | Cambio de toolstack: NestJS reemplaza ASP.NET Core como backend. n8n eliminado — automatizaciones viven en NestJS. Next.js PWA-ready (offline Fase 3). Python queda para data/ETL/AI. |
 | 2.1.1 | 2026-03-04 | Auditoría cross-doc: corregido acceso /mis-viajes (logistica, campo, almacen, admin). PWA aclarado (ready en toolstack, offline en Fase 3). Conteo tablas corregido (15, no 16). |
 | 2.2 | 2026-03-04 | Sincronización schema con Supabase live. 13 columnas corregidas: request_number→request_id, item_type→line_type, cost_category→category, oc_reference→po_reference, from_location_text→from_text, to_location_text→to_text, sequence_type→seq_type, current_value→next_number, trip_number→trip_id, requires_att_permit→att_permit, requires_escort→escort, line_id→request_line_id, qty_assigned→quantity_assigned. Eliminadas: trips.created_by, cost_codes.cost_type/description/is_active. Agregadas: sm_requests.date_created, sm_request_lines.unit_text, cost_codes.phase_description/full_code. |
+| 3.0 | 2026-03-05 | Correcciones post-testing Fases 0-3. Filtro equipos en solicitud corregido: solo `NOT IN ('ING')`. Remolque condicional con cabezal. Tarifa auto-rellena costo. Redirect después de guardar/enviar. Líneas de viaje muestran fecha requerida. Filtros en viajes recientes. Código de confirmación por cualquier rol autorizado. |
+| 3.1 | 2026-03-06 | Tarifa y Costo cambiados a opcionales (no toda movilización tiene tarifa formal). Categoría de material disponible en MVP como texto libre (CSI pendiente). Tabla `user_app_roles` agregada como fundación multi-app RBAC (User→Role→Scope). `parent_equipment_id` agregado a equipment para relación accesorio→equipo padre. 7 nuevas preguntas abiertas documentadas. Decisiones: eventos Salida+Entrega obligatorios, código acepta código O nombre receptor, forzar solicitud retroactiva en MVP, servicios externos con is_external+costo manual. BD limpieza: 177 personas (13 del organigrama), 58 teléfonos, 23 placas, ciudades normalizadas, 4 conductores con role. |
+| 3.2 | 2026-03-06 | Cost codes en cascada desde BD: `cost_categories` (8 estándar) y `cost_code_categories` (530 combos válidos) importadas de Sage Phase Listings. 98 fases importadas para 5 proyectos. 2 proyectos nuevos (26-604 Inyecciones Metro, 26-605 Micropilotes Multiplaza). ASTIBAL (25-504) cerrado. Solicitante: auto-fill NO editable. Aprobado por: filtrado por `app_role='pm'`. Remolque: filtro `spectrum_code LIKE 'REM%'`. Dashboard adaptativo por rol (pm=sus proyectos, campo=redirect, logistica/admin=global+chart+backlog). Taller Chilibre fusionado con Almacén Central. 11 personas con app_role=pm. Triggers off-by-one corregidos. Columnas nuevas en sm_request_lines: cost_category_id FK, material_category TEXT. |
+| 3.3 | 2026-03-08 | Sistema de entrega rediseñado: código MUST be correct (sin bypass), receptor desde dropdown de personas del proyecto con fallback texto, `received_by_id` UUID en trip_events. PM ve código en /solicitudes/[id] sección Viajes Programados. Código visible para pm/logistica/admin, NUNCA para campo/almacen. Timestamps de eventos now() automático, NO editable. `full_code` corregido de puntos a dashes (trigger `generate_full_code()`). Trigger `generate_confirmation_code()` como safety net en BD. Dashboard: operativo único para todos (no por rol). Search de equipos por spectrum_code + description. Keyboard navigation en Select (arrow keys + enter). Filtros en viajes recientes (proyecto) y mis-viajes (estado, fecha, conductor). Líneas disponibles con prioridad/fecha/solicitante. database.ts regenerado con cost_categories y received_by_id. |
 
 ---
 

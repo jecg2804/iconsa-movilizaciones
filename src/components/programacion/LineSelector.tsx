@@ -3,6 +3,8 @@
 import { useCallback } from 'react'
 import { Wrench, Package, ArrowRight, Plus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { formatDate } from '@/lib/utils/format'
 import type { BacklogLine, AssignmentInput } from '@/hooks/useTrips'
 
 interface LineSelectorProps {
@@ -220,12 +222,18 @@ function LineSelector({
             const unitCode = resolveUnit(line)
             const availableQty = getAvailableQty(line)
             const requestDisplayId = line.request.request_id ?? line.request_id.slice(0, 8)
+            const priority = line.request.priority ?? 'Normal'
 
             return (
               <div
                 key={line.id}
                 className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3 sm:flex-row sm:items-center sm:gap-3 hover:bg-gray-50/50 transition-colors"
               >
+                {/* Badge de prioridad */}
+                <div className="shrink-0">
+                  <Badge variant="priority" label={priority} />
+                </div>
+
                 {/* Icono de tipo */}
                 <span className="shrink-0 hidden sm:block" title={line.line_type}>
                   {isEquipo ? (
@@ -259,12 +267,27 @@ function LineSelector({
                     )}
                   </div>
 
-                  {/* Ruta */}
-                  <div className="flex items-center gap-1 text-xs text-iconsa-gray">
+                  {/* Ruta + fecha requerida + solicitante */}
+                  <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
                     <span className="truncate max-w-30">{fromName}</span>
                     <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
                     <span className="truncate max-w-30">{toName}</span>
+                    <span className="text-gray-300 mx-0.5">·</span>
+                    <span className="font-medium">{formatDate(line.request.date_required)}</span>
+                    {line.request.requester?.name && (
+                      <>
+                        <span className="text-gray-300 mx-0.5">·</span>
+                        <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+                      </>
+                    )}
                   </div>
+
+                  {/* Notas de solicitud */}
+                  {line.request.notes && (
+                    <p className="text-xs italic text-gray-400 truncate" title={line.request.notes}>
+                      {line.request.notes}
+                    </p>
+                  )}
                 </div>
 
                 {/* Cantidad disponible */}

@@ -7,6 +7,8 @@ export interface SelectOption {
   value: string
   label: string
   sublabel?: string
+  /** Valor numérico opcional — usado para auto-fill (ej: monto de tarifa de movilización) */
+  amount?: number
 }
 
 interface SelectProps {
@@ -38,8 +40,10 @@ function Select({
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const containerRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
 
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-')
 
@@ -100,14 +104,49 @@ function Select({
     [onChange],
   )
 
+  // Reset highlight cuando cambian las opciones filtradas
+  useEffect(() => {
+    setHighlightedIndex(-1)
+  }, [filteredOptions.length])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsOpen(false)
         setSearch('')
+        return
+      }
+
+      if (!isOpen) {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+          e.preventDefault()
+          setIsOpen(true)
+        }
+        return
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHighlightedIndex((prev) => {
+          const next = prev < filteredOptions.length - 1 ? prev + 1 : 0
+          listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' })
+          return next
+        })
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHighlightedIndex((prev) => {
+          const next = prev > 0 ? prev - 1 : filteredOptions.length - 1
+          listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' })
+          return next
+        })
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
+          handleSelect(filteredOptions[highlightedIndex].value)
+        }
       }
     },
-    [],
+    [isOpen, filteredOptions, highlightedIndex, handleSelect],
   )
 
   return (
@@ -162,7 +201,6 @@ function Select({
       {isOpen && (
         <div
           className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-gray-300 bg-white shadow-lg"
-          onKeyDown={handleKeyDown}
         >
           {searchable && (
             <div className="sticky top-0 border-b border-gray-200 bg-white p-2">
@@ -171,6 +209,7 @@ function Select({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Buscar..."
                 className="w-full rounded border border-gray-300 px-2.5 py-1.5 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
               />
@@ -182,16 +221,17 @@ function Select({
               {emptyMessage}
             </div>
           ) : (
-            <ul role="listbox">
-              {filteredOptions.map((option) => (
+            <ul role="listbox" ref={listRef}>
+              {filteredOptions.map((option, idx) => (
                 <li
                   key={option.value}
                   role="option"
                   aria-selected={option.value === value}
                   onClick={() => handleSelect(option.value)}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
                   className={`
                     cursor-pointer px-3 py-2 text-sm
-                    hover:bg-gray-50
+                    ${idx === highlightedIndex ? 'bg-gray-100' : 'hover:bg-gray-50'}
                     ${option.value === value ? 'bg-iconsa-blue/5 font-medium text-iconsa-blue' : 'text-gray-900'}
                   `}
                 >

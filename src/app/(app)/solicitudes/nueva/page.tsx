@@ -62,6 +62,7 @@ export default function NuevaSolicitudPage() {
 
   // Datos adicionales (fetch inline)
   const [people, setPeople] = useState<PersonRow[]>([])
+  const [approvers, setApprovers] = useState<PersonRow[]>([])
   const [units, setUnits] = useState<UnitRow[]>([])
   const [costCodes, setCostCodes] = useState<CostCodeRow[]>([])
   const [peopleLoading, setPeopleLoading] = useState(true)
@@ -82,16 +83,16 @@ export default function NuevaSolicitudPage() {
   // Hook de solicitudes (para saveSolicitud)
   const { saveSolicitud, saving, saveError } = useSolicitudes()
 
-  // --- Fetch personas activas ---
+  // --- Fetch personas activas (solicitante) + aprobadores (pm) en paralelo ---
   useEffect(() => {
     async function fetchPeople() {
       setPeopleLoading(true)
-      const { data } = await supabase
-        .from('people')
-        .select('id, name')
-        .eq('status', 'Activo')
-        .order('name')
-      setPeople(data ?? [])
+      const [allResult, pmResult] = await Promise.all([
+        supabase.from('people').select('id, name').eq('status', 'Activo').order('name'),
+        supabase.from('people').select('id, name').eq('status', 'Activo').eq('app_role', 'pm').order('name'),
+      ])
+      setPeople(allResult.data ?? [])
+      setApprovers(pmResult.data ?? [])
       setPeopleLoading(false)
     }
     fetchPeople()
@@ -149,6 +150,10 @@ export default function NuevaSolicitudPage() {
   const peopleOptions: SelectOption[] = useMemo(() => {
     return people.map((p) => ({ value: p.id, label: p.name }))
   }, [people])
+
+  const approversOptions: SelectOption[] = useMemo(() => {
+    return approvers.map((p) => ({ value: p.id, label: p.name }))
+  }, [approvers])
 
   const equipmentOptions: SelectOption[] = useMemo(() => {
     return equipment.map((e) => ({
@@ -275,7 +280,7 @@ export default function NuevaSolicitudPage() {
     if (!validateForDraft()) return
     const result = await saveSolicitud(header, lines, [], 'Borrador')
     if (result) {
-      router.push(`/solicitudes/${result.id}`)
+      router.push('/solicitudes')
     }
   }, [validateForDraft, saveSolicitud, header, lines, router])
 
@@ -284,7 +289,7 @@ export default function NuevaSolicitudPage() {
     if (!validateForSend()) return
     const result = await saveSolicitud(header, lines, [], 'Enviada')
     if (result) {
-      router.push(`/solicitudes/${result.id}`)
+      router.push('/solicitudes')
     }
   }, [validateForSend, saveSolicitud, header, lines, router])
 
@@ -359,6 +364,7 @@ export default function NuevaSolicitudPage() {
           mode="create"
           projects={projectOptions}
           people={peopleOptions}
+          approvers={approversOptions}
           onChange={setHeader}
           currentPersonId={person?.id ?? ''}
         />

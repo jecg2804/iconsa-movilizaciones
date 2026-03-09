@@ -17,6 +17,16 @@ interface BacklogTableProps {
   onRequestClick?: (requestId: string) => void
 }
 
+/** Color de texto para la fecha requerida segun prioridad */
+function priorityDateColor(priority: string): string {
+  switch (priority) {
+    case 'Vencida': return 'text-iconsa-red'
+    case 'Urgente': return 'text-iconsa-orange'
+    case 'Próxima': return 'text-iconsa-blue'
+    default: return 'text-iconsa-green'
+  }
+}
+
 /** Resuelve el nombre de origen de una linea de backlog */
 function resolveFrom(line: BacklogLine): string {
   return line.from_location?.name ?? line.from_text ?? '—'
@@ -172,13 +182,30 @@ function BacklogTable({
                 </span>
               </span>
 
+              {/* Solicitante */}
+              {line.request.requester?.name && (
+                <span className="shrink-0 text-xs text-iconsa-gray truncate max-w-[100px]" title={line.request.requester.name}>
+                  {line.request.requester.name.split(' ').slice(0, 2).join(' ')}
+                </span>
+              )}
+
+              {/* Notas de solicitud (truncadas) */}
+              {line.request.notes && (
+                <span
+                  className="shrink-0 max-w-[150px] truncate text-xs italic text-gray-400"
+                  title={line.request.notes}
+                >
+                  {line.request.notes}
+                </span>
+              )}
+
               {/* Cantidad + unidad */}
               <span className="shrink-0 whitespace-nowrap text-gray-700 text-xs ml-auto">
                 {line.quantity} {unitCode}
               </span>
 
-              {/* Fecha requerida */}
-              <span className="shrink-0 whitespace-nowrap text-xs text-iconsa-gray">
+              {/* Fecha requerida con color de prioridad */}
+              <span className={`shrink-0 whitespace-nowrap text-xs font-medium ${priorityDateColor(priority)}`}>
                 {formatDate(line.request.date_required)}
               </span>
             </div>
@@ -208,8 +235,8 @@ function BacklogTable({
                 </span>
               </div>
 
-              {/* Fila 2: ID solicitud + proyecto */}
-              <div className="flex items-center gap-2 text-xs">
+              {/* Fila 2: ID solicitud + proyecto + solicitante */}
+              <div className="flex items-center gap-2 text-xs flex-wrap">
                 <span
                   className={`font-mono text-iconsa-gray ${onRequestClick ? 'cursor-pointer hover:text-iconsa-blue hover:underline' : ''}`}
                   onClick={onRequestClick ? () => onRequestClick(line.request_id) : undefined}
@@ -220,21 +247,36 @@ function BacklogTable({
                 <span className="font-medium text-gray-600">
                   {line.request.project?.code ?? '—'}
                 </span>
+                {line.request.requester?.name && (
+                  <>
+                    <span className="text-gray-400">·</span>
+                    <span className="text-iconsa-gray truncate max-w-32">
+                      {line.request.requester.name.split(' ').slice(0, 2).join(' ')}
+                    </span>
+                  </>
+                )}
               </div>
+
+              {/* Fila 2b: notas de solicitud */}
+              {line.request.notes && (
+                <p className="text-xs italic text-gray-400 truncate">
+                  {line.request.notes}
+                </p>
+              )}
 
               {/* Fila 3: ruta desde → hasta */}
               <div className="flex items-center gap-1.5 text-xs text-iconsa-gray">
-                <span className="max-w-[130px] truncate">{fromName}</span>
+                <span className="max-w-32.5 truncate">{fromName}</span>
                 <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                <span className="max-w-[130px] truncate">{toName}</span>
+                <span className="max-w-32.5 truncate">{toName}</span>
               </div>
 
-              {/* Fila 4: cantidad + fecha requerida */}
+              {/* Fila 4: cantidad + fecha requerida con color */}
               <div className="flex items-center justify-between text-xs text-gray-600">
                 <span>
                   {line.quantity} {unitCode}
                 </span>
-                <span className="text-iconsa-gray">
+                <span className={`font-medium ${priorityDateColor(priority)}`}>
                   {formatDate(line.request.date_required)}
                 </span>
               </div>

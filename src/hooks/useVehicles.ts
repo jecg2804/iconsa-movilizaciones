@@ -7,7 +7,7 @@ import type { Row } from '@/lib/types/database'
 interface UseVehiclesReturn {
   /** Vehículos activos aptos para cabezal de viaje (VHL y VHP) */
   vehicles: Row<'equipment'>[]
-  /** Remolques activos filtrados por descripción (CAMA, PLATAFORMA, REMOLQUE) */
+  /** Remolques activos filtrados por spectrum_code LIKE 'REM%' */
   trailers: Row<'equipment'>[]
   loading: boolean
   error: string | null
@@ -36,12 +36,12 @@ export function useVehicles(): UseVehiclesReturn {
             .in('type_code', ['VHL', 'VHP'])
             .order('spectrum_code'),
 
-          // Remolques: camas, plataformas y remolques sin propulsión propia
+          // Remolques: solo equipos con spectrum_code REM### (excluye camiones plataforma y equipo marino)
           supabase
             .from('equipment')
             .select('*')
             .eq('status', 'Activo')
-            .or('description.ilike.%CAMA%,description.ilike.%PLATAFORMA%,description.ilike.%REMOLQUE%')
+            .like('spectrum_code', 'REM%')
             .order('spectrum_code'),
         ])
 

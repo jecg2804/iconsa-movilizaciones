@@ -4,11 +4,11 @@ import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Row } from '@/lib/types/database'
 
-/** Códigos de tipo excluidos del dropdown de solicitudes (ingeniería, vehículos, técnicos) */
-const EXCLUDED_TYPE_CODES = '("ING","VHL","VHP","TEC")'
+/** Códigos de tipo excluidos del dropdown de solicitudes (solo ingeniería — spec: NOT IN ING) */
+const EXCLUDED_TYPE_CODES = '("ING")'
 
 interface UseEquipmentReturn {
-  /** Equipos activos aptos para líneas de solicitud (excluye ING, VHL, VHP, TEC) */
+  /** Equipos activos aptos para líneas de solicitud (excluye solo ING; incluye VHL, VHP, TEC) */
   equipment: Row<'equipment'>[]
   loading: boolean
   error: string | null

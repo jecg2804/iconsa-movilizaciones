@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Wrench, Package } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select, type SelectOption } from '@/components/ui/Select'
@@ -10,7 +11,6 @@ import {
   type SelectWithFallbackValue,
 } from '@/components/ui/SelectWithFallback'
 import { DuplicateWarning, type DuplicateMatch } from '@/components/ui/DuplicateWarning'
-import { COST_CATEGORIES } from '@/lib/utils/constants'
 import type { LineInput } from '@/hooks/useSolicitudes'
 
 interface LineEditorProps {
@@ -36,12 +36,6 @@ interface LineEditorProps {
   onCheckDuplicates?: (line: LineInput) => Promise<DuplicateMatch[]>
 }
 
-// Mapear COST_CATEGORIES a SelectOption para el dropdown
-const categoryOptions: SelectOption[] = COST_CATEGORIES.map((cat) => ({
-  value: cat,
-  label: cat,
-}))
-
 /** Crea un SelectWithFallbackValue vacio */
 function emptyFallbackValue(): SelectWithFallbackValue {
   return { id: null, text: null }
@@ -66,6 +60,8 @@ function LineEditor({
   onCancel,
   onCheckDuplicates,
 }: LineEditorProps) {
+  const supabase = useMemo(() => createClient(), [])
+
   // --- Estado del formulario ---
   const [lineType, setLineType] = useState<'Equipo' | 'Material'>(
     initialData?.line_type ?? 'Equipo',
@@ -97,17 +93,64 @@ function LineEditor({
   const [costCodeId, setCostCodeId] = useState<string | null>(
     initialData?.cost_code_id ?? null,
   )
-  const [category, setCategory] = useState<string | null>(
-    initialData?.category ?? null,
+  const [costCategoryId, setCostCategoryId] = useState<string | null>(
+    initialData?.cost_category_id ?? null,
+  )
+  const [materialCategory, setMaterialCategory] = useState<string | null>(
+    initialData?.material_category ?? null,
   )
   const [poReference, setPoReference] = useState(initialData?.po_reference ?? '')
   const [lineNotes, setLineNotes] = useState(initialData?.notes ?? '')
+
+  // Categorias de costo dinamicas (desde BD)
+  const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
 
   // Validacion y duplicados
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [duplicates, setDuplicates] = useState<DuplicateMatch[] | null>(null)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
+
+  // --- Fetch categorias de costo cuando cambia la fase seleccionada ---
+  useEffect(() => {
+    if (!costCodeId) {
+      setCategoryOptions([])
+      setCostCategoryId(null)
+      return
+    }
+
+    let cancelled = false
+    setLoadingCategories(true)
+
+    // cost_code_categories y cost_categories no estan en database.ts (tipos no regenerados)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(supabase.from as (table: string) => ReturnType<typeof supabase.from>)('cost_code_categories')
+      .select('cost_category_id, cost_categories(id, code, description)')
+      .eq('cost_code_id', costCodeId)
+      .then(({ data }: { data: Array<{ cost_category_id: string; cost_categories: { id: string; code: string; description: string | null } | null }> | null }) => {
+        if (cancelled) return
+        const options: SelectOption[] = (data ?? [])
+          .map((row) => {
+            const cat = row.cost_categories
+            if (!cat) return null
+            return { value: cat.id, label: `${cat.code} — ${cat.description ?? cat.code}` }
+          })
+          .filter((opt): opt is SelectOption => opt !== null)
+          .sort((a, b) => a.label.localeCompare(b.label))
+        setCategoryOptions(options)
+
+        // Si la categoria actual no esta en las opciones validas, resetear
+        if (costCategoryId && !options.some((o) => o.value === costCategoryId)) {
+          setCostCategoryId(null)
+        }
+        setLoadingCategories(false)
+      })
+
+    return () => { cancelled = true }
+    // Solo re-fetch cuando cambia costCodeId, no cuando cambia costCategoryId
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [costCodeId, supabase])
 
   // --- Auto-rellenar descripcion al seleccionar equipo del dropdown ---
   useEffect(() => {
@@ -131,10 +174,17 @@ function LineEditor({
       } else {
         setDescription('')
       }
+      setMaterialCategory(null)
       setErrors({})
     },
     [lineType],
   )
+
+  // --- Manejar cambio de fase (resetea categoria) ---
+  const handleCostCodeChange = useCallback((newCostCodeId: string | null) => {
+    setCostCodeId(newCostCodeId)
+    setCostCategoryId(null)
+  }, [])
 
   // --- Construir LineInput desde el estado actual ---
   const buildLineInput = useCallback((): LineInput => {
@@ -152,7 +202,9 @@ function LineEditor({
       unit_id: unitValue.id,
       unit_text: unitValue.text,
       cost_code_id: costCodeId,
-      category,
+      cost_category_id: costCategoryId,
+      category: null, // LEGACY — no usar
+      material_category: lineType === 'Material' ? materialCategory : null,
       po_reference: poReference.trim() || null,
       notes: lineNotes.trim() || null,
     }
@@ -166,7 +218,8 @@ function LineEditor({
     quantity,
     unitValue,
     costCodeId,
-    category,
+    costCategoryId,
+    materialCategory,
     poReference,
     lineNotes,
   ])
@@ -316,15 +369,25 @@ function LineEditor({
             />
           </>
         ) : (
-          <div className="md:col-span-2">
-            <Input
-              label="Descripcion del material"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describa el material a movilizar..."
-              error={errors.description}
-            />
-          </div>
+          <>
+            <div className="md:col-span-2">
+              <Input
+                label="Descripcion del material"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describa el material a movilizar..."
+                error={errors.description}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Input
+                label="Categoria de Material"
+                value={materialCategory ?? ''}
+                onChange={(e) => setMaterialCategory(e.target.value || null)}
+                placeholder="Ej: Agregados, Acero, Electrico, Plomeria..."
+              />
+            </div>
+          </>
         )}
 
         {/* Campos comunes */}
@@ -371,20 +434,21 @@ function LineEditor({
         />
 
         <Select
-          label="Codigo de Costo"
-          placeholder="Seleccionar codigo..."
+          label="Fase / Código de Costo"
+          placeholder="Seleccionar fase..."
           options={costCodes}
           value={costCodeId}
-          onChange={setCostCodeId}
+          onChange={handleCostCodeChange}
           searchable
         />
 
         <Select
-          label="Categoria"
-          placeholder="Seleccionar..."
+          label="Categoría de Costo"
+          placeholder={loadingCategories ? 'Cargando...' : costCodeId ? 'Seleccionar categoría...' : 'Seleccione una fase primero'}
           options={categoryOptions}
-          value={category}
-          onChange={setCategory}
+          value={costCategoryId}
+          onChange={setCostCategoryId}
+          disabled={!costCodeId || loadingCategories}
         />
 
         <Input

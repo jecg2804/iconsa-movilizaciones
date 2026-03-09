@@ -43,6 +43,8 @@ interface TripFormProps {
    * El padre puede usar esto para auto-rellenar el costo.
    */
   onRateChange?: (rateId: string | null) => void
+  /** Si true, el remolque es obligatorio (vehículo es cabezal) */
+  isTrailerRequired?: boolean
 }
 
 function TripForm({
@@ -54,6 +56,7 @@ function TripForm({
   rates,
   onChange,
   onRateChange,
+  isTrailerRequired = false,
 }: TripFormProps) {
   // En modo edicion con viaje En Ruta, solo las notas son editables
   const isEnRuta = mode === 'edit' && initialData?.status === 'En Ruta'
@@ -154,11 +157,21 @@ function TripForm({
   const handleRateChange = useCallback(
     (val: string | null) => {
       setRateId(val)
-      // Notificar al padre para que auto-rellene el costo si lo desea
+      // Auto-rellenar costo desde el amount de la opción seleccionada
+      if (val) {
+        const selectedRate = rates.find((r) => r.value === val)
+        if (selectedRate?.amount != null) {
+          const newCost = String(selectedRate.amount)
+          setCost(newCost)
+          onRateChange?.(val)
+          propagate({ rate_id: val, cost: selectedRate.amount })
+          return
+        }
+      }
       onRateChange?.(val)
       propagate({ rate_id: val })
     },
-    [propagate, onRateChange],
+    [propagate, onRateChange, rates],
   )
 
   const handleCostChange = useCallback(
@@ -295,16 +308,23 @@ function TripForm({
           searchable
         />
 
-        {/* Remolque */}
-        <Select
-          label="Remolque (opcional)"
-          placeholder="Seleccionar remolque..."
-          options={trailers}
-          value={trailerId}
-          onChange={handleTrailerChange}
-          disabled={fieldsDisabled}
-          searchable
-        />
+        {/* Remolque — requerido si el vehículo es cabezal */}
+        <div>
+          <Select
+            label={isTrailerRequired ? 'Remolque (requerido)' : 'Remolque (opcional)'}
+            placeholder="Seleccionar remolque..."
+            options={trailers}
+            value={trailerId}
+            onChange={handleTrailerChange}
+            disabled={fieldsDisabled}
+            searchable
+          />
+          {isTrailerRequired && !trailerId && !fieldsDisabled && (
+            <p className="mt-1 text-xs text-red-600">
+              El remolque es obligatorio para vehículos cabezal.
+            </p>
+          )}
+        </div>
 
         {/* Tarifa */}
         <Select

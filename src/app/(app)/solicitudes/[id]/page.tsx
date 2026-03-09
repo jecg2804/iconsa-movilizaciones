@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, Loader2, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
@@ -16,9 +16,11 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
+import { formatDate } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
 import type { SelectOption } from '@/components/ui/Select'
+import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { SolicitudForm, type FormMode } from '@/components/solicitudes/SolicitudForm'
 import { LineEditor } from '@/components/solicitudes/LineEditor'
@@ -42,7 +44,9 @@ function lineToInput(line: LineWithRelations): LineInput {
     unit_id: line.unit_id,
     unit_text: line.unit_text,
     cost_code_id: line.cost_code_id,
+    cost_category_id: line.cost_category_id,
     category: line.category,
+    material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
   }
@@ -95,8 +99,27 @@ export default function SolicitudDetailPage() {
   const [deleteLineIndex, setDeleteLineIndex] = useState<number | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
 
+  // Viajes asociados a esta solicitud
+  interface TripLineInfo {
+    description: string
+    line_type: string
+    quantity_assigned: number
+  }
+  interface AssociatedTrip {
+    id: string
+    trip_id: string | null
+    scheduled_date: string
+    status: string
+    confirmation_code: string | null
+    driver: { name: string } | null
+    vehicle: { description: string; spectrum_code: string | null } | null
+    lines: TripLineInfo[]
+  }
+  const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
+
   // Datos auxiliares (people, units, costCodes) — se cargan inline
   const [people, setPeople] = useState<SelectOption[]>([])
+  const [approvers, setApprovers] = useState<SelectOption[]>([])
   const [units, setUnits] = useState<SelectOption[]>([])
   const [costCodes, setCostCodes] = useState<SelectOption[]>([])
 
@@ -123,17 +146,90 @@ export default function SolicitudDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // --- Cargar viajes asociados ---
+  useEffect(() => {
+    async function fetchTrips() {
+      if (!solicitud || solicitud.status === 'Borrador') {
+        setAssociatedTrips([])
+        return
+      }
+      // Buscar trip_line_assignments que referencien líneas de esta solicitud
+      const lineIds = solicitud.lines.map((l) => l.id)
+      if (lineIds.length === 0) return
+
+      const { data } = await supabase
+        .from('trip_line_assignments')
+        .select(`
+          trip_id,
+          quantity_assigned,
+          sm_request_lines!inner(description, line_type),
+          trips!inner(
+            id,
+            trip_id,
+            scheduled_date,
+            status,
+            confirmation_code,
+            driver:driver_id(name),
+            vehicle:vehicle_id(description, spectrum_code)
+          )
+        `)
+        .in('request_line_id', lineIds)
+
+      if (!data) return
+
+      // Agrupar líneas por viaje
+      const tripMap = new Map<string, AssociatedTrip>()
+      for (const row of data as unknown as Record<string, unknown>[]) {
+        const trip = Array.isArray(row.trips) ? row.trips[0] : row.trips
+        if (!trip) continue
+        const t = trip as Record<string, unknown>
+        const tripUuid = t.id as string
+
+        // Extraer info de la línea asignada
+        const lineRaw = Array.isArray(row.sm_request_lines) ? row.sm_request_lines[0] : row.sm_request_lines
+        const lineInfo: TripLineInfo | null = lineRaw
+          ? {
+              description: (lineRaw as Record<string, unknown>).description as string,
+              line_type: (lineRaw as Record<string, unknown>).line_type as string,
+              quantity_assigned: row.quantity_assigned as number,
+            }
+          : null
+
+        const existing = tripMap.get(tripUuid)
+        if (existing) {
+          if (lineInfo) existing.lines.push(lineInfo)
+          continue
+        }
+
+        const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
+        const vehicle = Array.isArray(t.vehicle) ? t.vehicle[0] : t.vehicle
+
+        tripMap.set(tripUuid, {
+          id: tripUuid,
+          trip_id: (t.trip_id as string | null) ?? null,
+          scheduled_date: t.scheduled_date as string,
+          status: t.status as string,
+          confirmation_code: (t.confirmation_code as string | null) ?? null,
+          driver: driver as { name: string } | null,
+          vehicle: vehicle as { description: string; spectrum_code: string | null } | null,
+          lines: lineInfo ? [lineInfo] : [],
+        })
+      }
+      const trips = Array.from(tripMap.values()).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
+      setAssociatedTrips(trips)
+    }
+    fetchTrips()
+  }, [solicitud, supabase])
+
   // --- Cargar people ---
   useEffect(() => {
     async function fetchPeople() {
-      const { data } = await supabase
-        .from('people')
-        .select('id, name')
-        .eq('status', 'Activo')
-        .order('name')
-      setPeople(
-        (data ?? []).map((p) => ({ value: p.id, label: p.name })),
-      )
+      const [allResult, pmResult] = await Promise.all([
+        supabase.from('people').select('id, name').eq('status', 'Activo').order('name'),
+        supabase.from('people').select('id, name').eq('status', 'Activo').eq('app_role', 'pm').order('name'),
+      ])
+      setPeople((allResult.data ?? []).map((p) => ({ value: p.id, label: p.name })))
+      setApprovers((pmResult.data ?? []).map((p) => ({ value: p.id, label: p.name })))
     }
     fetchPeople()
   }, [supabase])
@@ -351,10 +447,11 @@ export default function SolicitudDetailPage() {
         fromDisplay: originalLine?.from_location?.name ?? line.from_text ?? '',
         toDisplay: originalLine?.to_location?.name ?? line.to_text ?? '',
         unitDisplay: originalLine?.unit?.code ?? line.unit_text ?? '',
-        costCodeDisplay:
-          originalLine?.cost_code?.full_code ??
-          originalLine?.cost_code?.phase_code ??
-          '',
+        costCodeDisplay: (() => {
+          const phase = originalLine?.cost_code?.full_code ?? originalLine?.cost_code?.phase_code ?? ''
+          const cat = originalLine?.cost_category?.code ?? ''
+          return cat ? `${phase}-${cat}` : phase
+        })(),
       }
     },
     [solicitud],
@@ -430,6 +527,7 @@ export default function SolicitudDetailPage() {
           }}
           projects={projectOptions}
           people={people}
+          approvers={approvers}
           onChange={handleHeaderChange}
           currentPersonId={person?.id ?? ''}
         />
@@ -526,13 +624,72 @@ export default function SolicitudDetailPage() {
         )}
       </div>
 
-      {/* Informacion adicional en modo lectura para estados avanzados */}
-      {['En Proceso', 'Parcial', 'Completada'].includes(solicitud.status) && (
+      {/* Viajes Programados — visible cuando solicitud no está en Borrador */}
+      {solicitud.status !== 'Borrador' && associatedTrips.length > 0 && (
         <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-2 text-base font-semibold text-gray-900">Programacion</h2>
-          <p className="text-sm text-iconsa-gray">
-            Informacion de programacion disponible en modulo de Programacion.
-          </p>
+          <h2 className="mb-3 text-base font-semibold text-gray-900">
+            Viajes Programados ({associatedTrips.length})
+          </h2>
+          <div className="space-y-3">
+            {associatedTrips.map((t) => (
+              <div
+                key={t.id}
+                className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-bold text-navy">
+                      {t.trip_id ?? t.id.slice(0, 8)}
+                    </span>
+                    <Badge variant="trip" label={t.status} />
+                  </div>
+                  <span className="text-sm text-iconsa-gray">
+                    {formatDate(t.scheduled_date)}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-4 text-sm text-gray-700">
+                  {t.driver && (
+                    <span>
+                      <span className="text-iconsa-gray">Conductor:</span> {t.driver.name}
+                    </span>
+                  )}
+                  {t.vehicle && (
+                    <span>
+                      <span className="text-iconsa-gray">Vehículo:</span>{' '}
+                      {t.vehicle.spectrum_code ? `${t.vehicle.spectrum_code} — ` : ''}
+                      {t.vehicle.description}
+                    </span>
+                  )}
+                </div>
+                {/* Líneas asignadas al viaje */}
+                {t.lines.length > 0 && (
+                  <ul className="mt-2 space-y-0.5">
+                    {t.lines.map((line, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                        <span className="text-xs">
+                          {line.line_type === 'Equipo' ? '🔧' : '📦'}
+                        </span>
+                        <span className="truncate">{line.description}</span>
+                        <span className="shrink-0 text-xs text-iconsa-gray">
+                          ×{line.quantity_assigned}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* Código de confirmación — visible para pm, logistica, admin */}
+                {(role === 'pm' || role === 'logistica' || role === 'admin') && t.confirmation_code && (
+                  <div className="mt-2 flex items-center gap-2 rounded-lg bg-navy/5 border border-navy/20 px-3 py-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-navy shrink-0" />
+                    <span className="text-xs text-iconsa-gray">Código:</span>
+                    <span className="font-mono text-lg font-bold text-navy tracking-[0.25em]">
+                      {t.confirmation_code}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

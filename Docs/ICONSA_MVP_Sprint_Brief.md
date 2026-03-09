@@ -1,7 +1,7 @@
 # ICONSA — Sprint Brief: MVP Movilizaciones
 ## Documento de Contexto para Desarrollo con Claude Code
 
-**Versión:** 3.0 | **Fecha:** 04 Marzo 2026
+**Versión:** 3.3 | **Fecha:** 08 Marzo 2026
 **Stack:** Next.js (frontend/Vercel) + NestJS (backend/Railway) + Supabase (DB/Auth) + TypeScript + Tailwind CSS
 **Builder:** James Cucalón (con Claude Code)
 
@@ -18,10 +18,13 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 ### Proyectos Activos
 | Código | Nombre | Gerente |
 |--------|--------|---------|
-| 25-504 | Astillero de Balboa (ASTIBAL) | Ariel González |
+| 24-404 | Costa Norte | César Caballero |
 | 25-505 | Paraíso | César Caballero |
 | 25-506 | Muelle 14 | Franklin Marciaga |
-| 24-404 | Costa Norte | César Caballero |
+| 26-604 | Inyecciones Metro | TBD |
+| 26-605 | Micropilotes Multiplaza | TBD |
+
+ASTIBAL (25-504) está cerrado y no aparece en el sistema.
 
 ---
 
@@ -54,7 +57,7 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 - **Actor:** Carlos Charris (rol: logistica)
 - **Backlog:** Lista de TODAS las líneas pendientes de TODOS los proyectos, con prioridad visual
 - **Prioridad auto-calculada:** Vencida (rojo, fecha < hoy), Urgente (naranja, ≤3 días), Próxima (azul, ≤7 días), Normal (verde, >7 días)
-- **Crear viaje:** Seleccionar líneas → asignar conductor, vehículo, remolque, fecha, tarifa, permiso ATT, escolta
+- **Crear viaje:** Seleccionar líneas → asignar conductor, vehículo, remolque (requerido si cabezal), fecha, tarifa (auto-rellena costo, editable), permiso ATT, escolta
 - **Relación many-to-many:** Un viaje puede llevar líneas de MÚLTIPLES solicitudes. Una línea puede requerir MÚLTIPLES viajes.
 - **Tabla pivote:** `trip_line_assignments` conecta líneas con viajes (con cantidad asignada por cada uno)
 - **Cancelar viaje:** Líneas asignadas regresan a Pendiente en backlog. Cascada re-evalúa solicitudes.
@@ -66,7 +69,7 @@ Empresa de construcción pesada en Panamá (~160 empleados). Opera 4 proyectos a
 - **Registrar eventos secuenciales:**
   1. **Salida** — marca salida (timestamp) → viaje "En Ruta", líneas "En Tránsito"
   2. **Llegada** — marca llegada al destino → informativo
-  3. **Entrega** — confirma con **código de 4 dígitos** → líneas "Entregada", cascada actualiza solicitud
+  3. **Entrega** — código de 4 dígitos **MUST be correct** + receptor dropdown → líneas "Entregada", cascada actualiza solicitud
   4. **Retorno** — marca regreso a Chilibre → viaje "Completado"
 - **Código de confirmación (tipo Uber):** 4 dígitos generados al crear viaje. Receptor proporciona código al conductor.
 
@@ -355,7 +358,7 @@ MVAPX1=$5,000  MVCGRU=$300
 - No se restringe por driver_id del viaje.
 
 ### Dashboard
-- Métricas globales. Todos los roles ven las mismas métricas.
+- Métricas operativas. Dashboard único para todos. 4 KPIs + chart por proyecto + backlog crítico + solicitudes recientes + viajes hoy.
 
 ### Notificaciones (MVP: email vía NestJS)
 - Solicitud enviada → Charris
@@ -423,18 +426,20 @@ Gray:    #5A6272 (secondary text)
 
 Documentación clave:
 - `PROJECT_STATUS.md` — **Fuente de verdad** para schema completo
-- `ICONSA_Feature_Specification_v2.md` — reglas de negocio, estados, transiciones
+- `ICONSA_Feature_Specification_v3.md` — reglas de negocio, estados, transiciones (v3.3)
 - `BUILD_PLAN.md` — plan de construcción con 6 fases
 - `supabase_schema_verified.sql` — schema SQL definitivo para generación de tipos
 
 Datos ya importados:
 - equipment: 377 registros (tabla unificada equipos+vehículos)
-- people: 160 registros (pendiente asignar roles a ~15-20)
-- projects: 4 registros
+- people: 177 registros (11 pm, 5 campo, 1 logistica, 1 admin, 1 almacen)
+- projects: 6 registros (5 activos + ASTIBAL cerrado)
 - mobilization_rates: 14 registros
-- locations: 9 registros
+- locations: 7 activas (Taller Chilibre, Oficina Central, 5 proyectos)
 - units: 11 registros
-- cost_codes: PENDIENTE importar
+- cost_codes: 98 fases importadas de Sage (5 proyectos)
+- cost_categories: 8 categorías estándar (CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB)
+- cost_code_categories: 530 combinaciones válidas fase↔categoría
 
 ---
 

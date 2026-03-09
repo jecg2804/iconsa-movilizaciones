@@ -130,6 +130,13 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
             <span className="truncate max-w-[100px] sm:max-w-[150px]">{toName}</span>
           </div>
         )}
+
+        {/* Fecha requerida de la solicitud */}
+        {line?.request.date_required && (
+          <span className="text-xs text-iconsa-gray">
+            Requerida: {formatDate(line.request.date_required)}
+          </span>
+        )}
       </div>
 
       {/* Cantidad + estado */}
@@ -243,6 +250,7 @@ export default function ViajeDetailPage() {
         .from('people')
         .select('id, name')
         .eq('status', 'Activo')
+        .eq('app_role', 'campo')
         .order('name')
       setDrivers(data ?? [])
       setDriversLoading(false)
@@ -264,6 +272,16 @@ export default function ViajeDetailPage() {
     }
     fetchRates()
   }, [supabase])
+
+  // --- Detectar si el vehículo seleccionado es cabezal ---
+  const isCabezal = useMemo(() => {
+    const v = vehicles.find((v) => v.id === tripData.vehicle_id)
+    if (!v) return false
+    return (
+      (v.spectrum_code?.toUpperCase().startsWith('CAB') ?? false) ||
+      v.description.toUpperCase().includes('CABEZAL')
+    )
+  }, [vehicles, tripData.vehicle_id])
 
   // --- Modo del formulario ---
   const mode = useMemo(() => {
@@ -319,8 +337,7 @@ export default function ViajeDetailPage() {
     () =>
       vehicles.map((v) => ({
         value: v.id,
-        label: v.description,
-        sublabel: v.spectrum_code ?? undefined,
+        label: `${v.spectrum_code ?? ''} – ${v.description}`.trim(),
       })),
     [vehicles],
   )
@@ -329,8 +346,7 @@ export default function ViajeDetailPage() {
     () =>
       trailers.map((t) => ({
         value: t.id,
-        label: t.description,
-        sublabel: t.spectrum_code ?? undefined,
+        label: `${t.spectrum_code ?? ''} – ${t.description}`.trim(),
       })),
     [trailers],
   )
@@ -341,6 +357,7 @@ export default function ViajeDetailPage() {
         value: r.id,
         label: `${r.code} — ${r.description}`,
         sublabel: formatCurrency(r.rate),
+        amount: r.rate,
       })),
     [rates],
   )
@@ -360,6 +377,10 @@ export default function ViajeDetailPage() {
   // --- Guardar cambios ---
   const handleSave = useCallback(async () => {
     if (!trip) return
+    // Validar remolque para cabezal
+    if (isCabezal && !tripData.trailer_id) {
+      return // El TripForm ya muestra el warning visual; no avanzar
+    }
     const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds)
     if (success) {
       // Refrescar datos del viaje
@@ -482,6 +503,7 @@ export default function ViajeDetailPage() {
           rates={rateOptions}
           onChange={handleTripDataChange}
           onRateChange={handleRateChange}
+          isTrailerRequired={isCabezal}
         />
       </div>
 
