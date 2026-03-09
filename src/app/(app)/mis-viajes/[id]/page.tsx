@@ -469,7 +469,7 @@ export default function MisViajesDetailPage() {
           )}
         </dl>
 
-        {/* Codigo de confirmacion — SOLO logistica y admin */}
+        {/* Codigo de confirmacion — SOLO pm, logistica y admin */}
         {canSeeConfirmationCode && trip.confirmation_code && (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-navy/5 border border-navy/20 px-3 py-2">
             <KeyRound className="h-4 w-4 text-navy shrink-0" />
