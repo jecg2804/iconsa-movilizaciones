@@ -92,6 +92,7 @@ export interface LineInput {
 export interface SolicitudesFilter {
   projectId: string | null
   statuses: string[]
+  priorities: string[]
   dateFrom: string | null
   dateTo: string | null
   search: string
@@ -103,6 +104,7 @@ export interface SolicitudesFilter {
 const DEFAULT_FILTER: SolicitudesFilter = {
   projectId: null,
   statuses: [],
+  priorities: [],
   dateFrom: null,
   dateTo: null,
   search: '',
@@ -288,6 +290,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       }
       if (filters.statuses.length > 0) {
         query = query.in('status', filters.statuses)
+      }
+      if (filters.priorities.length > 0) {
+        query = query.in('priority', filters.priorities)
       }
       if (filters.dateFrom) {
         query = query.gte('date_required', filters.dateFrom)

@@ -8,7 +8,7 @@ import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
 import { canCreateSolicitud } from '@/lib/utils/roles'
 import { formatDate } from '@/lib/utils/format'
-import { REQUEST_STATUSES } from '@/lib/utils/constants'
+import { REQUEST_STATUSES, PRIORITIES } from '@/lib/utils/constants'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -84,6 +84,7 @@ export default function SolicitudesPage() {
     () =>
       filters.projectId !== null ||
       filters.statuses.length > 0 ||
+      filters.priorities.length > 0 ||
       filters.dateFrom !== null ||
       filters.dateTo !== null ||
       filters.search !== '',
@@ -95,6 +96,7 @@ export default function SolicitudesPage() {
     setFilters({
       projectId: null,
       statuses: [],
+      priorities: [],
       dateFrom: null,
       dateTo: null,
       search: '',
@@ -114,6 +116,19 @@ export default function SolicitudesPage() {
       }
     },
     [filters.statuses, setFilters],
+  )
+
+  // Toggle de una prioridad en el filtro
+  const togglePriority = useCallback(
+    (priority: string) => {
+      const current = filters.priorities
+      if (current.includes(priority)) {
+        setFilters({ priorities: current.filter((p) => p !== priority) })
+      } else {
+        setFilters({ priorities: [...current, priority] })
+      }
+    },
+    [filters.priorities, setFilters],
   )
 
   // Navegar al detalle
@@ -353,6 +368,29 @@ export default function SolicitudesPage() {
               Limpiar filtros
             </button>
           )}
+        </div>
+
+        {/* Tercera fila: Badges de prioridad */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-iconsa-gray">Prioridad:</span>
+          {PRIORITIES.map((priority) => {
+            const isActive = filters.priorities.includes(priority)
+            return (
+              <button
+                key={priority}
+                type="button"
+                aria-label={`Filtrar por prioridad ${priority}`}
+                onClick={() => togglePriority(priority)}
+                className={`transition-all ${
+                  isActive
+                    ? 'ring-2 ring-navy ring-offset-1'
+                    : 'opacity-50 hover:opacity-80'
+                }`}
+              >
+                <Badge label={priority} variant="priority" />
+              </button>
+            )
+          })}
         </div>
       </div>
 
