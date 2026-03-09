@@ -201,7 +201,6 @@ function Select({
       {isOpen && (
         <div
           className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-gray-300 bg-white shadow-lg"
-          onKeyDown={handleKeyDown}
         >
           {searchable && (
             <div className="sticky top-0 border-b border-gray-200 bg-white p-2">
