@@ -1,35 +1,40 @@
 # SYNC_LOG — Bridge entre Chat y Claude Code
 
 Ambos actores escriben aquí. James lo revisa para mantenerse al día.
-Formato: fecha, quién (Chat/Code/James), qué cambió, acción requerida.
 
 ---
 
-## 2026-03-09 — Chat: Schema changes aplicados
+## 2026-03-12 — Chat: Project Extras (CAMBIO MAYOR)
 
-- `received_by_id UUID FK people` agregado a `trip_events` (migración `add_received_by_id_to_trip_events`)
-- Trigger `generate_confirmation_code()` creado en trips (migración `auto_generate_confirmation_code`)
-- Trigger `generate_full_code()` creado en cost_codes — formato todo dashes (migración `auto_generate_full_code_with_dashes`)
-- `full_code` corregido de puntos a dashes en 98 registros
-- `confirmation_code` backfilled en viajes que tenían NULL
-- Sequences corregidos: 24-404 SM next=3, trips next=4
-- **Claude Code:** Los triggers generan confirmation_code y full_code automáticamente. No necesitas generarlos en frontend (pero el frontend también lo hace como doble capa).
+- Nueva tabla `project_extras` creada (19 tablas ahora)
+- `cost_codes.extra_id` FK agregado (nullable, NULL = proyecto base)
+- 12 extras insertados:
+  - 24-404: E1 Camino acceso, E2 Edificio Principal, E3 Muelles Flotantes, E4 Tanque combustible, E5 Trabajos electricos, E6 Trabajos mecanicos
+  - 25-505: E1 Pilotes Acero, E2 Flotadores, E3 Estructuras Fijas, E4 Rampas, E5 Trabajos Electricos, E6 Pintura flotadores
+- Cost codes reimportados con clasificación por extra: 122 fases (era 98), 784 combos
+- Trigger `generate_full_code()` actualizado: `{proyecto}{extra}-{fase}` ej: `24-404E1-01-3100`
+- **Claude Code:** La cascada en LineEditor necesita dropdown "Extra" condicional. Ver SPRINT_TODAY.md Bloque 1.
 
-## 2026-03-09 — Chat: database.ts regenerado
+## 2026-03-12 — Chat: database.ts regenerado
 
-- James colocó manualmente `src/lib/types/database.ts` con tipos actualizados
-- Incluye: cost_categories, cost_code_categories, received_by_id en trip_events, cost_category_id y material_category en sm_request_lines
-- **Claude Code:** No correr `npx supabase gen types`. Los tipos ya están actualizados.
+- James colocará en src/lib/types/database.ts
+- Incluye: project_extras, extra_id en cost_codes, received_by_id en trip_events
 
-## 2026-03-09 — Chat: Documentación v3.3 sincronizada
+## 2026-03-12 — Chat: Flujo de trabajo mejorado
 
-- Feature Spec actualizado a v3.3 (sistema entrega, timestamps, dashes, sección 11)
-- CLAUDE.md en raíz actualizado (17 reglas, v3.3, sin acceso write Supabase)
-- PROJECT_STATUS actualizado (34 decisiones, triggers nuevos, pendientes actualizados)
-- Sprint Brief actualizado (6 proyectos, 177 people, 98 cost codes, received_by_id)
-- events-page.md skill actualizado (must be correct, timestamps no editables)
-- supabase-queries.md skill actualizado (search spectrum_code)
-- supabase_schema_verified.sql regenerado con todos los cambios
+- Nuevo sistema de Tiers para documentación (ver .claude/rules/no-modify-specs.md)
+- Nueva skill self-update (ver .claude/skills/self-update.md)
+- .claude/suggestions.md creado para sugerencias de Claude Code
+- Docs/BUGS.md creado para tracking de bugs
+- **Claude Code:** Lee SPRINT_TODAY.md en Docs/ para las tareas de hoy
+
+## 2026-03-09 — Chat: Schema changes anteriores
+
+- received_by_id UUID FK people agregado a trip_events
+- Trigger generate_confirmation_code() en trips
+- Trigger generate_full_code() en cost_codes (todo dashes)
+- confirmation_code backfilled en viajes existentes
+- Sequences corregidos
 
 ## 2026-03-09 — James: App deployed
 
