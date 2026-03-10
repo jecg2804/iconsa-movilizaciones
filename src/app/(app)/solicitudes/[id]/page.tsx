@@ -599,6 +599,7 @@ export default function SolicitudDetailPage() {
               locations={locationOptions}
               units={units}
               costCodes={costCodes}
+              projectId={header.project_id}
               isEditing={false}
               onSave={handleAddLine}
               onCancel={() => setShowLineEditor(false)}
@@ -615,6 +616,7 @@ export default function SolicitudDetailPage() {
               locations={locationOptions}
               units={units}
               costCodes={costCodes}
+              projectId={header.project_id}
               initialData={lines[editingLineIndex]}
               isEditing
               onSave={handleEditLine}

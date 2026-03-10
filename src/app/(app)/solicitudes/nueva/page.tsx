@@ -457,6 +457,7 @@ export default function NuevaSolicitudPage() {
               locations={locationOptions}
               units={unitOptions}
               costCodes={costCodeOptions}
+              projectId={header.project_id}
               initialData={editingLineIndex !== null ? lines[editingLineIndex] : undefined}
               isEditing={editingLineIndex !== null}
               onSave={handleLineSave}

@@ -13,6 +13,7 @@ export type Database = {
         Row: {
           id: string
           project_id: string | null
+          extra_id: string | null
           phase_code: string
           phase_description: string | null
           full_code: string | null
@@ -22,6 +23,7 @@ export type Database = {
         Insert: {
           id?: string
           project_id?: string | null
+          extra_id?: string | null
           phase_code: string
           phase_description?: string | null
           full_code?: string | null
@@ -31,6 +33,7 @@ export type Database = {
         Update: {
           id?: string
           project_id?: string | null
+          extra_id?: string | null
           phase_code?: string
           phase_description?: string | null
           full_code?: string | null
@@ -43,6 +46,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_codes_extra_id_fkey"
+            columns: ["extra_id"]
+            isOneToOne: false
+            referencedRelation: "project_extras"
             referencedColumns: ["id"]
           },
         ]
@@ -331,6 +341,44 @@ export type Database = {
           },
           {
             foreignKeyName: "person_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_extras: {
+        Row: {
+          id: string
+          project_id: string
+          code: string
+          description: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          code: string
+          description?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          code?: string
+          description?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_extras_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
