@@ -13,7 +13,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Select, type SelectOption } from '@/components/ui/Select'
-import { MiniCalendar } from '@/components/ui/MiniCalendar'
+import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 // Orden de prioridad para sort (menor = más urgente)
@@ -85,14 +85,17 @@ export default function SolicitudesPage() {
     return solicitudes.filter((s) => s.date_required === dateFilter)
   }, [solicitudes, dateFilter])
 
-  // dateCounts para MiniCalendar (basado en solicitudes ya filtradas por otros filtros)
-  const dateCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    for (const s of solicitudes) {
-      const key = s.date_required
-      counts[key] = (counts[key] || 0) + 1
-    }
-    return counts
+  // calendarItems para MiniCalendar (basado en solicitudes ya filtradas por otros filtros)
+  const calendarItems = useMemo<CalendarItem[]>(() => {
+    return solicitudes.map((s) => ({
+      id: s.id,
+      date: s.date_required,
+      label: s.request_id ?? '—',
+      status: s.priority ?? s.status,
+      badgeVariant: (s.priority ? 'priority' : 'status') as 'priority' | 'status',
+      subtitle: `${s.project?.code ?? ''} — ${s.requester?.name ?? ''}`,
+      href: `/solicitudes/${s.id}`,
+    }))
   }, [solicitudes])
 
   // --- Chips de filtros activos ---
@@ -415,7 +418,7 @@ export default function SolicitudesPage() {
 
       {/* MiniCalendar */}
       <MiniCalendar
-        dateCounts={dateCounts}
+        items={calendarItems}
         selectedDate={dateFilter}
         onSelectDate={setDateFilter}
       />

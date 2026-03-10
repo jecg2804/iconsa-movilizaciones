@@ -15,7 +15,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Select, type SelectOption } from '@/components/ui/Select'
-import { MiniCalendar } from '@/components/ui/MiniCalendar'
+import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 // Tipos de línea para el filtro del backlog
@@ -117,25 +117,40 @@ export default function ProgramacionPage() {
     })
   }, [trips, projectFilter, statusFilter, driverFilter, dateFilter, searchFilter])
 
-  // --- MiniCalendar dateCounts (viajes por fecha, sin filtro de fecha) ---
-  const tripDateCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    // Contar viajes que coinciden con filtros excepto fecha
-    const base = trips.filter((trip) => {
-      if (projectFilter) {
-        const match = trip.assignments.some(
-          (a) => a.line?.request?.project?.id === projectFilter,
-        )
-        if (!match) return false
-      }
-      if (statusFilter && trip.status !== statusFilter) return false
-      if (driverFilter && trip.driver_id !== driverFilter) return false
-      return true
-    })
-    for (const t of base) {
-      counts[t.scheduled_date] = (counts[t.scheduled_date] || 0) + 1
-    }
-    return counts
+  // --- MiniCalendar items (viajes como mini-cards, sin filtro de fecha) ---
+  const calendarItems = useMemo<CalendarItem[]>(() => {
+    return trips
+      .filter((trip) => {
+        if (projectFilter) {
+          const match = trip.assignments.some(
+            (a) => a.line?.request?.project?.id === projectFilter,
+          )
+          if (!match) return false
+        }
+        if (statusFilter && trip.status !== statusFilter) return false
+        if (driverFilter && trip.driver_id !== driverFilter) return false
+        return true
+      })
+      .map((t) => {
+        // Ruta abreviada
+        const a = t.assignments?.[0]?.line
+        let route: string | undefined
+        if (a) {
+          const from = a.from_location?.name ?? a.from_text ?? ''
+          const to = a.to_location?.name ?? a.to_text ?? ''
+          if (from && to) route = `${from} → ${to}`
+        }
+        return {
+          id: t.id,
+          date: t.scheduled_date,
+          label: t.trip_id ?? '—',
+          status: t.status,
+          badgeVariant: 'trip' as const,
+          subtitle: t.driver?.name ?? 'Sin conductor',
+          route,
+          href: `/programacion/viaje/${t.id}`,
+        }
+      })
   }, [trips, projectFilter, statusFilter, driverFilter])
 
   // --- Chips de filtros activos ---
@@ -473,7 +488,7 @@ export default function ProgramacionPage() {
 
       {/* MiniCalendar */}
       <MiniCalendar
-        dateCounts={tripDateCounts}
+        items={calendarItems}
         selectedDate={dateFilter}
         onSelectDate={setDateFilter}
       />
