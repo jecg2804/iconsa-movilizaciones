@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { startOfWeek, addDays, format, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
+import { CalendarDays, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 
 interface CalendarTrip {
   id: string
@@ -114,6 +115,17 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-4">
+      {/* Banner */}
+      <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2.5 text-sm text-iconsa-blue">
+        <Info className="h-4 w-4 shrink-0" />
+        <span>
+          Vista integrada disponible en{' '}
+          <Link href="/programacion" className="font-medium underline hover:text-blue-800">
+            Programación
+          </Link>
+        </span>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
