@@ -231,7 +231,7 @@ export default function AdminMastersPage() {
         break
       }
       case 'extras': {
-        const fromAny = supabase.from as (t: string) => ReturnType<typeof supabase.from>
+        const fromAny = supabase.from.bind(supabase) as (t: string) => ReturnType<typeof supabase.from>
         let query = fromAny('project_extras')
           .select('id, project_id, code, description, is_active')
           .order('code')
@@ -295,7 +295,7 @@ export default function AdminMastersPage() {
 
     const field = typeof currentStatus === 'boolean' || currentStatus === null ? 'is_active' : 'status'
 
-    const fromAny = supabase.from as (t: string) => ReturnType<typeof supabase.from>
+    const fromAny = supabase.from.bind(supabase) as (t: string) => ReturnType<typeof supabase.from>
     await fromAny(table).update({ [field]: newStatus }).eq('id', id)
     fetchData()
   }, [supabase, fetchData])
@@ -313,7 +313,7 @@ export default function AdminMastersPage() {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, ...payload } = formData
-    const fromAny = supabase.from as (t: string) => ReturnType<typeof supabase.from>
+    const fromAny = supabase.from.bind(supabase) as (t: string) => ReturnType<typeof supabase.from>
 
     if (isNew) {
       await fromAny(table).insert(payload)

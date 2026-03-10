@@ -137,7 +137,7 @@ function LineEditor({
     let cancelled = false
     setLoadingExtras(true)
 
-    ;(supabase.from as (table: string) => ReturnType<typeof supabase.from>)('project_extras')
+    ;(supabase.from.bind(supabase) as (table: string) => ReturnType<typeof supabase.from>)('project_extras')
       .select('id, code, description')
       .eq('project_id', projectId)
       .eq('is_active', true)
@@ -254,7 +254,7 @@ function LineEditor({
 
     // cost_code_categories y cost_categories no estan en database.ts (tipos no regenerados)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(supabase.from as (table: string) => ReturnType<typeof supabase.from>)('cost_code_categories')
+    ;(supabase.from.bind(supabase) as (table: string) => ReturnType<typeof supabase.from>)('cost_code_categories')
       .select('cost_category_id, cost_categories(id, code, description)')
       .eq('cost_code_id', costCodeId)
       .then(({ data }: { data: Array<{ cost_category_id: string; cost_categories: { id: string; code: string; description: string | null } | null }> | null }) => {
