@@ -26,11 +26,13 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 ├── rules/                        # Reglas que Claude Code debe seguir siempre
 │   ├── commit-after-step.md
 │   ├── cost-management.md
-│   └── no-modify-specs.md
+│   └── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza, Tier 3: Code sugiere)
 ├── skills/                       # Patrones de implementación por tipo de tarea
 │   ├── crud-page.md
 │   ├── events-page.md
-│   └── supabase-queries.md
+│   ├── supabase-queries.md
+│   └── self-update.md            # Cómo mantener docs sincronizados
+└── suggestions.md                # Claude Code escribe aquí sugerencias a Tier 1
 src/
 ├── app/
 │   ├── (auth)/login/           # Login (Supabase Auth)
@@ -61,11 +63,13 @@ src/
 |-----------|---------------|
 | @Docs/BUILD_PLAN.md | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
 | @Docs/ICONSA_MVP_Sprint_Brief.md | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
-| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados (v3.2). |
+| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados (v3.3). |
 | @Docs/PROJECT_STATUS.md | Schema actual de BD (18 tablas), estado de cada componente, decisiones. |
-| @Docs/supabase_schema_verified.sql | SQL exacto del schema verificado contra Supabase live. |
+| @Docs/supabase_schema_verified.sql | SQL del schema — referencia para humanos. Claude Code: consultar Supabase directamente via MCP. |
+| @Docs/SYNC_LOG.md | **Leer al inicio de cada sesión.** Escribir después de cada paso y cuando encuentres discrepancias o necesites cambio de BD. |
+| @Docs/BUGS.md | Documentar bugs encontrados y resueltos. |
 
-**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.2 para reglas de negocio.
+**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.3 para reglas de negocio.
 
 ## Coding Conventions
 
@@ -112,18 +116,18 @@ Gray:   #5A6272  (secondary text)
 
 | Rol | Código | Acceso principal |
 |-----|--------|-----------------|
-| Ingeniero de Proyecto | `pm` | Solicitudes (CRUD sus proyectos, VER todas), Programación (lectura), Dashboard (sus proyectos) |
-| Coordinador Logística | `logistica` | Todo excepto Admin y crear solicitudes. Dashboard global. |
-| Conductor | `campo` | Mis Viajes + eventos. Dashboard redirige a /mis-viajes. |
-| Almacenista | `almacen` | Mis Viajes + eventos, Dashboard global. |
-| Administrador | `admin` | Todo. Dashboard global + charts + backlog crítico. |
+| Ingeniero de Proyecto | `pm` | Solicitudes (CRUD sus proyectos, VER todas), Programación (lectura), Dashboard, Mis Viajes |
+| Coordinador Logística | `logistica` | Todo excepto Admin y crear solicitudes. Dashboard. |
+| Conductor | `campo` | Mis Viajes + eventos. Dashboard. |
+| Almacenista | `almacen` | Mis Viajes + eventos, Dashboard. |
+| Administrador | `admin` | Todo. |
 
 ## Reglas Críticas (NUNCA violar)
 
 1. **PM ve TODAS las solicitudes** de todos los proyectos. Filtro default = su proyecto. Solo CREA/EDITA para SUS proyectos (via `person_projects`).
 2. **NO agregar líneas después de Borrador.** Enviada = editar existentes, no agregar nuevas.
 3. **Eventos: sin restricción por driver_id en MVP.** Cualquier logistica/campo/almacen registra eventos.
-4. **Dashboard adaptativo por rol.** pm=KPIs de sus proyectos. logistica/admin=global+chart+backlog. campo=redirect a /mis-viajes.
+4. **Dashboard operativo único.** Todos los roles ven lo mismo: 4 KPIs + chart por proyecto + backlog crítico + recientes.
 5. **UI 100% español.** Botones, labels, mensajes, placeholders — todo en español.
 6. **Mobile-first.** Los ingenieros y conductores usan celulares.
 7. **Monospace para IDs.** `25-506-SM-023` y `MOV-2026-042` siempre en fuente monoespaciada.
@@ -134,7 +138,9 @@ Gray:   #5A6272  (secondary text)
 12. **Solicitante NO editable.** Auto-fill con usuario logueado. El campo es disabled/readonly.
 13. **Aprobado por filtrado.** Dropdown filtra por `app_role = 'pm'` (11 personas de proyecto).
 14. **Cost codes en cascada desde BD.** Proyecto → Fase (cost_codes filtrado por project_id) → Categoría (cost_categories filtrado via cost_code_categories) → Código auto-generado: `{proyecto}-{fase}-{categoría}`.
-15. **Código de confirmación NUNCA visible para campo/almacen.** Solo logistica y admin ven el código en mis-viajes/[id]. El conductor debe pedirle el código al receptor.
+15. **Código de confirmación visible para pm/logistica/admin.** NUNCA para campo/almacen. PM lo ve en /solicitudes/[id] sección Viajes Programados. Código MUST be correct — no hay bypass. `received_by_id` vincula receptor a people.
+16. **Timestamps de eventos automáticos.** now() automático, NO editable. El usuario no puede cambiar cuándo ocurrió un evento.
+17. **Search de equipos por código.** Dropdowns de equipment buscan en spectrum_code Y description. Label: "{spectrum_code} — {description}".
 
 ## Estados y Cascada
 
@@ -152,25 +158,37 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 **ANTES de cada sesión:**
 1. `/model sonnet` — Sonnet es el default. Solo usar `/model opus` para arquitectura compleja.
 2. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
-3. Lee `@Docs/PROJECT_STATUS.md` sección "PENDIENTE PARA CLAUDE CODE" para ver tareas priorizadas.
+3. Lee `@Docs/SYNC_LOG.md` para ver cambios recientes de Chat/James que te afectan.
+4. Lee `@Docs/PROJECT_STATUS.md` sección "PENDIENTE PARA CLAUDE CODE" para ver tareas priorizadas.
 
 **DURANTE la sesión:**
-4. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-5. Verifica columnas y relaciones en `@Docs/PROJECT_STATUS.md` o via Supabase MCP (read-only).
-6. Implementa. Corre `npm run build` para verificar que compila sin errores.
-7. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
+5. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
+6. Verifica columnas y relaciones consultando Supabase via MCP (read-only).
+7. Implementa. Corre `npm run build` para verificar que compila sin errores.
+8. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
 
 **DESPUÉS de cada paso completado:**
-8. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
-9. Formato commit: `feat: paso X.Y — descripción` o `fix: bug #X — descripción`.
-10. Continuar al siguiente paso sin esperar aprobación.
-11. `/clear` entre fases no relacionadas.
+9. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
+10. Formato commit: `feat: paso X.Y — descripción` o `fix: bug #X — descripción`.
+11. Actualizar `Docs/PROJECT_STATUS.md` con estado del paso completado.
+12. Escribir en `Docs/SYNC_LOG.md`: qué se implementó, discrepancias encontradas.
+13. Si encontraste un bug, documentarlo en `Docs/BUGS.md`.
+14. Continuar al siguiente paso sin esperar aprobación.
+15. `/clear` entre fases no relacionadas.
+
+**CUANDO NECESITES UN CAMBIO DE BD:**
+- NO modificar Supabase. Escribir en `Docs/SYNC_LOG.md`:
+  "Code: SOLICITUD BD — {descripción}. Razón: {por qué}."
+- James lo verá y delegará a Chat para ejecutar.
+- Chat escribirá confirmación en SYNC_LOG.md.
+- Verificar leyendo Supabase via MCP y continuar.
 
 **NUNCA:**
 - No hacer commits ni push a `main`. Solo `jaime/dev` o `andy/dev`.
-- No modificar archivos en Docs/ que sean specs de referencia (Feature Spec, BUILD_PLAN, Sprint Brief).
-- Solo PROJECT_STATUS.md es editable por Claude Code.
-- No crear tablas nuevas en Supabase. Cambios de BD se discuten con James vía Chat.
+- No modificar Feature Spec ni BUILD_PLAN (Tier 1). Si hay discrepancia → `.claude/suggestions.md`.
+- No ESCRIBIR en Supabase. Solo LEER via MCP. Cambios de BD → SYNC_LOG.md → James → Chat.
+- No correr `npx supabase gen types`. James genera database.ts manualmente.
+- No crear tablas nuevas. Cambios de BD se discuten con James.
 
 ## Tres actores — quién hace qué
 
@@ -178,9 +196,9 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 
 **James (humano):** Decisiones finales, input de negocio, coordinación con equipo ICONSA, aprobación de cambios. Push a git solo desde `jaime/dev`.
 
-**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, leer Supabase MCP (read-only, NO escribir), actualizar PROJECT_STATUS.md, hacer commit+push automático a jaime/dev.
+**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, LEER Supabase via MCP (read-only, NO escribir), actualizar PROJECT_STATUS/SYNC_LOG/BUGS, hacer commit+push automático a jaime/dev, sugerir cambios a specs en `.claude/suggestions.md`.
 
-**Regla de oro:** Si algo involucra cambiar BD o lógica de negocio no documentada → STOP y dile a James que consulte con Chat. Si es solo implementación de código basada en lo que ya está en docs → HAZLO.
+**Regla de oro:** Si algo involucra cambiar BD o lógica de negocio no documentada → STOP, escribe en SYNC_LOG.md, y dile a James que consulte con Chat. Si es solo implementación de código basada en lo que ya está en docs → HAZLO.
 
 ## Git
 
@@ -199,10 +217,10 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 - **Chilibre:** Taller central de ICONSA (= Almacén Central). Origen/destino principal.
 - **Fase / Código de Costo:** Línea presupuestaria de Sage/Spectrum. Cada proyecto tiene sus propias fases. Tabla `cost_codes`.
 - **Categoría de Costo:** Tipo de gasto: CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB. Tabla `cost_categories`. Cada fase usa un subconjunto via `cost_code_categories`.
-- **Código de Costo Completo:** `{proyecto}-{fase}-{categoría}`. Ejemplo: `25-506-03.0130-EQI`. Auto-generado.
+- **Código de Costo Completo:** `{proyecto}-{fase}-{categoría}`. Ejemplo: `25-506-01-3100-EQI`. Todo con dashes. Trigger `generate_full_code()` en BD.
 - **Fallback:** Texto libre cuando un valor no existe en un dropdown. Crea sugerencia para admin en tabla `suggestions`.
 - **Cascada:** Trigger que actualiza estado de solicitud basándose en estados de sus líneas.
-- **Código de confirmación:** 4 dígitos generados al crear viaje. Tipo Uber — receptor da el código al conductor para confirmar entrega. NUNCA visible para campo/almacen en la UI.
+- **Código de confirmación:** 4 dígitos generados al crear viaje (trigger BD + frontend). Mecanismo de delegación de autoridad — PM decide quién recibe al compartir el código. MUST be correct, sin bypass. Receptor seleccionado de dropdown de personas del proyecto destino. `received_by_id` vincula a people.
 
 ## Proyectos Activos (5)
 

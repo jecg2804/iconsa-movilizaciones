@@ -1,0 +1,38 @@
+# BUGS — Issues conocidos
+
+Claude Code puede actualizar este archivo directamente.
+
+## Resueltos
+
+| # | Bug | Fecha | Commit |
+|---|-----|-------|--------|
+| 1 | Trigger generate_request_id off-by-one | 2026-03-05 | — |
+| 2 | Indexes duplicados sequences | 2026-03-05 | — |
+| 3 | Tarifa no pre-rellena Costo | 2026-03-06 | — |
+| 4 | Dropdowns no filtrados (equipo, conductor) | 2026-03-06 | — |
+| 5 | Redirect incorrecto al guardar | 2026-03-06 | — |
+| 6 | Viajes Recientes falta info | 2026-03-06 | — |
+| 7 | Fecha requerida en líneas viaje | 2026-03-06 | — |
+| 8 | Remolque siempre opcional | 2026-03-06 | — |
+| 9 | IDs off-by-one en sequences | 2026-03-06 | — |
+| 10 | Remolque incluye camiones | 2026-03-06 | — |
+| 11 | Categoría costo eliminada al agregar Categoría Material | 2026-03-07 | 4892737 |
+| 12 | CodeConfirmation permitía bypass | 2026-03-07 | a353a43 |
+| 13 | confirmation_code NULL en viajes nuevos | 2026-03-08 | — (trigger BD + frontend fix) |
+
+## Abiertos
+
+| # | Bug | Reportado | Prioridad |
+|---|-----|-----------|-----------|
+| — | Ninguno conocido | — | — |
+
+## Mejoras pendientes (no son bugs)
+
+| Mejora | Prioridad | Estado |
+|--------|-----------|--------|
+| Backlog con más contexto visual | Baja | Por discutir |
+| Columna "FECHA" ambigua en viajes recientes | Baja | Por discutir |
+| Asignar 10 ingenieros a person_projects | Media | Lunes con info oficina |
+| Admin Masters CRUD | Media | Fase 6 |
+| RLS policies reales (no USING(true)) | Alta | Pre-producción |
+| Notificaciones email | Media | Fase 6 |

@@ -242,7 +242,10 @@ CREATE TABLE trip_events (
   event_type TEXT NOT NULL,
   event_timestamp TIMESTAMPTZ NOT NULL DEFAULT now(),
   location TEXT, registered_by UUID REFERENCES people(id),
-  confirmation_code_used TEXT, received_by_name TEXT, notes TEXT,
+  confirmation_code_used TEXT,
+  received_by_id UUID REFERENCES people(id), -- receptor vinculado a people (solo Entrega)
+  received_by_name TEXT, -- denormalización + fallback
+  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
   -- NO updated_at — eventos son inmutables
 );
@@ -282,20 +285,23 @@ $$ LANGUAGE plpgsql;
 
 ## 5. DATOS MAESTROS PARA SEED
 
-### Proyectos (4)
+### Proyectos (6: 5 activos + 1 cerrado)
 ```
-25-504 | Astillero de Balboa (ASTIBAL) | Ariel González
-25-505 | Paraíso | César Caballero
-25-506 | Muelle 14 | Franklin Marciaga
-24-404 | Costa Norte | César Caballero
+24-404 | Costa Norte | César Caballero | Activo
+25-504 | Astillero de Balboa (ASTIBAL) | Ariel González | Cerrado
+25-505 | Paraíso | César Caballero | Activo
+25-506 | Muelle 14 | Franklin Marciaga | Activo
+26-604 | Inyecciones Metro | TBD | Activo
+26-605 | Micropilotes Multiplaza | TBD | Activo
 ```
 
-### Ubicaciones (9)
+### Ubicaciones (7 activas)
 ```
-Taller Chilibre (Taller), Almacén Central (Almacen),
-Muelle 14 (Proyecto→25-506), Proyecto Paraíso (Proyecto→25-505),
-ASTIBAL (Proyecto→25-504), Costa Norte (Proyecto→24-404),
-Gamboa (Externo), Oficina Central (Oficina), Proveedores varios (Proveedor)
+Taller Chilibre (Almacén Central) (Taller),
+Muelle 14 (Proyecto→25-506), Paraiso (Proyecto→25-505),
+Costa Norte (Proyecto→24-404), Metro de Panama (Proyecto→26-604),
+Multiplaza (Proyecto→26-605), Oficina Central (Otro)
+Inactivas: Almacen Central, ASTIBAL, Gamboa, Melones
 ```
 
 ### Tarifas de Movilización (14)
@@ -309,8 +315,10 @@ MVAPX1=$5,000  MVCGRU=$300
 ### Unidades (11): und, ml, m², m³, kg, ton, gal, juegos, pzas, ft, qq
 
 ### Equipos y Vehículos: 377 (YA IMPORTADOS en tabla unificada `equipment`)
-### Empleados: 160 (YA IMPORTADOS en `people`)
-### Códigos de Costo: PENDIENTE importar desde codcost.csv
+### Empleados: 177 (YA IMPORTADOS en `people` — 11 pm, 5 campo, 1 logistica, 1 admin, 1 almacen)
+### Códigos de Costo: 98 fases importadas de Sage (24-404:49, 25-505:23, 25-506:11, 26-604:7, 26-605:8)
+### Categorías de Costo: 8 estándar (CON, EQA, EQI, ICS, MAT, OTR, SAL, SUB)
+### Combinaciones Fase↔Categoría: 530 (tabla puente cost_code_categories)
 
 ---
 
