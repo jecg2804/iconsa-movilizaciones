@@ -125,7 +125,7 @@ id UUID PK, cost_code_id FK cost_codes (CASCADE), cost_category_id FK cost_categ
 UNIQUE(cost_code_id, cost_category_id).
 Datos: 530 combinaciones validas importadas de Sage.
 
-Logica cascada UI: Proyecto → Fase (cost_code) → Categorias validas (cost_code_categories) → Codigo auto: {proyecto}-{fase}-{categoria}
+Logica cascada UI: Proyecto → Extra (condicional) → Fase (cost_code) → Categorias validas (cost_code_categories) → Codigo auto: {proyecto}-{extra}-{fase}-{categoria}
 
 ---
 
@@ -210,7 +210,7 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 | 3 — Programacion | COMPLETADA | 2026-03-05 |
 | 4 — Ejecucion/Eventos | COMPLETADA | 2026-03-06 |
 | 5 — Dashboard | COMPLETADA (basico, mejora pendiente) | 2026-03-06 |
-| 6 — Admin Masters | PENDIENTE | - |
+| 6 — Admin Masters | COMPLETADA | 2026-03-12 |
 
 Bugs #3-8 corregidos 2026-03-06.
 
@@ -229,15 +229,16 @@ Bugs #3-8 corregidos 2026-03-06.
 | /programacion/calendario | placeholder | ✅ |
 | /mis-viajes | logistica, campo, almacen, admin | ✅ |
 | /mis-viajes/[id] | logistica, campo, almacen, admin | ✅ |
-| /admin/masters | admin | PENDIENTE |
+| /admin | admin | ✅ (redirect a /admin/masters) |
+| /admin/masters | admin | ✅ |
 
 ---
 
 ## PENDIENTE PARA CLAUDE CODE (proxima sesion)
 
-1. **Datos pendientes**: Asignar 10 ingenieros (pm) a sus proyectos en person_projects
-2. **UX por discutir**: Backlog con mas contexto visual, columna "FECHA" ambigua en viajes recientes
-3. **Fase 6**: Admin Masters (CRUD tablas maestras)
+1. **UX por discutir**: Backlog con mas contexto visual, columna "FECHA" ambigua en viajes recientes
+2. **Notificaciones email**: Fase 6.2 (NestJS Edge Functions)
+3. **RLS policies reales**: Cambiar USING(true) a policies por rol
 
 ---
 
