@@ -291,9 +291,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       if (filters.statuses.length > 0) {
         query = query.in('status', filters.statuses)
       }
-      if (filters.priorities.length > 0) {
-        query = query.in('priority', filters.priorities)
-      }
+      // Prioridad se filtra client-side (calculatePriority viva vs BD stale)
       if (filters.dateFrom) {
         query = query.gte('date_required', filters.dateFrom)
       }

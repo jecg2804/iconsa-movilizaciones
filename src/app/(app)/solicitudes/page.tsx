@@ -79,11 +79,19 @@ export default function SolicitudesPage() {
     [allProjects, filters.projectId],
   )
 
-  // Solicitudes filtradas (con filtro de fecha del calendario)
+  // Solicitudes filtradas (fecha del calendario + prioridad viva client-side)
   const displayedSolicitudes = useMemo(() => {
-    if (!dateFilter) return solicitudes
-    return solicitudes.filter((s) => s.date_required === dateFilter)
-  }, [solicitudes, dateFilter])
+    let result = solicitudes
+    if (dateFilter) {
+      result = result.filter((s) => s.date_required === dateFilter)
+    }
+    if (filters.priorities.length > 0) {
+      result = result.filter((s) =>
+        filters.priorities.includes(calculatePriority(s.date_required))
+      )
+    }
+    return result
+  }, [solicitudes, dateFilter, filters.priorities])
 
   // calendarItems para MiniCalendar (basado en solicitudes ya filtradas por otros filtros)
   const calendarItems = useMemo<CalendarItem[]>(() => {
@@ -91,8 +99,8 @@ export default function SolicitudesPage() {
       id: s.id,
       date: s.date_required,
       label: s.request_id ?? '—',
-      status: calculatePriority(s.date_required),
-      badgeVariant: 'priority' as const,
+      status: s.status,
+      badgeVariant: 'status' as const,
       subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas`,
       href: `/solicitudes/${s.id}`,
     }))
