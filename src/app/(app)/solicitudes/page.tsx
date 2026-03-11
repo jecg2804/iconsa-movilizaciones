@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Wrench, Package, ArrowRight } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
@@ -101,7 +101,7 @@ export default function SolicitudesPage() {
       label: s.request_id ?? '—',
       status: s.status,
       badgeVariant: 'status' as const,
-      subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas`,
+      subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas${s.lines?.some((l: { notes?: string | null }) => l.notes) ? ' 📝' : ''}`,
       href: `/solicitudes/${s.id}`,
     }))
   }, [priorityFilteredSolicitudes])
@@ -223,9 +223,13 @@ export default function SolicitudesPage() {
         sortable: true,
         className: 'w-[160px]',
         render: (row) => (
-          <span className="font-mono text-sm font-medium text-navy">
+          <a
+            href={`/solicitudes/${row.id}`}
+            onClick={(e) => { e.stopPropagation(); router.push(`/solicitudes/${row.id}`) }}
+            className="font-mono text-sm font-medium text-navy hover:underline"
+          >
             {row.request_id ?? '—'}
-          </span>
+          </a>
         ),
         sortValue: (row) => row.request_id ?? '',
       },
@@ -456,10 +460,54 @@ export default function SolicitudesPage() {
         columns={columns}
         data={displayedSolicitudes}
         keyExtractor={(row) => row.id}
-        onRowClick={handleRowClick}
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"
         mobileRender={mobileRender}
+        expandRender={(row) => {
+          const lines = row.lines ?? []
+          if (lines.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas</p>
+          return (
+            <div className="space-y-1.5">
+              {lines.map((line) => {
+                const fromName = line.from_location?.name ?? line.from_text ?? '—'
+                const toName = line.to_location?.name ?? line.to_text ?? '—'
+                const unitName = line.unit?.code ?? line.unit_text ?? ''
+                const isEquipo = line.line_type === 'Equipo'
+                return (
+                  <div key={line.id} className="flex items-center gap-2 text-sm">
+                    {isEquipo ? (
+                      <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                    ) : (
+                      <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
+                    )}
+                    <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+                      {line.description}
+                    </span>
+                    <span className="flex items-center gap-1 text-iconsa-gray">
+                      <span className="max-w-[100px] truncate">{fromName}</span>
+                      <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
+                      <span className="max-w-[100px] truncate">{toName}</span>
+                    </span>
+                    <span className="shrink-0 text-gray-600">{line.quantity} {unitName}</span>
+                    <Badge label={line.status} variant="line" />
+                    {line.notes && (
+                      <span className="max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
+                        {line.notes}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              <a
+                href={`/solicitudes/${row.id}`}
+                onClick={(e) => { e.stopPropagation(); router.push(`/solicitudes/${row.id}`) }}
+                className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
+              >
+                Ver detalle completo
+              </a>
+            </div>
+          )
+        }}
       />
     </div>
   )

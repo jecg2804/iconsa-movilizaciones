@@ -199,6 +199,16 @@ function BacklogTable({
                 </span>
               )}
 
+              {/* Notas de línea */}
+              {line.notes && (
+                <span
+                  className="shrink-0 max-w-[150px] truncate text-xs italic text-amber-600"
+                  title={line.notes}
+                >
+                  {line.notes}
+                </span>
+              )}
+
               {/* Cantidad + unidad */}
               <span className="shrink-0 whitespace-nowrap text-gray-700 text-xs ml-auto">
                 {line.quantity} {unitCode}
@@ -264,6 +274,13 @@ function BacklogTable({
               {line.request.notes && (
                 <p className="text-xs italic text-gray-400 truncate">
                   {line.request.notes}
+                </p>
+              )}
+
+              {/* Fila 2c: notas de línea */}
+              {line.notes && (
+                <p className="text-xs italic text-amber-600 truncate">
+                  {line.notes}
                 </p>
               )}
 

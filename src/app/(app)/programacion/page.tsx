@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Truck, Lock, Siren, Search } from 'lucide-react'
+import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
@@ -261,9 +261,13 @@ export default function ProgramacionPage() {
         sortable: true,
         className: 'w-[150px]',
         render: (row) => (
-          <span className="font-mono text-sm font-medium text-navy">
+          <a
+            href={`/programacion/viaje/${row.id}`}
+            onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
+            className="font-mono text-sm font-medium text-navy hover:underline"
+          >
             {row.trip_id ?? '—'}
-          </span>
+          </a>
         ),
         sortValue: (row) => row.trip_id ?? '',
       },
@@ -550,10 +554,56 @@ export default function ProgramacionPage() {
           columns={columns}
           data={filteredTrips}
           keyExtractor={(row) => row.id}
-          onRowClick={handleTripRowClick}
           loading={listLoading}
           emptyMessage="No hay viajes para mostrar"
           mobileRender={mobileRender}
+          expandRender={(row) => {
+            const assignments = row.assignments ?? []
+            if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
+            return (
+              <div className="space-y-1.5">
+                {assignments.map((a) => {
+                  const line = a.line
+                  if (!line) return null
+                  const fromName = line.from_location?.name ?? line.from_text ?? '—'
+                  const toName = line.to_location?.name ?? line.to_text ?? '—'
+                  const unitName = line.unit?.code ?? line.unit_text ?? ''
+                  const isEquipo = line.line_type === 'Equipo'
+                  return (
+                    <div key={a.id} className="flex items-center gap-2 text-sm">
+                      {isEquipo ? (
+                        <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                      ) : (
+                        <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
+                      )}
+                      <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+                        {line.description}
+                      </span>
+                      <span className="flex items-center gap-1 text-iconsa-gray">
+                        <span className="max-w-[100px] truncate">{fromName}</span>
+                        <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
+                        <span className="max-w-[100px] truncate">{toName}</span>
+                      </span>
+                      <span className="shrink-0 text-gray-600">{a.quantity_assigned} {unitName}</span>
+                      <Badge label={line.status} variant="line" />
+                      {line.notes && (
+                        <span className="max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
+                          {line.notes}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                <a
+                  href={`/programacion/viaje/${row.id}`}
+                  onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
+                  className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
+                >
+                  Ver detalle del viaje
+                </a>
+              </div>
+            )
+          }}
         />
       </section>
 

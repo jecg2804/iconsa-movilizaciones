@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-import { ArrowUpDown, ArrowUp, ArrowDown, Loader2 } from 'lucide-react'
+import React, { useState, useMemo, useCallback } from 'react'
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Loader2 } from 'lucide-react'
 
 export interface Column<T> {
   key: string
@@ -23,6 +23,8 @@ interface DataTableProps<T> {
   mobileRender?: (row: T) => React.ReactNode
   /** Función opcional para aplicar clases CSS condicionales a cada fila */
   rowClassName?: (row: T) => string
+  /** Contenido expandible debajo de cada fila. Si se provee, click en fila togglea expansión. */
+  expandRender?: (row: T) => React.ReactNode
 }
 
 type SortDirection = 'asc' | 'desc'
@@ -37,9 +39,11 @@ function DataTable<T>({
   className = '',
   mobileRender,
   rowClassName,
+  expandRender,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
 
   const handleSort = useCallback(
     (columnKey: string) => {
@@ -57,6 +61,18 @@ function DataTable<T>({
       }
     },
     [sortKey, sortDirection],
+  )
+
+  const toggleExpand = useCallback(
+    (key: string) => {
+      setExpandedKeys((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+    },
+    [],
   )
 
   const sortedData = useMemo(() => {
@@ -133,6 +149,7 @@ function DataTable<T>({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
+                {expandRender && <th className="w-8 px-2 py-3"><span className="sr-only">Expandir</span></th>}
                 {columns.map((column) => (
                   <th
                     key={column.key}
@@ -150,24 +167,50 @@ function DataTable<T>({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sortedData.map((row) => (
-                <tr
-                  key={keyExtractor(row)}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  className={`bg-white transition-colors ${
-                    onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-                  } ${rowClassName ? rowClassName(row) : ''}`}
-                >
-                  {columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className={`px-4 py-3 ${column.className ?? ''}`}
+              {sortedData.map((row) => {
+                const rowKey = keyExtractor(row)
+                const isExpanded = expandedKeys.has(rowKey)
+                const handleRowClick = expandRender
+                  ? () => toggleExpand(rowKey)
+                  : onRowClick
+                    ? () => onRowClick(row)
+                    : undefined
+                const colCount = columns.length + (expandRender ? 1 : 0)
+
+                return (
+                  <React.Fragment key={rowKey}>
+                    <tr
+                      onClick={handleRowClick}
+                      className={`bg-white transition-colors ${
+                        handleRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
+                      } ${rowClassName ? rowClassName(row) : ''}`}
                     >
-                      {column.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+                      {expandRender && (
+                        <td className="w-8 px-2 py-3">
+                          <ChevronRight
+                            className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                          />
+                        </td>
+                      )}
+                      {columns.map((column) => (
+                        <td
+                          key={column.key}
+                          className={`px-4 py-3 ${column.className ?? ''}`}
+                        >
+                          {column.render(row)}
+                        </td>
+                      ))}
+                    </tr>
+                    {isExpanded && expandRender && (
+                      <tr>
+                        <td colSpan={colCount} className="border-t-0 bg-gray-50 px-6 py-3">
+                          {expandRender(row)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -177,40 +220,58 @@ function DataTable<T>({
       <div className="flex flex-col gap-3 md:hidden">
         {sortedData.map((row) => {
           const key = keyExtractor(row)
+          const isExpanded = expandedKeys.has(key)
+          const handleMobileClick = expandRender
+            ? () => toggleExpand(key)
+            : onRowClick
+              ? () => onRowClick(row)
+              : undefined
 
           if (mobileRender) {
             return (
-              <div
-                key={key}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
-              >
-                {mobileRender(row)}
+              <div key={key}>
+                <div
+                  onClick={handleMobileClick}
+                  className={`${handleMobileClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
+                >
+                  {mobileRender(row)}
+                </div>
+                {isExpanded && expandRender && (
+                  <div className="rounded-b-xl border border-t-0 border-gray-200 bg-gray-50 px-4 py-3">
+                    {expandRender(row)}
+                  </div>
+                )}
               </div>
             )
           }
 
           // Vista mobile por defecto: tarjeta con columnas apiladas
           return (
-            <div
-              key={key}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={`rounded-xl border border-gray-200 bg-white p-4 ${
-                onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-              } ${rowClassName ? rowClassName(row) : ''}`}
-            >
-              <div className="space-y-2">
-                {columns.map((column) => (
-                  <div key={column.key} className="flex items-start justify-between gap-2">
-                    <span className="shrink-0 text-xs font-medium text-iconsa-gray">
-                      {column.header}
-                    </span>
-                    <span className="text-right text-sm text-gray-900">
-                      {column.render(row)}
-                    </span>
-                  </div>
-                ))}
+            <div key={key}>
+              <div
+                onClick={handleMobileClick}
+                className={`rounded-xl border border-gray-200 bg-white p-4 ${
+                  handleMobileClick ? 'cursor-pointer hover:bg-gray-50' : ''
+                } ${rowClassName ? rowClassName(row) : ''} ${isExpanded ? 'rounded-b-none' : ''}`}
+              >
+                <div className="space-y-2">
+                  {columns.map((column) => (
+                    <div key={column.key} className="flex items-start justify-between gap-2">
+                      <span className="shrink-0 text-xs font-medium text-iconsa-gray">
+                        {column.header}
+                      </span>
+                      <span className="text-right text-sm text-gray-900">
+                        {column.render(row)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
+              {isExpanded && expandRender && (
+                <div className="rounded-b-xl border border-t-0 border-gray-200 bg-gray-50 px-4 py-3">
+                  {expandRender(row)}
+                </div>
+              )}
             </div>
           )
         })}

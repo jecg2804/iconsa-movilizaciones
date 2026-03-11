@@ -280,7 +280,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           *,
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
-          lines:sm_request_lines(id, status)
+          lines:sm_request_lines(id, status, line_type, description, quantity, notes, from_text, to_text, unit_text, from_location:locations!sm_request_lines_from_location_id_fkey(name), to_location:locations!sm_request_lines_to_location_id_fkey(name), unit:units(code))
         `)
         .order('date_required', { ascending: true })
 

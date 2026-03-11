@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import type { LineInput } from '@/hooks/useSolicitudes'
 
 interface LineRowProps {
-  line: LineInput & { status?: string }
+  line: LineInput & { status?: string; po_reference?: string | null; material_category?: string | null }
   lineNumber: number
   editable: boolean
   canDelete: boolean
@@ -86,6 +86,23 @@ function LineRow({
           {costCode}
         </span>
 
+        {/* Campos opcionales */}
+        {line.po_reference && (
+          <span className="shrink-0 text-xs text-iconsa-gray" title={`OC: ${line.po_reference}`}>
+            OC: {line.po_reference}
+          </span>
+        )}
+        {!isEquipo && line.material_category && (
+          <span className="shrink-0 text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+            {line.material_category}
+          </span>
+        )}
+        {line.notes && (
+          <span className="shrink-0 max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
+            {line.notes}
+          </span>
+        )}
+
         {/* Badge de estado */}
         <div className="ml-auto shrink-0">
           <Badge variant="line" label={status} />
@@ -142,6 +159,21 @@ function LineRow({
           <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
           <span className="max-w-[130px] truncate">{toName}</span>
         </div>
+
+        {/* Campos opcionales */}
+        {(line.po_reference || (!isEquipo && line.material_category) || line.notes) && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {line.po_reference && (
+              <span className="text-iconsa-gray">OC: {line.po_reference}</span>
+            )}
+            {!isEquipo && line.material_category && (
+              <span className="text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{line.material_category}</span>
+            )}
+            {line.notes && (
+              <span className="italic text-amber-600 truncate max-w-[200px]">{line.notes}</span>
+            )}
+          </div>
+        )}
 
         {/* Tercera linea: cantidad, codigo costo, acciones */}
         <div className="flex items-center justify-between">

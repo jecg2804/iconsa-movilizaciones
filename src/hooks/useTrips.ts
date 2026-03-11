@@ -25,6 +25,7 @@ export interface BacklogLine {
   cost_code_id: string | null
   category: string | null
   status: string
+  notes: string | null
   qty_scheduled: number
   qty_delivered: number
   // Relaciones unidas
@@ -50,7 +51,7 @@ export interface TripAssignment {
   trip_id: string
   request_line_id: string
   quantity_assigned: number
-  // Info de la línea asignada (opcional — solo en detalle)
+  // Info de la línea asignada
   line: {
     id: string
     line_number: number
@@ -58,6 +59,7 @@ export interface TripAssignment {
     description: string
     quantity: number
     status: string
+    notes: string | null
     from_location: { id: string; name: string } | null
     to_location: { id: string; name: string } | null
     unit: { id: string; code: string } | null
@@ -176,25 +178,28 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
       const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
       const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
       const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
+      const unitRel = unwrapRelation(rawLine.unit as { id: string; code: string } | null)
+      const equipRel = unwrapRelation(rawLine.equipment as { id: string; spectrum_code: string | null; description: string } | null)
       line = {
         id: rawLine.id as string,
-        line_number: 0,
-        line_type: '',
-        description: '',
-        quantity: 0,
-        status: '',
+        line_number: (rawLine.line_number as number) ?? 0,
+        line_type: (rawLine.line_type as string) ?? '',
+        description: (rawLine.description as string) ?? '',
+        quantity: (rawLine.quantity as number) ?? 0,
+        status: (rawLine.status as string) ?? '',
+        notes: (rawLine.notes as string | null) ?? null,
         from_location: fromLoc,
         to_location: toLoc,
-        unit: null,
+        unit: unitRel,
         from_text: (rawLine.from_text as string | null) ?? null,
         to_text: (rawLine.to_text as string | null) ?? null,
-        unit_text: null,
-        equipment: null,
+        unit_text: (rawLine.unit_text as string | null) ?? null,
+        equipment: equipRel,
         request: rawRequest
           ? {
               id: rawRequest['id'] as string,
               request_id: (rawRequest['request_id'] as string | null) ?? null,
-              date_required: null,
+              date_required: (rawRequest['date_required'] as string | null) ?? null,
               project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
             }
           : { id: '', request_id: null, date_required: null, project: null },
@@ -258,6 +263,7 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       description: rawLine.description as string,
       quantity: rawLine.quantity as number,
       status: rawLine.status as string,
+      notes: (rawLine.notes as string | null) ?? null,
       from_location: fromLoc,
       to_location: toLoc,
       unit,
@@ -375,6 +381,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           unit_text,
           cost_code_id,
           category,
+          notes,
           status,
           qty_scheduled,
           qty_delivered,
@@ -441,6 +448,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           unit_text: (row.unit_text as string | null) ?? null,
           cost_code_id: (row.cost_code_id as string | null) ?? null,
           category: (row.category as string | null) ?? null,
+          notes: (row.notes as string | null) ?? null,
           status: row.status as string,
           qty_scheduled: (row.qty_scheduled as number) ?? 0,
           qty_delivered: (row.qty_delivered as number) ?? 0,
@@ -491,13 +499,23 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             quantity_assigned,
             line:request_line_id(
               id,
+              line_number,
+              line_type,
+              description,
+              quantity,
+              status,
+              notes,
               from_location:from_location_id(id, name),
               to_location:to_location_id(id, name),
               from_text,
               to_text,
+              unit_text,
+              unit:unit_id(id, code),
+              equipment:equipment_id(id, spectrum_code, description),
               request:request_id(
                 id,
                 request_id,
+                date_required,
                 project:project_id(id, code, name)
               )
             )
@@ -571,6 +589,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               description,
               quantity,
               status,
+              notes,
               from_text,
               to_text,
               unit_text,
