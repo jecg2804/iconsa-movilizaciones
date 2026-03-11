@@ -240,6 +240,12 @@ Bugs #3-8 corregidos 2026-03-06.
 2. **Notificaciones email**: Fase 6.2 (NestJS Edge Functions)
 3. **RLS policies reales**: Cambiar USING(true) a policies por rol
 
+## PENDIENTE PARA JAMES EN SUPABASE
+
+1. **RLS GAP CRITICO**: logistica no puede UPDATE sm_requests ni sm_request_lines. Agregar logistica a UPDATE policies.
+2. **cascade_request_status() BUG**: Muestra "Parcial" cuando deberia ser "En Proceso". Fix SQL en plan file (.claude/plans/).
+3. **17 personas con app_role pero sin auth account**: Crear cuentas Supabase Auth antes de lanzamiento.
+
 ---
 
 ## DECISIONES TOMADAS (34)
@@ -281,7 +287,7 @@ Bugs #3-8 corregidos 2026-03-06.
 
 ---
 
-## BUGS CORREGIDOS (11)
+## BUGS CORREGIDOS (14)
 
 | # | Bug | Fecha |
 |---|-----|-------|
@@ -296,6 +302,9 @@ Bugs #3-8 corregidos 2026-03-06.
 | 9 | IDs off-by-one | 2026-03-06 |
 | 10 | Remolque incluye camiones | 2026-03-06 |
 | 11 | Categoria costo eliminada al agregar Categoria Material | PENDIENTE |
+| 12 | CodeConfirmation permitia bypass | 2026-03-07 |
+| 13 | confirmation_code NULL en viajes nuevos | 2026-03-08 |
+| 14 | qty_delivered siempre 0 en lineas Entregada (fix en useTripEvents) | 2026-03-11 |
 
 ---
 

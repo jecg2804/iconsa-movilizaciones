@@ -4,6 +4,35 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-11 — Code: Auditoría completa + 7 fixes implementados (commit 6198f5b)
+
+### Auditoría Supabase vs Código
+- 20 tablas en BD (docs dicen 18): audit_log y project_extras no documentadas
+- 37 triggers en 12 tablas, 8 no documentados (audit_*, lifecycle, equipment_location)
+- 67 RLS policies activas
+- pg_cron activo: recalcula prioridad daily 6AM UTC para solicitudes activas
+
+### Cambios implementados (6 archivos)
+1. **database.ts**: +date_submitted/completed/cancelled (sm_requests), +date_cancelled (trips), +delivered_at (sm_request_lines)
+2. **format.ts**: nueva función `formatCompletionDelta()` para solicitudes completadas
+3. **SolicitudForm.tsx**: prioridad inteligente (frozen en Completada, oculta en Cancelada, live en activas) + lifecycle chips (Creada, Enviada, Completada, Cancelada con timestamps)
+4. **solicitudes/[id]/page.tsx**: pasa lifecycle timestamps + mini-timeline de trip_events por viaje (Salida→Llegada→Entrega→Retorno)
+5. **useTripEvents.ts**: fix qty_delivered=0 bug — ahora actualiza qty_delivered con quantity_assigned + delivered_at timestamp en Entrega
+6. **useSolicitudes.ts + useTripEvents.ts**: updated_by en operaciones de líneas
+
+### SOLICITUD BD — James debe aplicar (3 items)
+1. **RLS GAP CRÍTICO**: logistica no puede UPDATE sm_requests ni sm_request_lines. Agregar logistica a UPDATE policies.
+2. **cascade_request_status() BUG**: Muestra "Parcial" cuando debería ser "En Proceso" (verifica delivered>0 antes de in_progress>0). SQL fix en plan file.
+3. **scheduled_time ya tenía campo UI** — Paso 6 del plan no fue necesario, ya existía.
+
+### Discrepancias encontradas
+- PROJECT_STATUS dice 18 tablas, BD tiene 20 (audit_log, project_extras)
+- 8 triggers no documentados en PROJECT_STATUS ni schema SQL
+- 17 personas con app_role pero sin auth account (pre-lanzamiento)
+- 2 solicitudes con status inconsistente por bug en cascade trigger
+
+---
+
 ## 2026-03-12 — Code: UX mejoras — métricas vivas, layout, dashboard global
 
 5 archivos modificados (commit 3592470):
