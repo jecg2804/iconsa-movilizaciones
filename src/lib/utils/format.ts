@@ -61,3 +61,33 @@ export function calculatePriority(dateRequired: string | Date): Priority {
   if (daysUntil <= 7) return 'Próxima'
   return 'Normal'
 }
+
+/**
+ * Días hasta la fecha requerida. Negativo = vencido.
+ */
+export function daysUntilDue(dateRequired: string | Date): number {
+  const required = parseLocalDate(dateRequired)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return differenceInCalendarDays(required, today)
+}
+
+/**
+ * Formato compacto: "+3d", "-2d", "Hoy"
+ */
+export function formatDaysUntilDue(dateRequired: string | Date): string {
+  const days = daysUntilDue(dateRequired)
+  if (days === 0) return 'Hoy'
+  if (days > 0) return `+${days}d`
+  return `${days}d`
+}
+
+/**
+ * Color Tailwind según días al vencimiento (misma lógica que prioridad).
+ */
+export function daysUntilDueColor(days: number): string {
+  if (days < 0) return 'text-iconsa-red'
+  if (days <= 3) return 'text-iconsa-orange'
+  if (days <= 7) return 'text-iconsa-blue'
+  return 'text-iconsa-green'
+}

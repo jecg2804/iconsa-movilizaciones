@@ -2,7 +2,7 @@
 
 import { Wrench, Package, ArrowRight, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, calculatePriority, formatDaysUntilDue, daysUntilDue, daysUntilDueColor } from '@/lib/utils/format'
 import type { BacklogLine } from '@/hooks/useTrips'
 
 interface BacklogTableProps {
@@ -111,7 +111,7 @@ function BacklogTable({
         const toName = resolveTo(line)
         const unitCode = resolveUnit(line)
         const requestDisplayId = line.request.request_id ?? line.request_id.slice(0, 8)
-        const priority = line.request.priority ?? 'Normal'
+        const priority = calculatePriority(line.request.date_required)
 
         return (
           <div
@@ -204,9 +204,12 @@ function BacklogTable({
                 {line.quantity} {unitCode}
               </span>
 
-              {/* Fecha requerida con color de prioridad */}
+              {/* Fecha requerida con color de prioridad + días */}
               <span className={`shrink-0 whitespace-nowrap text-xs font-medium ${priorityDateColor(priority)}`}>
                 {formatDate(line.request.date_required)}
+                <span className={`ml-1.5 font-mono font-semibold ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
+                  {formatDaysUntilDue(line.request.date_required)}
+                </span>
               </span>
             </div>
 
@@ -278,6 +281,9 @@ function BacklogTable({
                 </span>
                 <span className={`font-medium ${priorityDateColor(priority)}`}>
                   {formatDate(line.request.date_required)}
+                  <span className={`ml-1 font-mono font-semibold ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
+                    {formatDaysUntilDue(line.request.date_required)}
+                  </span>
                 </span>
               </div>
             </div>

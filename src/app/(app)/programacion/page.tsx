@@ -146,7 +146,7 @@ export default function ProgramacionPage() {
           label: t.trip_id ?? '—',
           status: t.status,
           badgeVariant: 'trip' as const,
-          subtitle: t.driver?.name ?? 'Sin conductor',
+          subtitle: `${t.driver?.name ?? 'Sin conductor'} · ${t.assignments.length} lín.`,
           route,
           href: `/programacion/viaje/${t.id}`,
         }
@@ -486,13 +486,6 @@ export default function ProgramacionPage() {
         </div>
       </FilterBar>
 
-      {/* MiniCalendar */}
-      <MiniCalendar
-        items={calendarItems}
-        selectedDate={dateFilter}
-        onSelectDate={setDateFilter}
-      />
-
       {/* ─── Sección 1: Backlog ─── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -536,6 +529,13 @@ export default function ProgramacionPage() {
         </div>
       </section>
 
+      {/* MiniCalendar */}
+      <MiniCalendar
+        items={calendarItems}
+        selectedDate={dateFilter}
+        onSelectDate={setDateFilter}
+      />
+
       {/* ─── Sección 2: Viajes Recientes ─── */}
       <section className="space-y-3">
         <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
@@ -554,11 +554,6 @@ export default function ProgramacionPage() {
           loading={listLoading}
           emptyMessage="No hay viajes para mostrar"
           mobileRender={mobileRender}
-          rowClassName={(row) =>
-            row.status === 'Completado' || row.status === 'Cancelado'
-              ? 'opacity-60'
-              : ''
-          }
         />
       </section>
 

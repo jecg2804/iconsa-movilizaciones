@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
 import { canCreateSolicitud } from '@/lib/utils/roles'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, calculatePriority, daysUntilDue, formatDaysUntilDue, daysUntilDueColor } from '@/lib/utils/format'
 import { REQUEST_STATUSES, PRIORITIES } from '@/lib/utils/constants'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -91,9 +91,9 @@ export default function SolicitudesPage() {
       id: s.id,
       date: s.date_required,
       label: s.request_id ?? '—',
-      status: s.priority ?? s.status,
-      badgeVariant: (s.priority ? 'priority' : 'status') as 'priority' | 'status',
-      subtitle: `${s.project?.code ?? ''} — ${s.requester?.name ?? ''}`,
+      status: calculatePriority(s.date_required),
+      badgeVariant: 'priority' as const,
+      subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas`,
       href: `/solicitudes/${s.id}`,
     }))
   }, [solicitudes])
@@ -256,6 +256,21 @@ export default function SolicitudesPage() {
         sortValue: (row) => row.date_required,
       },
       {
+        key: 'days',
+        header: 'Días',
+        sortable: true,
+        className: 'w-[70px] text-center',
+        render: (row) => {
+          const days = daysUntilDue(row.date_required)
+          return (
+            <span className={`font-mono text-xs font-semibold ${daysUntilDueColor(days)}`}>
+              {formatDaysUntilDue(row.date_required)}
+            </span>
+          )
+        },
+        sortValue: (row) => daysUntilDue(row.date_required),
+      },
+      {
         key: 'lines',
         header: 'Lineas',
         className: 'w-[80px] text-center',
@@ -276,13 +291,11 @@ export default function SolicitudesPage() {
         header: 'Prioridad',
         sortable: true,
         className: 'w-[110px]',
-        render: (row) =>
-          row.priority ? (
-            <Badge label={row.priority} variant="priority" />
-          ) : (
-            <span className="text-sm text-iconsa-gray">—</span>
-          ),
-        sortValue: (row) => PRIORITY_ORDER[row.priority ?? 'Normal'] ?? 3,
+        render: (row) => {
+          const livePriority = calculatePriority(row.date_required)
+          return <Badge label={livePriority} variant="priority" />
+        },
+        sortValue: (row) => PRIORITY_ORDER[calculatePriority(row.date_required)] ?? 3,
       },
     ],
     [],
@@ -293,7 +306,7 @@ export default function SolicitudesPage() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 active:bg-gray-50">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono text-sm font-bold text-navy">{row.request_id ?? '—'}</span>
-          {row.priority && <Badge label={row.priority} variant="priority" />}
+          <Badge label={calculatePriority(row.date_required)} variant="priority" />
         </div>
         <div className="text-sm text-gray-900">
           {row.project ? (
@@ -439,11 +452,6 @@ export default function SolicitudesPage() {
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"
         mobileRender={mobileRender}
-        rowClassName={(row) =>
-          row.status === 'Completada' || row.status === 'Cancelada'
-            ? 'opacity-60'
-            : ''
-        }
       />
     </div>
   )
