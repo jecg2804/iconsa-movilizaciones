@@ -1,7 +1,6 @@
 'use client'
 
 import { Truck, MapPin, CheckCircle, Home, AlertTriangle } from 'lucide-react'
-import { formatDateTime } from '@/lib/utils/format'
 
 interface EventItem {
   id: string
@@ -51,7 +50,14 @@ function getEventColor(type: string): string {
 }
 
 function formatEventTimestamp(ts: string): string {
-  return formatDateTime(ts)
+  const date = new Date(ts)
+  return date.toLocaleString('es-PA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function EventTimeline({ events }: EventTimelineProps) {

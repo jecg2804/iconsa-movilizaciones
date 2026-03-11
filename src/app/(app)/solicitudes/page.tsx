@@ -137,9 +137,10 @@ export default function SolicitudesPage() {
       }
     }
     if (dateFilter) {
+      const d = new Date(dateFilter + 'T00:00:00')
       chips.push({
         key: 'date',
-        label: formatDate(dateFilter),
+        label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
         onRemove: () => setDateFilter(null),
       })
     }
