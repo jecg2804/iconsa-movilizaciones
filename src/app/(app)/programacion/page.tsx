@@ -554,6 +554,11 @@ export default function ProgramacionPage() {
           loading={listLoading}
           emptyMessage="No hay viajes para mostrar"
           mobileRender={mobileRender}
+          rowClassName={(row) =>
+            row.status === 'Completado' || row.status === 'Cancelado'
+              ? 'opacity-60'
+              : ''
+          }
         />
       </section>
 

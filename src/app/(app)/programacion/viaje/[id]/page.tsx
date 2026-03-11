@@ -26,6 +26,7 @@ import { LineSelector } from '@/components/programacion/LineSelector'
 function tripToInput(trip: TripWithRelations): TripInput {
   return {
     scheduled_date: trip.scheduled_date,
+    scheduled_time: (trip as unknown as Record<string, unknown>).scheduled_time as string | null ?? null,
     driver_id: trip.driver_id,
     vehicle_id: trip.vehicle_id,
     trailer_id: trip.trailer_id,
@@ -173,7 +174,7 @@ export default function ViajeDetailPage() {
   const supabase = useMemo(() => createClient(), [])
 
   // Auth y permisos
-  const { role, loading: authLoading } = useAuth()
+  const { person, role, loading: authLoading } = useAuth()
 
   // Vehiculos y remolques
   const { vehicles, trailers, loading: vehiclesLoading } = useVehicles()
@@ -196,6 +197,7 @@ export default function ViajeDetailPage() {
   // Estado editable
   const [tripData, setTripData] = useState<TripInput>({
     scheduled_date: '',
+    scheduled_time: null,
     driver_id: null,
     vehicle_id: null,
     trailer_id: null,
@@ -381,7 +383,7 @@ export default function ViajeDetailPage() {
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
     }
-    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds)
+    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id)
     if (success) {
       // Refrescar datos del viaje
       const updated = await fetchTrip(id)
@@ -394,7 +396,7 @@ export default function ViajeDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, updateTrip, fetchTrip, id])
+  }, [trip, tripData, newAssignments, removedAssignmentIds, updateTrip, fetchTrip, id, person?.id])
 
   // --- Cancelar viaje ---
   const handleCancelTrip = useCallback(async () => {

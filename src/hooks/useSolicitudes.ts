@@ -19,8 +19,8 @@ export interface SolicitudWithRelations {
   priority: string | null
   notes: string | null
   attachments: unknown
-  created_at: string
-  updated_at: string
+  created_at: string | null
+  updated_at: string | null
   project: { id: string; code: string; name: string } | null
   requester: { id: string; name: string } | null
   lines: LineWithRelations[]
@@ -477,6 +477,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           date_required: header.date_required,
           notes: header.notes ?? null,
           status,
+          created_by: header.requester_id,
         }
 
         // 1. Insertar el header
@@ -560,6 +561,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       header: Partial<SolicitudInput>,
       lines: LineInput[],
       deletedLineIds: string[],
+      personId?: string,
     ): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
@@ -572,6 +574,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.approved_by !== undefined) headerUpdate.approved_by = header.approved_by
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
+        if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
           const { error: headerError } = await supabase

@@ -104,6 +104,7 @@ export interface TripWithRelations {
 
 export interface TripInput {
   scheduled_date: string
+  scheduled_time: string | null
   driver_id: string | null
   vehicle_id: string | null
   trailer_id: string | null
@@ -640,6 +641,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
     async (
       input: TripInput,
       assignments: AssignmentInput[],
+      personId?: string,
     ): Promise<{ id: string; tripId: string | null } | null> => {
       setSaving(true)
       setSaveError(null)
@@ -652,6 +654,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           .from('trips')
           .insert({
             scheduled_date: input.scheduled_date,
+            scheduled_time: input.scheduled_time ?? null,
             driver_id: input.driver_id,
             vehicle_id: input.vehicle_id,
             trailer_id: input.trailer_id,
@@ -662,6 +665,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             confirmation_code: confirmationCode,
             notes: input.notes,
             is_external: input.is_external,
+            created_by: personId ?? null,
           })
           .select('id, trip_id')
           .single()
@@ -740,6 +744,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       input: TripInput,
       addAssignments: AssignmentInput[],
       removeAssignmentIds: string[],
+      personId?: string,
     ): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
@@ -750,6 +755,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           .from('trips')
           .update({
             scheduled_date: input.scheduled_date,
+            scheduled_time: input.scheduled_time ?? null,
             driver_id: input.driver_id,
             vehicle_id: input.vehicle_id,
             trailer_id: input.trailer_id,
@@ -759,6 +765,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             escort: input.escort,
             notes: input.notes,
             is_external: input.is_external,
+            updated_by: personId ?? null,
           })
           .eq('id', id)
 

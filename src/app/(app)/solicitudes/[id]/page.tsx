@@ -377,7 +377,7 @@ export default function SolicitudDetailPage() {
   // --- Guardar cambios ---
   const handleSave = useCallback(async () => {
     if (!solicitud) return
-    const success = await updateSolicitud(solicitud.id, header, lines, deletedLineIds)
+    const success = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
     if (success) {
       const updated = await fetchSolicitud(id)
       if (updated) {
@@ -387,7 +387,7 @@ export default function SolicitudDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id])
+  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id, person?.id])
 
   // --- Enviar solicitud (Borrador → Enviada) ---
   const handleSend = useCallback(async () => {
@@ -401,13 +401,13 @@ export default function SolicitudDetailPage() {
     if (lines.length === 0) { setSendError('Agregue al menos una linea a la solicitud'); return }
 
     // Primero guardar los cambios pendientes
-    const saveSuccess = await updateSolicitud(solicitud.id, header, lines, deletedLineIds)
+    const saveSuccess = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
     if (!saveSuccess) return
 
     // Actualizar status a Enviada
     const { error } = await supabase
       .from('sm_requests')
-      .update({ status: 'Enviada' })
+      .update({ status: 'Enviada', updated_by: person?.id ?? null })
       .eq('id', solicitud.id)
 
     if (error) {

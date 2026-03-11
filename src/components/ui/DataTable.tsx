@@ -21,6 +21,8 @@ interface DataTableProps<T> {
   loading?: boolean
   className?: string
   mobileRender?: (row: T) => React.ReactNode
+  /** Función opcional para aplicar clases CSS condicionales a cada fila */
+  rowClassName?: (row: T) => string
 }
 
 type SortDirection = 'asc' | 'desc'
@@ -34,6 +36,7 @@ function DataTable<T>({
   loading = false,
   className = '',
   mobileRender,
+  rowClassName,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -153,7 +156,7 @@ function DataTable<T>({
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={`bg-white transition-colors ${
                     onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-                  }`}
+                  } ${rowClassName ? rowClassName(row) : ''}`}
                 >
                   {columns.map((column) => (
                     <td
@@ -180,7 +183,7 @@ function DataTable<T>({
               <div
                 key={key}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={onRowClick ? 'cursor-pointer' : ''}
+                className={`${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}
               >
                 {mobileRender(row)}
               </div>
@@ -194,7 +197,7 @@ function DataTable<T>({
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={`rounded-xl border border-gray-200 bg-white p-4 ${
                 onRowClick ? 'cursor-pointer hover:bg-gray-50' : ''
-              }`}
+              } ${rowClassName ? rowClassName(row) : ''}`}
             >
               <div className="space-y-2">
                 {columns.map((column) => (

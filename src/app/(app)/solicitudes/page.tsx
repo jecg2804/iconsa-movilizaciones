@@ -439,6 +439,11 @@ export default function SolicitudesPage() {
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"
         mobileRender={mobileRender}
+        rowClassName={(row) =>
+          row.status === 'Completada' || row.status === 'Cancelada'
+            ? 'opacity-60'
+            : ''
+        }
       />
     </div>
   )
