@@ -53,7 +53,7 @@ export default async function DashboardPage() {
     supabase
       .from('sm_requests')
       .select('id', { count: 'exact', head: true })
-      .in('status', ['Enviada', 'En Proceso'])
+      .in('status', ['Enviada', 'En Proceso', 'Parcial'])
 
   const buildSinProgramarQuery = () =>
     supabase
@@ -225,7 +225,7 @@ export default async function DashboardPage() {
         <KpiCard
           label="Solicitudes Pendientes"
           value={pendientesCount}
-          sublabel="Enviadas + En Proceso"
+          sublabel="Enviadas + En Proceso + Parcial"
           icon={FileText}
           color="orange"
         />
