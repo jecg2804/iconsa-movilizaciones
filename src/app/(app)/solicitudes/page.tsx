@@ -206,7 +206,7 @@ export default function SolicitudesPage() {
     [router],
   )
 
-  // Columnas
+  // Columnas — orden: ID, Proyecto, Solicitante, Líneas, Fecha Req., Estado, Prioridad, Vence
   const columns: Column<SolicitudWithRelations>[] = useMemo(
     () => [
       {
@@ -246,6 +246,14 @@ export default function SolicitudesPage() {
         sortValue: (row) => row.requester?.name ?? '',
       },
       {
+        key: 'lines',
+        header: 'Líneas',
+        className: 'w-[80px] text-center',
+        render: (row) => (
+          <span className="text-sm text-gray-900">{row.lines?.length ?? 0}</span>
+        ),
+      },
+      {
         key: 'date_required',
         header: 'Fecha Req.',
         sortable: true,
@@ -254,29 +262,6 @@ export default function SolicitudesPage() {
           <span className="text-sm text-gray-900">{formatDate(row.date_required)}</span>
         ),
         sortValue: (row) => row.date_required,
-      },
-      {
-        key: 'days',
-        header: 'Días',
-        sortable: true,
-        className: 'w-[70px] text-center',
-        render: (row) => {
-          const days = daysUntilDue(row.date_required)
-          return (
-            <span className={`font-mono text-xs font-semibold ${daysUntilDueColor(days)}`}>
-              {formatDaysUntilDue(row.date_required)}
-            </span>
-          )
-        },
-        sortValue: (row) => daysUntilDue(row.date_required),
-      },
-      {
-        key: 'lines',
-        header: 'Lineas',
-        className: 'w-[80px] text-center',
-        render: (row) => (
-          <span className="text-sm text-gray-900">{row.lines?.length ?? 0}</span>
-        ),
       },
       {
         key: 'status',
@@ -296,6 +281,21 @@ export default function SolicitudesPage() {
           return <Badge label={livePriority} variant="priority" />
         },
         sortValue: (row) => PRIORITY_ORDER[calculatePriority(row.date_required)] ?? 3,
+      },
+      {
+        key: 'days',
+        header: 'Vence',
+        sortable: true,
+        className: 'w-[70px] text-center',
+        render: (row) => {
+          const days = daysUntilDue(row.date_required)
+          return (
+            <span className={`font-mono text-xs font-semibold ${daysUntilDueColor(days)}`}>
+              {formatDaysUntilDue(row.date_required)}
+            </span>
+          )
+        },
+        sortValue: (row) => daysUntilDue(row.date_required),
       },
     ],
     [],

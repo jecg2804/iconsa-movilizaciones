@@ -73,13 +73,12 @@ export function daysUntilDue(dateRequired: string | Date): number {
 }
 
 /**
- * Formato compacto: "+3d", "-2d", "Hoy"
+ * Formato compacto: "Hoy", "1", "2", "-1", "-2"
  */
 export function formatDaysUntilDue(dateRequired: string | Date): string {
   const days = daysUntilDue(dateRequired)
   if (days === 0) return 'Hoy'
-  if (days > 0) return `+${days}d`
-  return `${days}d`
+  return `${days}`
 }
 
 /**
