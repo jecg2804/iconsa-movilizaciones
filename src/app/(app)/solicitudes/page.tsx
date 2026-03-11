@@ -79,23 +79,23 @@ export default function SolicitudesPage() {
     [allProjects, filters.projectId],
   )
 
-  // Solicitudes filtradas (fecha del calendario + prioridad viva client-side)
-  const displayedSolicitudes = useMemo(() => {
-    let result = solicitudes
-    if (dateFilter) {
-      result = result.filter((s) => s.date_required === dateFilter)
-    }
-    if (filters.priorities.length > 0) {
-      result = result.filter((s) =>
-        filters.priorities.includes(calculatePriority(s.date_required))
-      )
-    }
-    return result
-  }, [solicitudes, dateFilter, filters.priorities])
+  // Solicitudes filtradas por prioridad viva (client-side, sin dateFilter)
+  const priorityFilteredSolicitudes = useMemo(() => {
+    if (filters.priorities.length === 0) return solicitudes
+    return solicitudes.filter((s) =>
+      filters.priorities.includes(calculatePriority(s.date_required))
+    )
+  }, [solicitudes, filters.priorities])
 
-  // calendarItems para MiniCalendar (basado en solicitudes ya filtradas por otros filtros)
+  // Para la tabla: prioridad + fecha calendario
+  const displayedSolicitudes = useMemo(() => {
+    if (!dateFilter) return priorityFilteredSolicitudes
+    return priorityFilteredSolicitudes.filter((s) => s.date_required === dateFilter)
+  }, [priorityFilteredSolicitudes, dateFilter])
+
+  // calendarItems para MiniCalendar (respeta filtro de prioridad)
   const calendarItems = useMemo<CalendarItem[]>(() => {
-    return solicitudes.map((s) => ({
+    return priorityFilteredSolicitudes.map((s) => ({
       id: s.id,
       date: s.date_required,
       label: s.request_id ?? '—',
@@ -104,7 +104,7 @@ export default function SolicitudesPage() {
       subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas`,
       href: `/solicitudes/${s.id}`,
     }))
-  }, [solicitudes])
+  }, [priorityFilteredSolicitudes])
 
   // --- Chips de filtros activos ---
   const filterChips = useMemo<FilterChip[]>(() => {
