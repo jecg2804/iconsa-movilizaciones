@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
-import { formatDate, calculatePriority, formatDaysUntilDue, daysUntilDue, daysUntilDueColor } from '@/lib/utils/format'
+import { formatDate, formatDateTime, calculatePriority, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
 
 type FormMode = 'create' | 'edit' | 'readonly'
@@ -21,6 +21,9 @@ interface SolicitudFormProps {
     notes: string | null
     status: string
     priority: string | null
+    dateSubmitted?: string | null
+    dateCompleted?: string | null
+    dateCancelled?: string | null
   }
   /** Proyectos disponibles para el dropdown (para PM, solo sus proyectos asignados) */
   projects: SelectOption[]
@@ -122,7 +125,23 @@ function SolicitudForm({
   // Datos de visualizacion
   const requestId = initialData?.requestId
   const status = initialData?.status
-  const livePriority = dateRequired ? calculatePriority(dateRequired) : initialData?.priority ?? null
+  const isCancelled = status === 'Cancelada'
+  const isCompleted = status === 'Completada'
+  const isTerminal = isCancelled || isCompleted
+
+  // Prioridad condicional según estado
+  const displayPriority = isCancelled
+    ? null // Cancelada: ocultar prioridad
+    : isCompleted
+      ? initialData?.priority ?? null // Completada: frozen de BD
+      : dateRequired
+        ? calculatePriority(dateRequired) // Activa: live
+        : initialData?.priority ?? null
+
+  // Delta de completación (solo para Completada)
+  const completionDelta = isCompleted && dateRequired && initialData?.dateCompleted
+    ? formatCompletionDelta(dateRequired, initialData.dateCompleted)
+    : null
 
   return (
     <div className="space-y-4">
@@ -139,15 +158,20 @@ function SolicitudForm({
             </span>
           )}
         </div>
-        {(status || livePriority || dateRequired) && (
+        {(status || displayPriority || dateRequired) && (
           <div className="flex items-center gap-2">
             {status && <Badge variant="status" label={status} />}
-            {livePriority && <Badge variant="priority" label={livePriority} />}
-            {dateRequired && (
+            {displayPriority && <Badge variant="priority" label={displayPriority} />}
+            {/* Días: Completada muestra delta, Cancelada oculta, Activa muestra live */}
+            {completionDelta ? (
+              <span className={`text-xs font-medium ${completionDelta.color}`}>
+                {completionDelta.text}
+              </span>
+            ) : !isTerminal && dateRequired ? (
               <span className={`text-xs font-medium ${daysUntilDueColor(daysUntilDue(dateRequired))}`}>
                 {formatDaysUntilDue(dateRequired)}
               </span>
-            )}
+            ) : null}
           </div>
         )}
       </div>
@@ -192,14 +216,32 @@ function SolicitudForm({
           disabled={isReadonly}
         />
 
+        {/* Lifecycle timestamps */}
         {initialData?.dateCreated && (
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
-              Fecha Creada
+              Fechas del Ciclo
             </label>
-            <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-              {formatDate(initialData.dateCreated)}
-            </p>
+            <div className="flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
+                Creada: {formatDate(initialData.dateCreated)}
+              </span>
+              {initialData.dateSubmitted && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-iconsa-blue">
+                  Enviada: {formatDateTime(initialData.dateSubmitted)}
+                </span>
+              )}
+              {initialData.dateCompleted && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-iconsa-green">
+                  Completada: {formatDateTime(initialData.dateCompleted)}
+                </span>
+              )}
+              {initialData.dateCancelled && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-iconsa-red">
+                  Cancelada: {formatDateTime(initialData.dateCancelled)}
+                </span>
+              )}
+            </div>
           </div>
         )}
 

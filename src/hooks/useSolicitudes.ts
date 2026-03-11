@@ -15,6 +15,9 @@ export interface SolicitudWithRelations {
   approved_by: string | null
   date_required: string
   date_created: string | null
+  date_submitted: string | null
+  date_completed: string | null
+  date_cancelled: string | null
   status: string
   priority: string | null
   notes: string | null
@@ -327,6 +330,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           approved_by: row.approved_by,
           date_required: row.date_required,
           date_created: row.date_created,
+          date_submitted: row.date_submitted ?? null,
+          date_completed: row.date_completed ?? null,
+          date_cancelled: row.date_cancelled ?? null,
           status: row.status,
           priority: row.priority,
           notes: row.notes,
@@ -442,6 +448,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         approved_by: data.approved_by,
         date_required: data.date_required,
         date_created: data.date_created,
+        date_submitted: data.date_submitted,
+        date_completed: data.date_completed,
+        date_cancelled: data.date_cancelled,
         status: data.status,
         priority: data.priority,
         notes: data.notes,
@@ -620,9 +629,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         for (const line of lines) {
           if (line.id) {
             // Linea existente: actualizar
-            const { error: updateError } = await supabase
-              .from('sm_request_lines')
-              .update({
+            const lineUpdate: Record<string, unknown> = {
                 line_type: line.line_type,
                 equipment_id: line.equipment_id,
                 equipment_text: line.equipment_text,
@@ -640,7 +647,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 material_category: line.material_category,
                 po_reference: line.po_reference,
                 notes: line.notes,
-              })
+              }
+            if (personId) lineUpdate.updated_by = personId
+
+            const { error: updateError } = await supabase
+              .from('sm_request_lines')
+              .update(lineUpdate)
               .eq('id', line.id)
 
             if (updateError) {

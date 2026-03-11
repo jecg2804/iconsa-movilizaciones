@@ -90,3 +90,19 @@ export function daysUntilDueColor(days: number): string {
   if (days <= 7) return 'text-iconsa-blue'
   return 'text-iconsa-green'
 }
+
+/**
+ * Delta entre fecha requerida y fecha completada.
+ * Positivo = completado antes de tiempo. Negativo = tarde.
+ */
+export function formatCompletionDelta(
+  dateRequired: string,
+  dateCompleted: string
+): { text: string; color: string } {
+  const required = parseLocalDate(dateRequired)
+  const completed = parseLocalDate(dateCompleted)
+  const days = differenceInCalendarDays(required, completed)
+  if (days > 0) return { text: `${days}d antes`, color: 'text-iconsa-green' }
+  if (days < 0) return { text: `${Math.abs(days)}d tarde`, color: 'text-iconsa-red' }
+  return { text: 'a tiempo', color: 'text-iconsa-green' }
+}

@@ -77,7 +77,7 @@ export function useTripEvents(tripId: string) {
           if (assignedLineIds.length > 0) {
             const { error: linesError } = await supabase
               .from('sm_request_lines')
-              .update({ status: 'En Tránsito' })
+              .update({ status: 'En Tránsito', updated_by: person?.id ?? null })
               .in('id', assignedLineIds)
 
             if (linesError) {
@@ -97,16 +97,36 @@ export function useTripEvents(tripId: string) {
             return false
           }
         } else if (input.event_type === 'Entrega') {
-          // líneas → Entregada (trigger BD cascade_request_status actualiza solicitudes)
+          // líneas → Entregada + qty_delivered + delivered_at
           if (assignedLineIds.length > 0) {
-            const { error: linesError } = await supabase
-              .from('sm_request_lines')
-              .update({ status: 'Entregada' })
-              .in('id', assignedLineIds)
+            // Obtener quantity_assigned de trip_line_assignments para cada línea
+            const { data: assignments } = await supabase
+              .from('trip_line_assignments')
+              .select('request_line_id, quantity_assigned')
+              .eq('trip_id', tripId)
+              .in('request_line_id', assignedLineIds)
 
-            if (linesError) {
-              setRegisterError(linesError.message)
-              return false
+            const now = new Date().toISOString()
+
+            // Actualizar cada línea con su qty_delivered correspondiente
+            for (const lineId of assignedLineIds) {
+              const assignment = assignments?.find((a) => a.request_line_id === lineId)
+              const qtyDelivered = assignment?.quantity_assigned ?? 0
+
+              const { error: lineError } = await supabase
+                .from('sm_request_lines')
+                .update({
+                  status: 'Entregada',
+                  qty_delivered: qtyDelivered,
+                  delivered_at: now,
+                  updated_by: person?.id ?? null,
+                })
+                .eq('id', lineId)
+
+              if (lineError) {
+                setRegisterError(lineError.message)
+                return false
+              }
             }
           }
         } else if (input.event_type === 'Retorno') {

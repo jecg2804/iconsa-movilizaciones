@@ -16,7 +16,7 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, formatDateTime } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
 import type { SelectOption } from '@/components/ui/Select'
@@ -105,6 +105,12 @@ export default function SolicitudDetailPage() {
     line_type: string
     quantity_assigned: number
   }
+  interface TripEventInfo {
+    event_type: string
+    event_timestamp: string
+    received_by_name: string | null
+    notes: string | null
+  }
   interface AssociatedTrip {
     id: string
     trip_id: string | null
@@ -117,6 +123,7 @@ export default function SolicitudDetailPage() {
     att_permit: boolean
     escort: boolean
     lines: TripLineInfo[]
+    events: TripEventInfo[]
   }
   const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
 
@@ -176,7 +183,8 @@ export default function SolicitudDetailPage() {
             escort,
             driver:driver_id(name),
             vehicle:vehicle_id(description, spectrum_code),
-            trailer:trailer_id(description, spectrum_code)
+            trailer:trailer_id(description, spectrum_code),
+            trip_events(event_type, event_timestamp, received_by_name, notes)
           )
         `)
         .in('request_line_id', lineIds)
@@ -210,6 +218,10 @@ export default function SolicitudDetailPage() {
         const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
         const vehicle = Array.isArray(t.vehicle) ? t.vehicle[0] : t.vehicle
         const trailer = Array.isArray(t.trailer) ? t.trailer[0] : t.trailer
+        const rawEvents = Array.isArray(t.trip_events) ? t.trip_events : []
+        const events = (rawEvents as TripEventInfo[]).sort(
+          (a, b) => new Date(a.event_timestamp).getTime() - new Date(b.event_timestamp).getTime()
+        )
 
         tripMap.set(tripUuid, {
           id: tripUuid,
@@ -223,6 +235,7 @@ export default function SolicitudDetailPage() {
           att_permit: (t.att_permit as boolean) ?? false,
           escort: (t.escort as boolean) ?? false,
           lines: lineInfo ? [lineInfo] : [],
+          events,
         })
       }
       const trips = Array.from(tripMap.values()).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
@@ -535,6 +548,9 @@ export default function SolicitudDetailPage() {
             notes: solicitud.notes,
             status: solicitud.status,
             priority: solicitud.priority,
+            dateSubmitted: solicitud.date_submitted ?? undefined,
+            dateCompleted: solicitud.date_completed ?? undefined,
+            dateCancelled: solicitud.date_cancelled ?? undefined,
           }}
           projects={projectOptions}
           people={people}
@@ -706,6 +722,28 @@ export default function SolicitudDetailPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {/* Mini-timeline de eventos */}
+                {t.events.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-gray-200 pt-2">
+                    {t.events.map((ev, idx) => {
+                      const icon = ev.event_type === 'Salida' ? '🚛'
+                        : ev.event_type === 'Llegada' ? '📍'
+                        : ev.event_type === 'Entrega' ? '✅'
+                        : ev.event_type === 'Retorno' ? '🏠'
+                        : '⚠️'
+                      return (
+                        <div key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="text-xs shrink-0">{icon}</span>
+                          <span className="font-medium shrink-0">{ev.event_type}:</span>
+                          <span className="text-iconsa-gray">{formatDateTime(ev.event_timestamp)}</span>
+                          {ev.event_type === 'Entrega' && ev.received_by_name && (
+                            <span className="text-iconsa-gray">— Recibido por: {ev.received_by_name}</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
                 {/* Código de confirmación — visible para pm, logistica, admin */}
                 {(role === 'pm' || role === 'logistica' || role === 'admin') && t.confirmation_code && (
