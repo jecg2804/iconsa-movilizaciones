@@ -472,6 +472,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       lines: LineInput[],
       _deletedLineIds: string[],
       status: 'Borrador' | 'Enviada',
+      personId?: string,
     ): Promise<{ id: string; requestId: string } | null> => {
       setSaving(true)
       setSaveError(null)
@@ -484,7 +485,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           date_required: header.date_required,
           notes: header.notes ?? null,
           status,
-          created_by: header.requester_id,
+          created_by: personId ?? null,
         }
 
         // 1. Insertar el header

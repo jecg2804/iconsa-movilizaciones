@@ -4,6 +4,37 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-12 — Code: Fix created_by semántico
+
+- `useSolicitudes.ts`: `created_by` cambiado de `header.requester_id` → `personId` (el usuario logueado)
+- `solicitudes/nueva/page.tsx`: pasa `person?.id` a saveSolicitud en handleSaveDraft y handleSend
+- **Razón:** `created_by` y `requester_id` son conceptos diferentes. created_by = quién opera el sistema, requester_id = quién solicita el equipo. Un admin puede crear solicitud en nombre de un PM.
+- Las 11 solicitudes existentes tienen created_by = NULL (pre-fix). Solo futuras tendrán el valor correcto.
+
+---
+
+## 2026-03-12 — Chat: Correcciones post-auditoría aplicadas en Supabase
+
+### RLS fix (migración aplicada)
+- sm_request_lines: nueva policy `operational_update` reemplaza `pm_admin_update`. Ahora permite UPDATE a pm, admin, logistica, campo, almacen.
+- sm_requests UPDATE: sigue siendo pm+admin solamente. El cascade trigger es SECURITY DEFINER, así que cuando campo/logistica actualizan una línea, el trigger puede actualizar el header sin darle permisos directos.
+- Flujo de entrega ahora funciona para todos los roles operativos.
+
+### cascade_request_status() corregido (SECURITY DEFINER)
+- Completada: delivered = total
+- Cancelada: cancelled = total
+- Parcial: delivered + cancelled = total, mix de ambos (todo resuelto pero no todo entregado)
+- En Proceso: hay líneas activas (programadas/en tránsito) O hay entregas con líneas pendientes
+- Enviada: nada moviéndose aún
+- 24-404-SM-003 corregido de "Parcial" → "En Proceso" (1 entregada + 2 programadas)
+- 25-506-SM-002 corregido de "Enviada" → "En Proceso" (1 línea En Tránsito)
+
+### Backfill
+- delivered_at backfillado en 10 líneas Entregada con timestamps reales de trip_events
+- qty_delivered ya estaba correcto (backfillado anteriormente)
+
+---
+
 ## 2026-03-11 — Code: Auditoría completa + 7 fixes implementados (commit 6198f5b)
 
 ### Auditoría Supabase vs Código

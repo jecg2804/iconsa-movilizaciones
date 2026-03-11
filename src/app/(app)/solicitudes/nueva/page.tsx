@@ -278,20 +278,20 @@ export default function NuevaSolicitudPage() {
   // --- Guardar borrador ---
   const handleSaveDraft = useCallback(async () => {
     if (!validateForDraft()) return
-    const result = await saveSolicitud(header, lines, [], 'Borrador')
+    const result = await saveSolicitud(header, lines, [], 'Borrador', person?.id)
     if (result) {
       router.push('/solicitudes')
     }
-  }, [validateForDraft, saveSolicitud, header, lines, router])
+  }, [validateForDraft, saveSolicitud, header, lines, router, person])
 
   // --- Enviar solicitud ---
   const handleSend = useCallback(async () => {
     if (!validateForSend()) return
-    const result = await saveSolicitud(header, lines, [], 'Enviada')
+    const result = await saveSolicitud(header, lines, [], 'Enviada', person?.id)
     if (result) {
       router.push('/solicitudes')
     }
-  }, [validateForSend, saveSolicitud, header, lines, router])
+  }, [validateForSend, saveSolicitud, header, lines, router, person])
 
   // --- Estado de carga global ---
   const isLoading = authLoading || projectsLoading || equipmentLoading || locationsLoading || peopleLoading || unitsLoading

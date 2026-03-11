@@ -19,6 +19,10 @@ Claude Code puede actualizar este archivo directamente.
 | 11 | Categoría costo eliminada al agregar Categoría Material | 2026-03-07 | 4892737 |
 | 12 | CodeConfirmation permitía bypass | 2026-03-07 | a353a43 |
 | 13 | confirmation_code NULL en viajes nuevos | 2026-03-08 | — (trigger BD + frontend fix) |
+| 14 | qty_delivered siempre 0 en líneas Entregada | 2026-03-11 | 6198f5b |
+| 15 | created_by usaba requester_id en vez de personId | 2026-03-12 | — |
+| 16 | cascade_request_status() orden incorrecto (Parcial antes de En Proceso) | 2026-03-12 | — (fix BD) |
+| 17 | RLS bloqueaba UPDATE sm_request_lines para roles operativos | 2026-03-12 | — (fix BD) |
 
 ## Abiertos
 

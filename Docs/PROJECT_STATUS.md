@@ -1,6 +1,6 @@
 ![alt text](image.png)# ICONSA Movilizaciones - Estado del Proyecto
 
-Ultima actualizacion: 2026-03-08
+Ultima actualizacion: 2026-03-12
 
 Actualizar este archivo despues de CADA paso completado.
 Este documento es la UNICA fuente de verdad para el estado del schema, decisiones, y progreso.
@@ -28,7 +28,7 @@ Documentacion en repo (Docs/):
 
 ---
 
-## SCHEMA COMPLETO DE BASE DE DATOS (18 tablas)
+## SCHEMA COMPLETO DE BASE DE DATOS (20 tablas)
 
 ### Convenciones globales
 - Todos los IDs son UUID con gen_random_uuid()
@@ -185,6 +185,23 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 
 ---
 
+### TABLA: audit_log (auditoría — no documentada previamente)
+
+id UUID PK, table_name TEXT, record_id UUID, action TEXT (INSERT/UPDATE/DELETE), old_data JSONB, new_data JSONB, changed_by UUID FK people, changed_at TIMESTAMPTZ DEFAULT now().
+RLS habilitado. Triggers de auditoría activos en 4 tablas transaccionales (sm_requests, sm_request_lines, trips, trip_events).
+Nota: usa auth.uid() — funciona desde browser client. No se usa service_role en la app.
+
+---
+
+### TABLA: project_extras (extras/secciones por proyecto)
+
+id UUID PK, project_id FK projects, code TEXT, name TEXT, created_at, updated_at.
+Datos: 12 extras (24-404: 6, 25-505: 6). Proyectos sin extras usan fases base.
+Relación: cost_codes.extra_id FK project_extras (nullable, NULL = proyecto base).
+UI: dropdown "Extra / Sección" solo visible si proyecto tiene extras.
+
+---
+
 ## TRIGGERS Y FUNCIONES
 
 | Funcion | Descripcion |
@@ -195,8 +212,15 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 | generate_confirmation_code() | Auto 4 digitos random si NULL en BEFORE INSERT trips (safety net) |
 | generate_full_code() | Auto {proyecto}-{fase} todo con dashes en BEFORE INSERT/UPDATE cost_codes |
 | calculate_priority() | Vencida/Urgente/Proxima/Normal basado en date_required |
-| cascade_request_status() | Actualiza header basado en estados de lineas |
+| cascade_request_status() | Actualiza header basado en estados de lineas (SECURITY DEFINER). Orden: Completada→Cancelada→Parcial→En Proceso→Enviada |
 | get_my_app_role() | Helper SECURITY DEFINER: retorna app_role del usuario auth |
+| capture_initial_priority() | Captura priority en INSERT → initial_priority (trg_initial_priority) |
+| capture_lifecycle_timestamps() | Captura date_submitted/completed/cancelled en cambio de status (trg_lifecycle_timestamps) |
+| capture_trip_cancelled() | Captura date_cancelled cuando viaje se cancela (trg_trip_cancelled) |
+| update_equipment_location() | Actualiza equipment.current_location en evento Entrega (trg_update_equipment_location) |
+| audit_trigger() | Escribe en audit_log en INSERT/UPDATE/DELETE (×4 tablas transaccionales) |
+
+**pg_cron:** Daily 6AM UTC recalcula priority para solicitudes activas (`status NOT IN ('Completada', 'Cancelada')`).
 
 ---
 
@@ -238,13 +262,14 @@ Bugs #3-8 corregidos 2026-03-06.
 
 1. **UX por discutir**: Backlog con mas contexto visual, columna "FECHA" ambigua en viajes recientes
 2. **Notificaciones email**: Fase 6.2 (NestJS Edge Functions)
-3. **RLS policies reales**: Cambiar USING(true) a policies por rol
+3. **RLS policies reales**: Preparar SQL para policies por rol
 
 ## PENDIENTE PARA JAMES EN SUPABASE
 
-1. **RLS GAP CRITICO**: logistica no puede UPDATE sm_requests ni sm_request_lines. Agregar logistica a UPDATE policies.
-2. **cascade_request_status() BUG**: Muestra "Parcial" cuando deberia ser "En Proceso". Fix SQL en plan file (.claude/plans/).
+1. ~~**RLS GAP CRITICO**~~: ✅ RESUELTO 2026-03-12. sm_request_lines permite UPDATE para todos los roles operativos. sm_requests UPDATE sigue pm+admin (cascade trigger es SECURITY DEFINER).
+2. ~~**cascade_request_status() BUG**~~: ✅ RESUELTO 2026-03-12. Orden correcto: Completada→Cancelada→Parcial→En Proceso→Enviada. 2 solicitudes corregidas.
 3. **17 personas con app_role pero sin auth account**: Crear cuentas Supabase Auth antes de lanzamiento.
+4. **Verificar audit_log**: Crear solicitud de prueba desde browser y verificar que audit_log se pobla correctamente.
 
 ---
 
@@ -305,6 +330,9 @@ Bugs #3-8 corregidos 2026-03-06.
 | 12 | CodeConfirmation permitia bypass | 2026-03-07 |
 | 13 | confirmation_code NULL en viajes nuevos | 2026-03-08 |
 | 14 | qty_delivered siempre 0 en lineas Entregada (fix en useTripEvents) | 2026-03-11 |
+| 15 | created_by usaba requester_id en vez de personId (fix semantico) | 2026-03-12 |
+| 16 | cascade_request_status() orden incorrecto (Parcial antes de En Proceso) | 2026-03-12 (BD) |
+| 17 | RLS bloqueaba UPDATE sm_request_lines para logistica/campo/almacen | 2026-03-12 (BD) |
 
 ---
 
