@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import { formatDate } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
 
 type FormMode = 'create' | 'edit' | 'readonly'
@@ -16,6 +17,7 @@ interface SolicitudFormProps {
     requesterId: string
     approvedBy: string | null
     dateRequired: string
+    dateCreated?: string
     notes: string | null
     status: string
     priority: string | null
@@ -184,6 +186,17 @@ function SolicitudForm({
           onChange={handleDateChange}
           disabled={isReadonly}
         />
+
+        {initialData?.dateCreated && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Fecha Creada
+            </label>
+            <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {formatDate(initialData.dateCreated)}
+            </p>
+          </div>
+        )}
 
         {/* Notas — full width */}
         <div className="md:col-span-2">

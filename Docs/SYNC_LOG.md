@@ -4,6 +4,20 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-12 — Code: UX mejoras — métricas vivas, layout, dashboard global
+
+5 archivos modificados (commit 3592470):
+- `format.ts`: 3 nuevas funciones (daysUntilDue, formatDaysUntilDue, daysUntilDueColor)
+- `programacion/page.tsx`: backlog primero, calendario después; calendar cards con conteo líneas
+- `solicitudes/page.tsx`: columna "Días", prioridad viva client-side, calendar cards mejoradas
+- `BacklogTable.tsx`: días-al-vencimiento junto a fecha, prioridad viva
+- `dashboard/page.tsx`: métricas globales para TODOS los roles (quitado filtro PM, redirect campo, guard isGlobalRole)
+- Opacity en filas completadas/canceladas eliminada de ambas tablas
+
+Decisión: prioridad client-side (`calculatePriority()`) para display en páginas client. Dashboard (Server Component) sigue usando valor de BD (pg_cron 6AM es aceptable).
+
+---
+
 ## 2026-03-12 — Code: Bloque 1 + Bloque 2 completados
 
 ### Bloque 1: Extras en cascada de cost codes

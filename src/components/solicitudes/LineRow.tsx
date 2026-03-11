@@ -49,88 +49,91 @@ function LineRow({
   return (
     <>
       {/* Desktop: visible a partir de md */}
-      <div className="hidden md:flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm hover:bg-gray-50/50 transition-colors">
-        {/* Numero de linea */}
-        <span className="w-6 shrink-0 text-center text-xs font-medium text-iconsa-gray">
-          {lineNumber}
-        </span>
+      <div className="hidden md:block rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm hover:bg-gray-50/50 transition-colors">
+        <div className="flex items-center gap-3">
+          {/* Numero de linea */}
+          <span className="w-6 shrink-0 text-center text-xs font-medium text-iconsa-gray">
+            {lineNumber}
+          </span>
 
-        {/* Icono de tipo */}
-        <span className="shrink-0" title={line.line_type}>
-          {isEquipo ? (
-            <Wrench className="h-4 w-4 text-iconsa-blue" />
-          ) : (
-            <Package className="h-4 w-4 text-gold" />
+          {/* Icono de tipo */}
+          <span className="shrink-0" title={line.line_type}>
+            {isEquipo ? (
+              <Wrench className="h-4 w-4 text-iconsa-blue" />
+            ) : (
+              <Package className="h-4 w-4 text-gold" />
+            )}
+          </span>
+
+          {/* Descripcion */}
+          <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+            {line.description}
+          </span>
+
+          {/* Ruta: desde → hasta */}
+          <span className="flex min-w-0 items-center gap-1.5 text-iconsa-gray">
+            <span className="max-w-[120px] truncate" title={fromName}>{fromName}</span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <span className="max-w-[120px] truncate" title={toName}>{toName}</span>
+          </span>
+
+          {/* Cantidad + unidad */}
+          <span className="shrink-0 whitespace-nowrap text-gray-700">
+            {line.quantity} {unitName}
+          </span>
+
+          {/* Codigo de costo */}
+          <span className="shrink-0 font-mono text-xs text-iconsa-gray" title={costCode}>
+            {costCode}
+          </span>
+
+          {/* Campos opcionales */}
+          {line.po_reference && (
+            <span className="shrink-0 text-xs text-iconsa-gray" title={`OC: ${line.po_reference}`}>
+              OC: {line.po_reference}
+            </span>
           )}
-        </span>
+          {!isEquipo && line.material_category && (
+            <span className="shrink-0 text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+              {line.material_category}
+            </span>
+          )}
 
-        {/* Descripcion */}
-        <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
-          {line.description}
-        </span>
+          {/* Badge de estado */}
+          <div className="ml-auto shrink-0">
+            <Badge variant="line" label={status} />
+          </div>
 
-        {/* Ruta: desde → hasta */}
-        <span className="flex min-w-0 items-center gap-1.5 text-iconsa-gray">
-          <span className="max-w-[120px] truncate" title={fromName}>{fromName}</span>
-          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="max-w-[120px] truncate" title={toName}>{toName}</span>
-        </span>
-
-        {/* Cantidad + unidad */}
-        <span className="shrink-0 whitespace-nowrap text-gray-700">
-          {line.quantity} {unitName}
-        </span>
-
-        {/* Codigo de costo */}
-        <span className="shrink-0 font-mono text-xs text-iconsa-gray" title={costCode}>
-          {costCode}
-        </span>
-
-        {/* Campos opcionales */}
-        {line.po_reference && (
-          <span className="shrink-0 text-xs text-iconsa-gray" title={`OC: ${line.po_reference}`}>
-            OC: {line.po_reference}
-          </span>
-        )}
-        {!isEquipo && line.material_category && (
-          <span className="shrink-0 text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-            {line.material_category}
-          </span>
-        )}
-        {line.notes && (
-          <span className="shrink-0 max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
-            {line.notes}
-          </span>
-        )}
-
-        {/* Badge de estado */}
-        <div className="ml-auto shrink-0">
-          <Badge variant="line" label={status} />
+          {/* Acciones */}
+          {(editable || canDelete) && (
+            <div className="flex shrink-0 items-center gap-1">
+              {editable && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="rounded p-1.5 text-iconsa-gray hover:bg-gray-100 hover:text-iconsa-blue transition-colors"
+                  title="Editar linea"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="rounded p-1.5 text-iconsa-gray hover:bg-red-50 hover:text-iconsa-red transition-colors"
+                  title={isScheduled ? 'Eliminar linea programada' : 'Eliminar linea'}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-
-        {/* Acciones */}
-        {(editable || canDelete) && (
-          <div className="flex shrink-0 items-center gap-1">
-            {editable && (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="rounded p-1.5 text-iconsa-gray hover:bg-gray-100 hover:text-iconsa-blue transition-colors"
-                title="Editar linea"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            )}
-            {canDelete && (
-              <button
-                type="button"
-                onClick={onDelete}
-                className="rounded p-1.5 text-iconsa-gray hover:bg-red-50 hover:text-iconsa-red transition-colors"
-                title={isScheduled ? 'Eliminar linea programada' : 'Eliminar linea'}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
+        {/* Notas de linea — texto completo, sin truncar */}
+        {line.notes && (
+          <div className="mt-1.5 ml-6 text-xs italic text-amber-600">
+            {line.notes}
           </div>
         )}
       </div>
@@ -170,7 +173,7 @@ function LineRow({
               <span className="text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{line.material_category}</span>
             )}
             {line.notes && (
-              <span className="italic text-amber-600 truncate max-w-[200px]">{line.notes}</span>
+              <span className="text-xs italic text-amber-600">{line.notes}</span>
             )}
           </div>
         )}

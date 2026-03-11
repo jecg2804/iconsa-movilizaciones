@@ -113,6 +113,9 @@ export default function SolicitudDetailPage() {
     confirmation_code: string | null
     driver: { name: string } | null
     vehicle: { description: string; spectrum_code: string | null } | null
+    trailer: { description: string; spectrum_code: string | null } | null
+    att_permit: boolean
+    escort: boolean
     lines: TripLineInfo[]
   }
   const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
@@ -169,8 +172,11 @@ export default function SolicitudDetailPage() {
             scheduled_date,
             status,
             confirmation_code,
+            att_permit,
+            escort,
             driver:driver_id(name),
-            vehicle:vehicle_id(description, spectrum_code)
+            vehicle:vehicle_id(description, spectrum_code),
+            trailer:trailer_id(description, spectrum_code)
           )
         `)
         .in('request_line_id', lineIds)
@@ -203,6 +209,7 @@ export default function SolicitudDetailPage() {
 
         const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
         const vehicle = Array.isArray(t.vehicle) ? t.vehicle[0] : t.vehicle
+        const trailer = Array.isArray(t.trailer) ? t.trailer[0] : t.trailer
 
         tripMap.set(tripUuid, {
           id: tripUuid,
@@ -212,6 +219,9 @@ export default function SolicitudDetailPage() {
           confirmation_code: (t.confirmation_code as string | null) ?? null,
           driver: driver as { name: string } | null,
           vehicle: vehicle as { description: string; spectrum_code: string | null } | null,
+          trailer: trailer as { description: string; spectrum_code: string | null } | null,
+          att_permit: (t.att_permit as boolean) ?? false,
+          escort: (t.escort as boolean) ?? false,
           lines: lineInfo ? [lineInfo] : [],
         })
       }
@@ -521,6 +531,7 @@ export default function SolicitudDetailPage() {
             requesterId: solicitud.requester_id,
             approvedBy: solicitud.approved_by,
             dateRequired: solicitud.date_required,
+            dateCreated: solicitud.date_created ?? solicitud.created_at ?? undefined,
             notes: solicitud.notes,
             status: solicitud.status,
             priority: solicitud.priority,
@@ -660,6 +671,23 @@ export default function SolicitudDetailPage() {
                       <span className="text-iconsa-gray">Vehículo:</span>{' '}
                       {t.vehicle.spectrum_code ? `${t.vehicle.spectrum_code} — ` : ''}
                       {t.vehicle.description}
+                    </span>
+                  )}
+                  {t.trailer && (
+                    <span>
+                      <span className="text-iconsa-gray">Remolque:</span>{' '}
+                      {t.trailer.spectrum_code ? `${t.trailer.spectrum_code} — ` : ''}
+                      {t.trailer.description}
+                    </span>
+                  )}
+                  {t.att_permit && (
+                    <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                      ATT
+                    </span>
+                  )}
+                  {t.escort && (
+                    <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                      Escolta
                     </span>
                   )}
                 </div>
