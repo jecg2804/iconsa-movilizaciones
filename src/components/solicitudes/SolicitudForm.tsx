@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, calculatePriority, formatDaysUntilDue, daysUntilDue, daysUntilDueColor } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
 
 type FormMode = 'create' | 'edit' | 'readonly'
@@ -122,7 +122,7 @@ function SolicitudForm({
   // Datos de visualizacion
   const requestId = initialData?.requestId
   const status = initialData?.status
-  const priority = initialData?.priority
+  const livePriority = dateRequired ? calculatePriority(dateRequired) : initialData?.priority ?? null
 
   return (
     <div className="space-y-4">
@@ -139,10 +139,15 @@ function SolicitudForm({
             </span>
           )}
         </div>
-        {(status || priority) && (
+        {(status || livePriority || dateRequired) && (
           <div className="flex items-center gap-2">
             {status && <Badge variant="status" label={status} />}
-            {priority && <Badge variant="priority" label={priority} />}
+            {livePriority && <Badge variant="priority" label={livePriority} />}
+            {dateRequired && (
+              <span className={`text-xs font-medium ${daysUntilDueColor(daysUntilDue(dateRequired))}`}>
+                {formatDaysUntilDue(dateRequired)}
+              </span>
+            )}
           </div>
         )}
       </div>
