@@ -25,6 +25,8 @@ Claude Code puede actualizar este archivo directamente.
 | 17 | RLS bloqueaba UPDATE sm_request_lines para roles operativos | 2026-03-12 | — (fix BD) |
 | 18 | formatCompletionDelta timezone: TIMESTAMPTZ parseado como DATE causa desfase 1 día en UTC-5 | 2026-03-12 | 6249867 |
 | 19 | Columna "Días" en solicitudes: completadas/canceladas mostraban días vs hoy en vez de delta | 2026-03-12 | 4808839 |
+| 20 | KPI "Ítems sin programar" contaba líneas de solicitudes Borrador/Cancelada/Completada | 2026-03-12 | 01d5e59 |
+| 22 | /programacion/viaje/[id] no mostraba eventos de ejecución + trip_id no era clickeable en solicitud | 2026-03-12 | 49b898e |
 
 ## Abiertos
 
