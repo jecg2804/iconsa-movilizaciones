@@ -57,8 +57,9 @@ export default async function DashboardPage() {
   const buildSinProgramarQuery = () =>
     supabase
       .from('sm_request_lines')
-      .select('id', { count: 'exact', head: true })
+      .select('id, sm_requests!inner(status)', { count: 'exact', head: true })
       .eq('status', 'Pendiente')
+      .in('sm_requests.status', ['Enviada', 'En Proceso', 'Parcial'])
 
   const buildCompletadasQuery = () =>
     supabase
