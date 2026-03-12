@@ -52,14 +52,14 @@ export default async function DashboardPage() {
     supabase
       .from('sm_requests')
       .select('id', { count: 'exact', head: true })
-      .in('status', ['Enviada', 'En Proceso', 'Parcial'])
+      .in('status', ['Enviada', 'En Proceso'])
 
   const buildSinProgramarQuery = () =>
     supabase
       .from('sm_request_lines')
       .select('id, sm_requests!inner(status)', { count: 'exact', head: true })
       .eq('status', 'Pendiente')
-      .in('sm_requests.status', ['Enviada', 'En Proceso', 'Parcial'])
+      .in('sm_requests.status', ['Enviada', 'En Proceso'])
 
   const buildCompletadasQuery = () =>
     supabase
@@ -74,7 +74,7 @@ export default async function DashboardPage() {
       .select(
         'id, request_id, status, priority, date_required, project:projects(code, name), requester:people!requester_id(name)',
       )
-      .in('status', ['Borrador', 'Enviada', 'En Proceso', 'Parcial'])
+      .in('status', ['Borrador', 'Enviada', 'En Proceso'])
       .order('updated_at', { ascending: false })
       .limit(5)
 
@@ -159,7 +159,7 @@ export default async function DashboardPage() {
   const { data: chartRaw } = await supabase
     .from('sm_requests')
     .select('project_id, project:projects(code, name)')
-    .in('status', ['Enviada', 'En Proceso', 'Parcial'])
+    .in('status', ['Enviada', 'En Proceso'])
 
   if (chartRaw) {
     const countsByProject = new Map<string, { code: string; name: string; count: number }>()
@@ -225,7 +225,7 @@ export default async function DashboardPage() {
         <KpiCard
           label="Solicitudes Pendientes"
           value={pendientesCount}
-          sublabel="Enviadas + En Proceso + Parcial"
+          sublabel="Enviadas + En Proceso"
           icon={FileText}
           color="orange"
         />
