@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import type { LineInput } from '@/hooks/useSolicitudes'
 
 interface LineRowProps {
-  line: LineInput & { status?: string; po_reference?: string | null; material_category?: string | null }
+  line: LineInput & { status?: string; po_reference?: string | null; material_category?: string | null; qty_delivered?: number | null; qty_scheduled?: number | null }
   lineNumber: number
   editable: boolean
   canDelete: boolean
@@ -77,9 +77,14 @@ function LineRow({
             <span className="max-w-[120px] truncate" title={toName}>{toName}</span>
           </span>
 
-          {/* Cantidad + unidad */}
+          {/* Cantidad + unidad + progreso entrega */}
           <span className="shrink-0 whitespace-nowrap text-gray-700">
             {line.quantity} {unitName}
+            {(line.qty_delivered ?? 0) > 0 && (
+              <span className={`ml-1 text-xs ${(line.qty_delivered ?? 0) >= line.quantity ? 'text-iconsa-green' : 'text-orange-600'}`}>
+                ({line.qty_delivered}/{line.quantity} entregadas)
+              </span>
+            )}
           </span>
 
           {/* Codigo de costo */}
@@ -183,6 +188,11 @@ function LineRow({
           <div className="flex items-center gap-3 text-xs">
             <span className="text-gray-700">
               {line.quantity} {unitName}
+              {(line.qty_delivered ?? 0) > 0 && (
+                <span className={`ml-1 text-xs ${(line.qty_delivered ?? 0) >= line.quantity ? 'text-iconsa-green' : 'text-orange-600'}`}>
+                  ({line.qty_delivered}/{line.quantity} entregadas)
+                </span>
+              )}
             </span>
             {costCode !== '—' && (
               <span className="font-mono text-iconsa-gray">{costCode}</span>
