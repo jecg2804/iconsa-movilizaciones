@@ -238,6 +238,16 @@ export default function SolicitudesPage() {
         sortValue: (row) => row.date_required,
       },
       {
+        key: 'date_submitted',
+        header: 'Fecha Enviada',
+        sortable: true,
+        className: 'w-[120px]',
+        render: (row) => (
+          <span className="text-sm text-gray-900">{row.date_submitted ? formatDate(row.date_submitted) : '—'}</span>
+        ),
+        sortValue: (row) => row.date_submitted ?? '',
+      },
+      {
         key: 'status',
         header: 'Estado',
         sortable: true,
@@ -299,6 +309,11 @@ export default function SolicitudesPage() {
           <span>{row.requester?.name ?? '—'}</span>
           <span>{formatDate(row.date_required)}</span>
         </div>
+        {row.date_submitted && (
+          <div className="text-xs text-iconsa-gray">
+            Enviada: {formatDate(row.date_submitted)}
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2 text-xs text-iconsa-gray">
           <span>{row.lines?.length ?? 0} {(row.lines?.length ?? 0) === 1 ? 'línea' : 'líneas'}</span>
           {row.status !== 'Cancelada' && (
