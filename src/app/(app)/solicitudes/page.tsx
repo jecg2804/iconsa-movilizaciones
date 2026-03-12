@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
 import { canCreateSolicitud } from '@/lib/utils/roles'
-import { formatDate, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
+import { formatDate, formatQty, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
 import { REQUEST_STATUSES } from '@/lib/utils/constants'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -442,7 +442,7 @@ export default function SolicitudesPage() {
                       <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
                       <span className="max-w-[100px] truncate">{toName}</span>
                     </span>
-                    <span className="shrink-0 text-gray-600">{line.quantity} {unitName}</span>
+                    <span className="shrink-0 text-gray-600">{formatQty(line.quantity)} {unitName}</span>
                     <Badge label={line.status} variant="line" />
                     {line.notes && (
                       <span className="max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
