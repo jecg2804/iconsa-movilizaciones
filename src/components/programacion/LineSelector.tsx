@@ -156,6 +156,7 @@ function LineSelector({
                   </label>
                   <input
                     type="number"
+                    title="Cantidad a asignar"
                     value={assignment.quantity_assigned}
                     min={0.01}
                     max={availableQty > 0 ? availableQty : undefined}
