@@ -6,7 +6,6 @@ import { ROLE_LABELS, type AppRole } from '@/lib/utils/constants'
 import { KpiCard } from '@/components/dashboard/KpiCard'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
 import { SolicitudesByProjectChart, type ProjectData } from '@/components/dashboard/SolicitudesByProjectChart'
-import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils/format'
 import type { RecentSolicitud, RecentTrip } from '@/components/dashboard/RecentActivity'
 
@@ -292,7 +291,7 @@ export default async function DashboardPage() {
                           <span>Req. {formatDate(item.date_required)}</span>
                         </div>
                       </div>
-                      <Badge variant="priority" label={item.priority} />
+                      <span className="text-xs text-iconsa-gray">{formatDate(item.date_required)}</span>
                     </div>
                   </li>
                 ))}

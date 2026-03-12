@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
-import { formatDate, formatDateTime, calculatePriority, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
+import { formatDate, formatDateTime, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
 
 type FormMode = 'create' | 'edit' | 'readonly'
@@ -129,15 +129,6 @@ function SolicitudForm({
   const isCompleted = status === 'Completada'
   const isTerminal = isCancelled || isCompleted
 
-  // Prioridad condicional según estado
-  const displayPriority = isCancelled
-    ? null // Cancelada: ocultar prioridad
-    : isCompleted
-      ? initialData?.priority ?? null // Completada: frozen de BD
-      : dateRequired
-        ? calculatePriority(dateRequired) // Activa: live
-        : initialData?.priority ?? null
-
   // Delta de completación (solo para Completada)
   const completionDelta = isCompleted && dateRequired && initialData?.dateCompleted
     ? formatCompletionDelta(dateRequired, initialData.dateCompleted)
@@ -158,11 +149,9 @@ function SolicitudForm({
             </span>
           )}
         </div>
-        {(status || displayPriority || dateRequired) && (
+        {(status || dateRequired) && (
           <div className="flex items-center gap-2">
             {status && <Badge variant="status" label={status} />}
-            {displayPriority && <Badge variant="priority" label={displayPriority} />}
-            {/* Días: Completada muestra delta, Cancelada oculta, Activa muestra live */}
             {completionDelta ? (
               <span className={`text-xs font-medium ${completionDelta.color}`}>
                 {completionDelta.text}
