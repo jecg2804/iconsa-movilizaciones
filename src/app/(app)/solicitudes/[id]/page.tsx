@@ -667,9 +667,13 @@ export default function SolicitudDetailPage() {
               >
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-navy">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/programacion/viaje/${t.id}`)}
+                      className="font-mono text-sm font-bold text-navy hover:underline cursor-pointer"
+                    >
                       {t.trip_id ?? t.id.slice(0, 8)}
-                    </span>
+                    </button>
                     <Badge variant="trip" label={t.status} />
                   </div>
                   <span className="text-sm text-iconsa-gray">

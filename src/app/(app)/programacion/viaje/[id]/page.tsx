@@ -13,7 +13,7 @@ import {
   type TripWithRelations,
   type TripAssignment,
 } from '@/hooks/useTrips'
-import { formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils/format'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -70,6 +70,14 @@ interface RateRow {
   code: string
   description: string
   rate: number
+}
+
+interface TripEventRow {
+  event_type: string
+  event_timestamp: string
+  registered_by: { name: string } | null
+  received_by_name: string | null
+  notes: string | null
 }
 
 // --- Componente de fila de asignacion existente (modo lectura o edicion) ---
@@ -214,6 +222,9 @@ export default function ViajeDetailPage() {
   const [newAssignments, setNewAssignments] = useState<AssignmentInput[]>([])
   const [removedAssignmentIds, setRemovedAssignmentIds] = useState<string[]>([])
 
+  // Eventos de ejecución
+  const [tripEvents, setTripEvents] = useState<TripEventRow[]>([])
+
   // Estado de UI
   const [isDirty, setIsDirty] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -236,6 +247,14 @@ export default function ViajeDetailPage() {
         setNewAssignments([])
         setRemovedAssignmentIds([])
         setIsDirty(false)
+
+        // Fetch eventos de ejecución
+        const { data: events } = await supabase
+          .from('trip_events')
+          .select('event_type, event_timestamp, registered_by:registered_by(name), received_by_name, notes')
+          .eq('trip_id', id)
+          .order('event_timestamp', { ascending: true })
+        setTripEvents((events as unknown as TripEventRow[]) ?? [])
       }
       setPageLoading(false)
     }
@@ -556,24 +575,51 @@ export default function ViajeDetailPage() {
         )}
       </div>
 
-      {/* Informacion adicional en modo lectura */}
-      {mode === 'readonly' && (
+      {/* Eventos de ejecución — visible siempre que haya eventos o viaje no esté Programado */}
+      {(tripEvents.length > 0 || trip.status !== 'Programado') && (
         <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-1 text-base font-semibold text-gray-900">
-            Eventos de Ejecucion
-          </h2>
-          <p className="text-sm text-iconsa-gray">
-            Registro de eventos de ejecucion disponible en la seccion Mis Viajes.
-          </p>
-          {trip.actual_departure && (
-            <p className="mt-2 text-xs text-gray-500">
-              Salida: {formatDate(trip.actual_departure)}
-            </p>
-          )}
-          {trip.actual_arrival && (
-            <p className="text-xs text-gray-500">
-              Llegada: {formatDate(trip.actual_arrival)}
-            </p>
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Eventos de Ejecucion
+            </h2>
+            {tripEvents.length > 0 && (
+              <span className="rounded-full bg-navy/10 px-2.5 py-0.5 text-xs font-medium text-navy">
+                {tripEvents.length}
+              </span>
+            )}
+          </div>
+          {tripEvents.length === 0 ? (
+            <p className="text-sm text-iconsa-gray">Sin eventos registrados.</p>
+          ) : (
+            <div className="space-y-3">
+              {tripEvents.map((ev, idx) => {
+                const icon = ev.event_type === 'Salida' ? '🚛'
+                  : ev.event_type === 'Llegada' ? '📍'
+                  : ev.event_type === 'Entrega' ? '✅'
+                  : ev.event_type === 'Retorno' ? '🏠'
+                  : '⚠️'
+                return (
+                  <div key={idx} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                    <span className="text-lg shrink-0">{icon}</span>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{ev.event_type}</span>
+                        <span className="text-xs text-iconsa-gray">{formatDateTime(ev.event_timestamp)}</span>
+                      </div>
+                      {ev.registered_by?.name && (
+                        <p className="text-xs text-iconsa-gray">Registrado por: {ev.registered_by.name}</p>
+                      )}
+                      {ev.event_type === 'Entrega' && ev.received_by_name && (
+                        <p className="text-xs text-iconsa-gray">Recibido por: {ev.received_by_name}</p>
+                      )}
+                      {ev.notes && (
+                        <p className="text-xs text-gray-600">{ev.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}
