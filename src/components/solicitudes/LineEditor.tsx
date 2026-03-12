@@ -385,21 +385,6 @@ function LineEditor({
       newErrors.to = 'Indique el destino'
     }
 
-    // Origen != destino
-    const fromIsId = !!fromValue.id
-    const toIsId = !!toValue.id
-    if (fromIsId && toIsId && fromValue.id === toValue.id) {
-      newErrors.to = 'El origen y destino no pueden ser iguales'
-    } else if (
-      !fromIsId &&
-      !toIsId &&
-      fromValue.text?.trim() &&
-      toValue.text?.trim() &&
-      fromValue.text.trim().toLowerCase() === toValue.text.trim().toLowerCase()
-    ) {
-      newErrors.to = 'El origen y destino no pueden ser iguales'
-    }
-
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }, [description, quantity, fromValue, toValue])
