@@ -59,6 +59,7 @@ function determineMode(
   projectId: string,
   userProjectIds: string[],
 ): FormMode {
+  if (role === 'admin' && status !== 'Cancelada') return 'edit'
   if (status === 'Completada' || status === 'Cancelada') return 'readonly'
   if (status === 'En Proceso') return 'readonly'
   if (!canEditSolicitud(role, projectId, userProjectIds)) return 'readonly'
@@ -557,6 +558,7 @@ export default function SolicitudDetailPage() {
           approvers={approvers}
           onChange={handleHeaderChange}
           currentPersonId={person?.id ?? ''}
+          role={role}
         />
       </div>
 

@@ -35,6 +35,8 @@ interface SolicitudFormProps {
   onChange: (data: SolicitudInput) => void
   /** ID de la persona actualmente logueada (auto-rellena solicitante en modo creacion) */
   currentPersonId: string
+  /** Rol del usuario logueado — admin puede editar solicitante */
+  role?: string | null
 }
 
 function SolicitudForm({
@@ -45,6 +47,7 @@ function SolicitudForm({
   approvers,
   onChange,
   currentPersonId,
+  role,
 }: SolicitudFormProps) {
   const approverOptions = approvers ?? people
   const isReadonly = mode === 'readonly'
@@ -177,15 +180,30 @@ function SolicitudForm({
           searchable
         />
 
-        {/* Solicitante — siempre fijo al usuario logueado, no editable */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Solicitante
-          </label>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-            {people.find((p) => p.value === requesterId)?.label ?? '—'}
+        {/* Solicitante — editable solo para admin */}
+        {role === 'admin' ? (
+          <Select
+            label="Solicitante"
+            placeholder="Seleccionar solicitante..."
+            options={people}
+            value={requesterId}
+            onChange={(val) => {
+              setRequesterId(val ?? '')
+              propagate({ requester_id: val ?? '' })
+            }}
+            disabled={isReadonly}
+            searchable
+          />
+        ) : (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Solicitante
+            </label>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {people.find((p) => p.value === requesterId)?.label ?? '—'}
+            </div>
           </div>
-        </div>
+        )}
 
         <Select
           label="Aprobado por"

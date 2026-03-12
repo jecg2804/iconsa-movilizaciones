@@ -262,7 +262,7 @@ export default function NuevaSolicitudPage() {
     if (!header.requester_id) errors.requester = 'Seleccione el solicitante'
     if (!header.date_required) {
       errors.date = 'Ingrese la fecha requerida'
-    } else {
+    } else if (role !== 'admin') {
       const today = new Date().toISOString().split('T')[0]
       if (header.date_required < today) {
         errors.date = 'La fecha requerida no puede ser en el pasado'
@@ -367,6 +367,7 @@ export default function NuevaSolicitudPage() {
           approvers={approversOptions}
           onChange={setHeader}
           currentPersonId={person?.id ?? ''}
+          role={role}
         />
       </div>
 
