@@ -16,7 +16,6 @@ export const REQUEST_STATUSES = [
   'Enviada',
   'En Proceso',
   'Completada',
-  'Parcial',
   'Cancelada',
 ] as const
 export type RequestStatus = (typeof REQUEST_STATUSES)[number]

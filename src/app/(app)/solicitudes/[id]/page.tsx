@@ -60,7 +60,7 @@ function determineMode(
   userProjectIds: string[],
 ): FormMode {
   if (status === 'Completada' || status === 'Cancelada') return 'readonly'
-  if (status === 'En Proceso' || status === 'Parcial') return 'readonly'
+  if (status === 'En Proceso') return 'readonly'
   if (!canEditSolicitud(role, projectId, userProjectIds)) return 'readonly'
   return 'edit'
 }
