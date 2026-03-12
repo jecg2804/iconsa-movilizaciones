@@ -106,9 +106,9 @@ export type Database = {
         Relationships: []
       }
       trip_line_assignments: {
-        Row: { created_at: string | null; id: string; quantity_assigned: number; request_line_id: string; trip_id: string; updated_at: string | null }
-        Insert: { created_at?: string | null; id?: string; quantity_assigned: number; request_line_id: string; trip_id: string; updated_at?: string | null }
-        Update: { created_at?: string | null; id?: string; quantity_assigned?: number; request_line_id?: string; trip_id?: string; updated_at?: string | null }
+        Row: { created_at: string | null; id: string; qty_delivered: number; quantity_assigned: number; request_line_id: string; trip_id: string; updated_at: string | null }
+        Insert: { created_at?: string | null; id?: string; qty_delivered?: number; quantity_assigned: number; request_line_id: string; trip_id: string; updated_at?: string | null }
+        Update: { created_at?: string | null; id?: string; qty_delivered?: number; quantity_assigned?: number; request_line_id?: string; trip_id?: string; updated_at?: string | null }
         Relationships: []
       }
       trips: {
