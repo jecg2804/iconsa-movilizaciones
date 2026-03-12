@@ -100,7 +100,9 @@ export function formatCompletionDelta(
   dateCompleted: string
 ): { text: string; color: string } {
   const required = parseLocalDate(dateRequired)
-  const completed = parseLocalDate(dateCompleted)
+  // dateCompleted es TIMESTAMPTZ — convertir a fecha local (no usar parseLocalDate que extrae YYYY-MM-DD del string)
+  const completedFull = new Date(dateCompleted)
+  const completed = new Date(completedFull.getFullYear(), completedFull.getMonth(), completedFull.getDate())
   const days = differenceInCalendarDays(required, completed)
   if (days > 0) return { text: `${days}d antes`, color: 'text-iconsa-green' }
   if (days < 0) return { text: `${Math.abs(days)}d tarde`, color: 'text-iconsa-red' }
