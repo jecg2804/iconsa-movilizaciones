@@ -119,7 +119,7 @@ export default function NuevoViajePage() {
       .map((id) => {
         const line = backlog.find((l) => l.id === id)
         if (!line) return null
-        const availableQty = Math.max(0, line.quantity - line.qty_scheduled)
+        const availableQty = Math.max(0, line.quantity - line.qty_scheduled - (line.qty_delivered ?? 0))
         return {
           request_line_id: line.id,
           quantity_assigned: availableQty > 0 ? availableQty : line.quantity,
