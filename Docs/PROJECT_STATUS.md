@@ -175,7 +175,7 @@ Remolque REQUERIDO cuando vehiculo es cabezal (CAB/CABEZAL).
 
 ### TABLA: trip_line_assignments (pivote many-to-many)
 
-id, trip_id FK (CASCADE), request_line_id FK, quantity_assigned DECIMAL, created_at, updated_at. UNIQUE(trip_id, request_line_id).
+id, trip_id FK (CASCADE), request_line_id FK, quantity_assigned DECIMAL, qty_delivered NUMERIC DEFAULT 0 (auditoria por viaje), created_at, updated_at. UNIQUE(trip_id, request_line_id).
 
 ---
 
@@ -310,10 +310,13 @@ Bugs #3-8 corregidos 2026-03-06.
 32. Search equipos por spectrum_code Y description.
 33. Keyboard navigation en Select (arrow keys + enter).
 34. Claude Code NO tiene acceso a Supabase.
+35. Parcial solo existe a nivel de linea, no de solicitud. cascade_request_status() usa En Proceso cuando hay entregas + lineas activas.
+36. Entregas parciales: qty_delivered acumula por viaje, qty_scheduled decrementa al entregar. Formula disponible: quantity - qty_scheduled - qty_delivered.
+37. Receptor dropdown incluye personal operativo (pm, logistica, almacen, admin) ademas de personas del proyecto destino.
 
 ---
 
-## BUGS CORREGIDOS (14)
+## BUGS CORREGIDOS (27)
 
 | # | Bug | Fecha |
 |---|-----|-------|
@@ -327,15 +330,22 @@ Bugs #3-8 corregidos 2026-03-06.
 | 8 | Remolque siempre opcional | 2026-03-06 |
 | 9 | IDs off-by-one | 2026-03-06 |
 | 10 | Remolque incluye camiones | 2026-03-06 |
-| 11 | Categoria costo eliminada al agregar Categoria Material | PENDIENTE |
+| 11 | Categoria costo eliminada al agregar Categoria Material | 2026-03-07 |
 | 12 | CodeConfirmation permitia bypass | 2026-03-07 |
 | 13 | confirmation_code NULL en viajes nuevos | 2026-03-08 |
-| 14 | qty_delivered siempre 0 en lineas Entregada (fix en useTripEvents) | 2026-03-11 |
-| 15 | created_by usaba requester_id en vez de personId (fix semantico) | 2026-03-12 |
+| 14 | qty_delivered siempre 0 en lineas Entregada | 2026-03-11 |
+| 15 | created_by usaba requester_id en vez de personId | 2026-03-12 |
 | 16 | cascade_request_status() orden incorrecto (Parcial antes de En Proceso) | 2026-03-12 (BD) |
-| 17 | RLS bloqueaba UPDATE sm_request_lines para logistica/campo/almacen | 2026-03-12 (BD) |
-| 18 | formatCompletionDelta timezone: TIMESTAMPTZ desfase 1 dia en UTC-5 | 2026-03-12 |
-| 19 | Columna Dias en solicitudes: completadas/canceladas mostraban dias vs hoy | 2026-03-12 |
+| 17 | RLS bloqueaba UPDATE sm_request_lines para roles operativos | 2026-03-12 (BD) |
+| 18 | formatCompletionDelta timezone desfase 1 dia en UTC-5 | 2026-03-12 |
+| 19 | Columna Dias: completadas/canceladas mostraban dias vs hoy | 2026-03-12 |
+| 20 | KPI Items sin programar contaba lineas de Borrador/Cancelada/Completada | 2026-03-12 |
+| 22 | viaje/[id] no mostraba eventos de ejecucion + trip_id no clickeable | 2026-03-12 |
+| 23 | Receptor dropdown muy restringido (solo personas proyecto destino) | 2026-03-12 |
+| 24 | Backlog no mostraba lineas parcialmente programadas | 2026-03-12 |
+| 25 | Entrega no acumulaba qty_delivered (siempre sobrescribia) | 2026-03-12 |
+| 26 | Entrega siempre marcaba Entregada sin verificar cantidad vs total | 2026-03-12 |
+| 27 | En Transito con acento no coincidia con BD | 2026-03-12 |
 
 ---
 

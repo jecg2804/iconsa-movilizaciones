@@ -27,6 +27,11 @@ Claude Code puede actualizar este archivo directamente.
 | 19 | Columna "Días" en solicitudes: completadas/canceladas mostraban días vs hoy en vez de delta | 2026-03-12 | 4808839 |
 | 20 | KPI "Ítems sin programar" contaba líneas de solicitudes Borrador/Cancelada/Completada | 2026-03-12 | 01d5e59 |
 | 22 | /programacion/viaje/[id] no mostraba eventos de ejecución + trip_id no era clickeable en solicitud | 2026-03-12 | 49b898e |
+| 23 | Receptor dropdown muy restringido — solo personas del proyecto destino | 2026-03-12 | 7de6658 |
+| 24 | Backlog no mostraba líneas parcialmente programadas | 2026-03-12 | d6dfbe2 |
+| 25 | Entrega no acumulaba qty_delivered (siempre sobrescribía) | 2026-03-12 | 38854f6 |
+| 26 | Entrega siempre marcaba Entregada sin verificar cantidad vs total | 2026-03-12 | 38854f6 |
+| 27 | 'En Tránsito' con acento no coincidía con BD | 2026-03-12 | ad43ec0 |
 
 ## Abiertos
 

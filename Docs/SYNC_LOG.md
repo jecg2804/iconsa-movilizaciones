@@ -4,6 +4,21 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-12 — Code: Entregas parciales + Bugs 20-27
+
+### BD (Chat en Supabase)
+- trip_line_assignments.qty_delivered NUMERIC DEFAULT 0 agregado
+- cascade_request_status() actualizado: Parcial eliminado de solicitudes, líneas Parcial cuentan como En Proceso
+- 'En Transito' sin acento es canonical en BD
+- BD limpia (0 datos transaccionales)
+
+### Código (Claude Code — 3 chunks)
+Chunk 1: normalizar En Transito, quitar Parcial de request, Bug #20 KPI, database.ts
+Chunk 2: entregas parciales core (acumular qty_delivered, decrementar qty_scheduled, backlog Parcial/Programada, fórmula disponible, releaseLineFromAssignment respeta entregas, guard Salida)
+Chunk 3: UI cantidad real en Entrega, LineRow progreso, Bug #23 receptores
+
+---
+
 ## 2026-03-12 — Code: Bugs 18-19 + eliminar prioridad visual
 
 ### Cambios Supabase (James)
