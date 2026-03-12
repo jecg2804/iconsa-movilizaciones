@@ -262,7 +262,7 @@ export default function NuevaSolicitudPage() {
     if (!header.requester_id) errors.requester = 'Seleccione el solicitante'
     if (!header.date_required) {
       errors.date = 'Ingrese la fecha requerida'
-    } else {
+    } else if (role !== 'admin') {
       const today = new Date().toISOString().split('T')[0]
       if (header.date_required < today) {
         errors.date = 'La fecha requerida no puede ser en el pasado'
@@ -278,20 +278,20 @@ export default function NuevaSolicitudPage() {
   // --- Guardar borrador ---
   const handleSaveDraft = useCallback(async () => {
     if (!validateForDraft()) return
-    const result = await saveSolicitud(header, lines, [], 'Borrador')
+    const result = await saveSolicitud(header, lines, [], 'Borrador', person?.id)
     if (result) {
       router.push('/solicitudes')
     }
-  }, [validateForDraft, saveSolicitud, header, lines, router])
+  }, [validateForDraft, saveSolicitud, header, lines, router, person])
 
   // --- Enviar solicitud ---
   const handleSend = useCallback(async () => {
     if (!validateForSend()) return
-    const result = await saveSolicitud(header, lines, [], 'Enviada')
+    const result = await saveSolicitud(header, lines, [], 'Enviada', person?.id)
     if (result) {
       router.push('/solicitudes')
     }
-  }, [validateForSend, saveSolicitud, header, lines, router])
+  }, [validateForSend, saveSolicitud, header, lines, router, person])
 
   // --- Estado de carga global ---
   const isLoading = authLoading || projectsLoading || equipmentLoading || locationsLoading || peopleLoading || unitsLoading
@@ -367,6 +367,7 @@ export default function NuevaSolicitudPage() {
           approvers={approversOptions}
           onChange={setHeader}
           currentPersonId={person?.id ?? ''}
+          role={role}
         />
       </div>
 
@@ -457,6 +458,7 @@ export default function NuevaSolicitudPage() {
               locations={locationOptions}
               units={unitOptions}
               costCodes={costCodeOptions}
+              projectId={header.project_id}
               initialData={editingLineIndex !== null ? lines[editingLineIndex] : undefined}
               isEditing={editingLineIndex !== null}
               onSave={handleLineSave}

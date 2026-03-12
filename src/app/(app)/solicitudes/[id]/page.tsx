@@ -16,7 +16,7 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
 import type { SelectOption } from '@/components/ui/Select'
@@ -59,8 +59,9 @@ function determineMode(
   projectId: string,
   userProjectIds: string[],
 ): FormMode {
+  if (role === 'admin' && status !== 'Cancelada') return 'edit'
   if (status === 'Completada' || status === 'Cancelada') return 'readonly'
-  if (status === 'En Proceso' || status === 'Parcial') return 'readonly'
+  if (status === 'En Proceso') return 'readonly'
   if (!canEditSolicitud(role, projectId, userProjectIds)) return 'readonly'
   return 'edit'
 }
@@ -104,6 +105,13 @@ export default function SolicitudDetailPage() {
     description: string
     line_type: string
     quantity_assigned: number
+    qty_delivered: number
+  }
+  interface TripEventInfo {
+    event_type: string
+    event_timestamp: string
+    received_by_name: string | null
+    notes: string | null
   }
   interface AssociatedTrip {
     id: string
@@ -113,7 +121,11 @@ export default function SolicitudDetailPage() {
     confirmation_code: string | null
     driver: { name: string } | null
     vehicle: { description: string; spectrum_code: string | null } | null
+    trailer: { description: string; spectrum_code: string | null } | null
+    att_permit: boolean
+    escort: boolean
     lines: TripLineInfo[]
+    events: TripEventInfo[]
   }
   const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
 
@@ -162,6 +174,7 @@ export default function SolicitudDetailPage() {
         .select(`
           trip_id,
           quantity_assigned,
+          qty_delivered,
           sm_request_lines!inner(description, line_type),
           trips!inner(
             id,
@@ -169,8 +182,12 @@ export default function SolicitudDetailPage() {
             scheduled_date,
             status,
             confirmation_code,
+            att_permit,
+            escort,
             driver:driver_id(name),
-            vehicle:vehicle_id(description, spectrum_code)
+            vehicle:vehicle_id(description, spectrum_code),
+            trailer:trailer_id(description, spectrum_code),
+            trip_events(event_type, event_timestamp, received_by_name, notes)
           )
         `)
         .in('request_line_id', lineIds)
@@ -192,6 +209,7 @@ export default function SolicitudDetailPage() {
               description: (lineRaw as Record<string, unknown>).description as string,
               line_type: (lineRaw as Record<string, unknown>).line_type as string,
               quantity_assigned: row.quantity_assigned as number,
+              qty_delivered: (row.qty_delivered as number) ?? 0,
             }
           : null
 
@@ -203,6 +221,11 @@ export default function SolicitudDetailPage() {
 
         const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
         const vehicle = Array.isArray(t.vehicle) ? t.vehicle[0] : t.vehicle
+        const trailer = Array.isArray(t.trailer) ? t.trailer[0] : t.trailer
+        const rawEvents = Array.isArray(t.trip_events) ? t.trip_events : []
+        const events = (rawEvents as TripEventInfo[]).sort(
+          (a, b) => new Date(a.event_timestamp).getTime() - new Date(b.event_timestamp).getTime()
+        )
 
         tripMap.set(tripUuid, {
           id: tripUuid,
@@ -212,7 +235,11 @@ export default function SolicitudDetailPage() {
           confirmation_code: (t.confirmation_code as string | null) ?? null,
           driver: driver as { name: string } | null,
           vehicle: vehicle as { description: string; spectrum_code: string | null } | null,
+          trailer: trailer as { description: string; spectrum_code: string | null } | null,
+          att_permit: (t.att_permit as boolean) ?? false,
+          escort: (t.escort as boolean) ?? false,
           lines: lineInfo ? [lineInfo] : [],
+          events,
         })
       }
       const trips = Array.from(tripMap.values()).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
@@ -377,7 +404,7 @@ export default function SolicitudDetailPage() {
   // --- Guardar cambios ---
   const handleSave = useCallback(async () => {
     if (!solicitud) return
-    const success = await updateSolicitud(solicitud.id, header, lines, deletedLineIds)
+    const success = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
     if (success) {
       const updated = await fetchSolicitud(id)
       if (updated) {
@@ -387,7 +414,7 @@ export default function SolicitudDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id])
+  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id, person?.id])
 
   // --- Enviar solicitud (Borrador → Enviada) ---
   const handleSend = useCallback(async () => {
@@ -401,13 +428,13 @@ export default function SolicitudDetailPage() {
     if (lines.length === 0) { setSendError('Agregue al menos una linea a la solicitud'); return }
 
     // Primero guardar los cambios pendientes
-    const saveSuccess = await updateSolicitud(solicitud.id, header, lines, deletedLineIds)
+    const saveSuccess = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
     if (!saveSuccess) return
 
     // Actualizar status a Enviada
     const { error } = await supabase
       .from('sm_requests')
-      .update({ status: 'Enviada' })
+      .update({ status: 'Enviada', updated_by: person?.id ?? null })
       .eq('id', solicitud.id)
 
     if (error) {
@@ -521,15 +548,20 @@ export default function SolicitudDetailPage() {
             requesterId: solicitud.requester_id,
             approvedBy: solicitud.approved_by,
             dateRequired: solicitud.date_required,
+            dateCreated: solicitud.date_created ?? solicitud.created_at ?? undefined,
             notes: solicitud.notes,
             status: solicitud.status,
             priority: solicitud.priority,
+            dateSubmitted: solicitud.date_submitted ?? undefined,
+            dateCompleted: solicitud.date_completed ?? undefined,
+            dateCancelled: solicitud.date_cancelled ?? undefined,
           }}
           projects={projectOptions}
           people={people}
           approvers={approvers}
           onChange={handleHeaderChange}
           currentPersonId={person?.id ?? ''}
+          role={role}
         />
       </div>
 
@@ -599,6 +631,7 @@ export default function SolicitudDetailPage() {
               locations={locationOptions}
               units={units}
               costCodes={costCodes}
+              projectId={header.project_id}
               isEditing={false}
               onSave={handleAddLine}
               onCancel={() => setShowLineEditor(false)}
@@ -615,6 +648,7 @@ export default function SolicitudDetailPage() {
               locations={locationOptions}
               units={units}
               costCodes={costCodes}
+              projectId={header.project_id}
               initialData={lines[editingLineIndex]}
               isEditing
               onSave={handleEditLine}
@@ -638,9 +672,13 @@ export default function SolicitudDetailPage() {
               >
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-bold text-navy">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/programacion/viaje/${t.id}`)}
+                      className="font-mono text-sm font-bold text-navy hover:underline cursor-pointer"
+                    >
                       {t.trip_id ?? t.id.slice(0, 8)}
-                    </span>
+                    </button>
                     <Badge variant="trip" label={t.status} />
                   </div>
                   <span className="text-sm text-iconsa-gray">
@@ -660,6 +698,23 @@ export default function SolicitudDetailPage() {
                       {t.vehicle.description}
                     </span>
                   )}
+                  {t.trailer && (
+                    <span>
+                      <span className="text-iconsa-gray">Remolque:</span>{' '}
+                      {t.trailer.spectrum_code ? `${t.trailer.spectrum_code} — ` : ''}
+                      {t.trailer.description}
+                    </span>
+                  )}
+                  {t.att_permit && (
+                    <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                      ATT
+                    </span>
+                  )}
+                  {t.escort && (
+                    <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                      Escolta
+                    </span>
+                  )}
                 </div>
                 {/* Líneas asignadas al viaje */}
                 {t.lines.length > 0 && (
@@ -671,11 +726,38 @@ export default function SolicitudDetailPage() {
                         </span>
                         <span className="truncate">{line.description}</span>
                         <span className="shrink-0 text-xs text-iconsa-gray">
-                          ×{line.quantity_assigned}
+                          ×{formatQty(line.quantity_assigned)}
                         </span>
+                        {(line.qty_delivered ?? 0) > 0 && (
+                          <span className="shrink-0 text-xs text-orange-600">
+                            ({formatQty(line.qty_delivered)} entregadas)
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>
+                )}
+                {/* Mini-timeline de eventos */}
+                {t.events.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-gray-200 pt-2">
+                    {t.events.map((ev, idx) => {
+                      const icon = ev.event_type === 'Salida' ? '🚛'
+                        : ev.event_type === 'Llegada' ? '📍'
+                        : ev.event_type === 'Entrega' ? '✅'
+                        : ev.event_type === 'Retorno' ? '🏠'
+                        : '⚠️'
+                      return (
+                        <div key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="text-xs shrink-0">{icon}</span>
+                          <span className="font-medium shrink-0">{ev.event_type}:</span>
+                          <span className="text-iconsa-gray">{formatDateTime(ev.event_timestamp)}</span>
+                          {ev.event_type === 'Entrega' && ev.received_by_name && (
+                            <span className="text-iconsa-gray">— Recibido por: {ev.received_by_name}</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
                 {/* Código de confirmación — visible para pm, logistica, admin */}
                 {(role === 'pm' || role === 'logistica' || role === 'admin') && t.confirmation_code && (

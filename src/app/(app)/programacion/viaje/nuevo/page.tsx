@@ -35,7 +35,7 @@ export default function NuevoViajePage() {
   const supabase = useMemo(() => createClient(), [])
 
   // Auth y permisos
-  const { role, loading: authLoading } = useAuth()
+  const { person, role, loading: authLoading } = useAuth()
 
   // Vehiculos y remolques
   const { vehicles, trailers, loading: vehiclesLoading } = useVehicles()
@@ -58,6 +58,7 @@ export default function NuevoViajePage() {
   // Estado del formulario
   const [tripData, setTripData] = useState<TripInput>({
     scheduled_date: '',
+    scheduled_time: null,
     driver_id: null,
     vehicle_id: null,
     trailer_id: null,
@@ -118,7 +119,7 @@ export default function NuevoViajePage() {
       .map((id) => {
         const line = backlog.find((l) => l.id === id)
         if (!line) return null
-        const availableQty = Math.max(0, line.quantity - line.qty_scheduled)
+        const availableQty = Math.max(0, line.quantity - line.qty_scheduled - (line.qty_delivered ?? 0))
         return {
           request_line_id: line.id,
           quantity_assigned: availableQty > 0 ? availableQty : line.quantity,
@@ -210,11 +211,11 @@ export default function NuevoViajePage() {
   // --- Guardar viaje ---
   const handleSave = useCallback(async () => {
     if (!validate()) return
-    const result = await saveTrip(tripData, assignments)
+    const result = await saveTrip(tripData, assignments, person?.id)
     if (result) {
       router.push('/programacion')
     }
-  }, [validate, saveTrip, tripData, assignments, router])
+  }, [validate, saveTrip, tripData, assignments, router, person?.id])
 
   // --- Estado de carga global ---
   const isLoading =

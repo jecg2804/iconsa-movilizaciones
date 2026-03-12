@@ -1,6 +1,6 @@
 ![alt text](image.png)# ICONSA Movilizaciones - Estado del Proyecto
 
-Ultima actualizacion: 2026-03-08
+Ultima actualizacion: 2026-03-12
 
 Actualizar este archivo despues de CADA paso completado.
 Este documento es la UNICA fuente de verdad para el estado del schema, decisiones, y progreso.
@@ -28,7 +28,7 @@ Documentacion en repo (Docs/):
 
 ---
 
-## SCHEMA COMPLETO DE BASE DE DATOS (18 tablas)
+## SCHEMA COMPLETO DE BASE DE DATOS (20 tablas)
 
 ### Convenciones globales
 - Todos los IDs son UUID con gen_random_uuid()
@@ -125,7 +125,7 @@ id UUID PK, cost_code_id FK cost_codes (CASCADE), cost_category_id FK cost_categ
 UNIQUE(cost_code_id, cost_category_id).
 Datos: 530 combinaciones validas importadas de Sage.
 
-Logica cascada UI: Proyecto → Fase (cost_code) → Categorias validas (cost_code_categories) → Codigo auto: {proyecto}-{fase}-{categoria}
+Logica cascada UI: Proyecto → Extra (condicional) → Fase (cost_code) → Categorias validas (cost_code_categories) → Codigo auto: {proyecto}-{extra}-{fase}-{categoria}
 
 ---
 
@@ -175,13 +175,30 @@ Remolque REQUERIDO cuando vehiculo es cabezal (CAB/CABEZAL).
 
 ### TABLA: trip_line_assignments (pivote many-to-many)
 
-id, trip_id FK (CASCADE), request_line_id FK, quantity_assigned DECIMAL, created_at, updated_at. UNIQUE(trip_id, request_line_id).
+id, trip_id FK (CASCADE), request_line_id FK, quantity_assigned DECIMAL, qty_delivered NUMERIC DEFAULT 0 (auditoria por viaje), created_at, updated_at. UNIQUE(trip_id, request_line_id).
 
 ---
 
 ### TABLA: trip_events (eventos — INMUTABLES)
 
 id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, registered_by FK, confirmation_code_used TEXT, received_by_id FK people (UUID, nullable — solo Entrega), received_by_name TEXT, notes TEXT, created_at. NO updated_at.
+
+---
+
+### TABLA: audit_log (auditoría — no documentada previamente)
+
+id UUID PK, table_name TEXT, record_id UUID, action TEXT (INSERT/UPDATE/DELETE), old_data JSONB, new_data JSONB, changed_by UUID FK people, changed_at TIMESTAMPTZ DEFAULT now().
+RLS habilitado. Triggers de auditoría activos en 4 tablas transaccionales (sm_requests, sm_request_lines, trips, trip_events).
+Nota: usa auth.uid() — funciona desde browser client. No se usa service_role en la app.
+
+---
+
+### TABLA: project_extras (extras/secciones por proyecto)
+
+id UUID PK, project_id FK projects, code TEXT, name TEXT, created_at, updated_at.
+Datos: 12 extras (24-404: 6, 25-505: 6). Proyectos sin extras usan fases base.
+Relación: cost_codes.extra_id FK project_extras (nullable, NULL = proyecto base).
+UI: dropdown "Extra / Sección" solo visible si proyecto tiene extras.
 
 ---
 
@@ -195,8 +212,16 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 | generate_confirmation_code() | Auto 4 digitos random si NULL en BEFORE INSERT trips (safety net) |
 | generate_full_code() | Auto {proyecto}-{fase} todo con dashes en BEFORE INSERT/UPDATE cost_codes |
 | calculate_priority() | Vencida/Urgente/Proxima/Normal basado en date_required |
-| cascade_request_status() | Actualiza header basado en estados de lineas |
+| cascade_request_status() | Actualiza header basado en estados de lineas (SECURITY DEFINER). Orden: Completada→Cancelada→Parcial→En Proceso→Enviada |
 | get_my_app_role() | Helper SECURITY DEFINER: retorna app_role del usuario auth |
+| capture_initial_priority() | Captura priority en INSERT → initial_priority (trg_initial_priority) |
+| capture_lifecycle_timestamps() | Captura date_submitted/completed/cancelled en cambio de status (trg_lifecycle_timestamps) |
+| capture_trip_cancelled() | Captura date_cancelled cuando viaje se cancela (trg_trip_cancelled) |
+| update_equipment_location() | Actualiza equipment.current_location en evento Entrega (trg_update_equipment_location) |
+| audit_trigger() | Escribe en audit_log en INSERT/UPDATE/DELETE (×4 tablas transaccionales) |
+
+**pg_cron:** ELIMINADO (era recalculación diaria de prioridad). Trigger `calculate_priority()` sigue activo en INSERT/UPDATE.
+**Prioridad UI:** Badges de prioridad eliminados de la UI. La columna "Días" con color comunica la misma info. Campo `priority` en BD se mantiene.
 
 ---
 
@@ -210,7 +235,7 @@ id, trip_id FK, event_type TEXT, event_timestamp TIMESTAMPTZ, location TEXT, reg
 | 3 — Programacion | COMPLETADA | 2026-03-05 |
 | 4 — Ejecucion/Eventos | COMPLETADA | 2026-03-06 |
 | 5 — Dashboard | COMPLETADA (basico, mejora pendiente) | 2026-03-06 |
-| 6 — Admin Masters | PENDIENTE | - |
+| 6 — Admin Masters | COMPLETADA | 2026-03-12 |
 
 Bugs #3-8 corregidos 2026-03-06.
 
@@ -229,15 +254,23 @@ Bugs #3-8 corregidos 2026-03-06.
 | /programacion/calendario | placeholder | ✅ |
 | /mis-viajes | logistica, campo, almacen, admin | ✅ |
 | /mis-viajes/[id] | logistica, campo, almacen, admin | ✅ |
-| /admin/masters | admin | PENDIENTE |
+| /admin | admin | ✅ (redirect a /admin/masters) |
+| /admin/masters | admin | ✅ |
 
 ---
 
 ## PENDIENTE PARA CLAUDE CODE (proxima sesion)
 
-1. **Datos pendientes**: Asignar 10 ingenieros (pm) a sus proyectos en person_projects
-2. **UX por discutir**: Backlog con mas contexto visual, columna "FECHA" ambigua en viajes recientes
-3. **Fase 6**: Admin Masters (CRUD tablas maestras)
+1. **UX por discutir**: Backlog con mas contexto visual, columna "FECHA" ambigua en viajes recientes
+2. **Notificaciones email**: Fase 6.2 (NestJS Edge Functions)
+3. **RLS policies reales**: Preparar SQL para policies por rol
+
+## PENDIENTE PARA JAMES EN SUPABASE
+
+1. ~~**RLS GAP CRITICO**~~: ✅ RESUELTO 2026-03-12. sm_request_lines permite UPDATE para todos los roles operativos. sm_requests UPDATE sigue pm+admin (cascade trigger es SECURITY DEFINER).
+2. ~~**cascade_request_status() BUG**~~: ✅ RESUELTO 2026-03-12. Orden correcto: Completada→Cancelada→Parcial→En Proceso→Enviada. 2 solicitudes corregidas.
+3. **17 personas con app_role pero sin auth account**: Crear cuentas Supabase Auth antes de lanzamiento.
+4. **Verificar audit_log**: Crear solicitud de prueba desde browser y verificar que audit_log se pobla correctamente.
 
 ---
 
@@ -277,10 +310,13 @@ Bugs #3-8 corregidos 2026-03-06.
 32. Search equipos por spectrum_code Y description.
 33. Keyboard navigation en Select (arrow keys + enter).
 34. Claude Code NO tiene acceso a Supabase.
+35. Parcial solo existe a nivel de linea, no de solicitud. cascade_request_status() usa En Proceso cuando hay entregas + lineas activas.
+36. Entregas parciales: qty_delivered acumula por viaje, qty_scheduled decrementa al entregar. Formula disponible: quantity - qty_scheduled - qty_delivered.
+37. Receptor dropdown incluye personal operativo (pm, logistica, almacen, admin) ademas de personas del proyecto destino.
 
 ---
 
-## BUGS CORREGIDOS (11)
+## BUGS CORREGIDOS (27)
 
 | # | Bug | Fecha |
 |---|-----|-------|
@@ -294,7 +330,22 @@ Bugs #3-8 corregidos 2026-03-06.
 | 8 | Remolque siempre opcional | 2026-03-06 |
 | 9 | IDs off-by-one | 2026-03-06 |
 | 10 | Remolque incluye camiones | 2026-03-06 |
-| 11 | Categoria costo eliminada al agregar Categoria Material | PENDIENTE |
+| 11 | Categoria costo eliminada al agregar Categoria Material | 2026-03-07 |
+| 12 | CodeConfirmation permitia bypass | 2026-03-07 |
+| 13 | confirmation_code NULL en viajes nuevos | 2026-03-08 |
+| 14 | qty_delivered siempre 0 en lineas Entregada | 2026-03-11 |
+| 15 | created_by usaba requester_id en vez de personId | 2026-03-12 |
+| 16 | cascade_request_status() orden incorrecto (Parcial antes de En Proceso) | 2026-03-12 (BD) |
+| 17 | RLS bloqueaba UPDATE sm_request_lines para roles operativos | 2026-03-12 (BD) |
+| 18 | formatCompletionDelta timezone desfase 1 dia en UTC-5 | 2026-03-12 |
+| 19 | Columna Dias: completadas/canceladas mostraban dias vs hoy | 2026-03-12 |
+| 20 | KPI Items sin programar contaba lineas de Borrador/Cancelada/Completada | 2026-03-12 |
+| 22 | viaje/[id] no mostraba eventos de ejecucion + trip_id no clickeable | 2026-03-12 |
+| 23 | Receptor dropdown muy restringido (solo personas proyecto destino) | 2026-03-12 |
+| 24 | Backlog no mostraba lineas parcialmente programadas | 2026-03-12 |
+| 25 | Entrega no acumulaba qty_delivered (siempre sobrescribia) | 2026-03-12 |
+| 26 | Entrega siempre marcaba Entregada sin verificar cantidad vs total | 2026-03-12 |
+| 27 | En Transito con acento no coincidia con BD | 2026-03-12 |
 
 ---
 

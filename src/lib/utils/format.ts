@@ -42,6 +42,12 @@ export function formatCurrency(amount: number): string {
   })}`
 }
 
+/** Formatea cantidad: entero si es número entero, 2 decimales si tiene fracción */
+export function formatQty(n: number | null | undefined): string {
+  if (n == null) return '0'
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
+}
+
 /**
  * Calcula prioridad basada en la fecha requerida vs hoy.
  * Vencida: fecha ya pasó
@@ -60,4 +66,51 @@ export function calculatePriority(dateRequired: string | Date): Priority {
   if (daysUntil <= 3) return 'Urgente'
   if (daysUntil <= 7) return 'Próxima'
   return 'Normal'
+}
+
+/**
+ * Días hasta la fecha requerida. Negativo = vencido.
+ */
+export function daysUntilDue(dateRequired: string | Date): number {
+  const required = parseLocalDate(dateRequired)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return differenceInCalendarDays(required, today)
+}
+
+/**
+ * Formato compacto: "Hoy", "1", "2", "-1", "-2"
+ */
+export function formatDaysUntilDue(dateRequired: string | Date): string {
+  const days = daysUntilDue(dateRequired)
+  if (days === 0) return 'Hoy'
+  return `${days}`
+}
+
+/**
+ * Color Tailwind según días al vencimiento (misma lógica que prioridad).
+ */
+export function daysUntilDueColor(days: number): string {
+  if (days < 0) return 'text-iconsa-red'
+  if (days <= 3) return 'text-iconsa-orange'
+  if (days <= 7) return 'text-iconsa-blue'
+  return 'text-iconsa-green'
+}
+
+/**
+ * Delta entre fecha requerida y fecha completada.
+ * Positivo = completado antes de tiempo. Negativo = tarde.
+ */
+export function formatCompletionDelta(
+  dateRequired: string,
+  dateCompleted: string
+): { text: string; color: string } {
+  const required = parseLocalDate(dateRequired)
+  // dateCompleted es TIMESTAMPTZ — convertir a fecha local (no usar parseLocalDate que extrae YYYY-MM-DD del string)
+  const completedFull = new Date(dateCompleted)
+  const completed = new Date(completedFull.getFullYear(), completedFull.getMonth(), completedFull.getDate())
+  const days = differenceInCalendarDays(required, completed)
+  if (days > 0) return { text: `${days}d antes`, color: 'text-iconsa-green' }
+  if (days < 0) return { text: `${Math.abs(days)}d tarde`, color: 'text-iconsa-red' }
+  return { text: 'a tiempo', color: 'text-iconsa-green' }
 }

@@ -20,8 +20,10 @@ interface LineEditorProps {
   locations: SelectOption[]
   /** Opciones de unidades para el dropdown */
   units: SelectOption[]
-  /** Opciones de codigos de costo filtrados por proyecto */
+  /** Opciones de codigos de costo filtrados por proyecto (fallback si no hay projectId) */
   costCodes: SelectOption[]
+  /** ID del proyecto seleccionado — habilita cascada Extra → Fase */
+  projectId?: string | null
 
   /** Datos iniciales si se esta editando una linea existente */
   initialData?: LineInput
@@ -54,6 +56,7 @@ function LineEditor({
   locations,
   units,
   costCodes,
+  projectId,
   initialData,
   isEditing,
   onSave,
@@ -102,6 +105,16 @@ function LineEditor({
   const [poReference, setPoReference] = useState(initialData?.po_reference ?? '')
   const [lineNotes, setLineNotes] = useState(initialData?.notes ?? '')
 
+  // Extras del proyecto (cascada: Proyecto → Extra → Fase → Categoría)
+  const [extraOptions, setExtraOptions] = useState<SelectOption[]>([])
+  const [selectedExtraId, setSelectedExtraId] = useState<string | null>(null)
+  const [hasExtras, setHasExtras] = useState(false)
+  const [loadingExtras, setLoadingExtras] = useState(false)
+
+  // Cost codes filtrados por extra (fetch interno)
+  const [filteredCostCodes, setFilteredCostCodes] = useState<SelectOption[]>([])
+  const [loadingCostCodes, setLoadingCostCodes] = useState(false)
+
   // Categorias de costo dinamicas (desde BD)
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
@@ -111,6 +124,122 @@ function LineEditor({
   const [duplicates, setDuplicates] = useState<DuplicateMatch[] | null>(null)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
+
+  // --- Fetch extras del proyecto ---
+  useEffect(() => {
+    if (!projectId) {
+      setExtraOptions([])
+      setHasExtras(false)
+      setSelectedExtraId(null)
+      return
+    }
+
+    let cancelled = false
+    setLoadingExtras(true)
+
+    ;(supabase.from.bind(supabase) as (table: string) => ReturnType<typeof supabase.from>)('project_extras')
+      .select('id, code, description')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+      .order('code')
+      .then(({ data }: { data: Array<{ id: string; code: string; description: string | null }> | null }) => {
+        if (cancelled) return
+        const extras = data ?? []
+        if (extras.length > 0) {
+          setExtraOptions(extras.map((e) => ({
+            value: e.id,
+            label: `${e.code} — ${e.description ?? e.code}`,
+          })))
+          setHasExtras(true)
+          // Si estamos editando y ya hay un costCodeId, no resetear
+          if (!initialData?.cost_code_id) {
+            setSelectedExtraId(null)
+          }
+        } else {
+          setExtraOptions([])
+          setHasExtras(false)
+          setSelectedExtraId(null)
+        }
+        setLoadingExtras(false)
+      })
+
+    return () => { cancelled = true }
+  }, [projectId, supabase, initialData?.cost_code_id])
+
+  // --- Fetch cost codes filtrados por proyecto + extra ---
+  useEffect(() => {
+    if (!projectId) {
+      setFilteredCostCodes([])
+      return
+    }
+
+    // Si el proyecto tiene extras pero no se ha seleccionado uno, no fetch
+    if (hasExtras && selectedExtraId === null && !loadingExtras) {
+      setFilteredCostCodes([])
+      return
+    }
+
+    // Esperar a que se determine si hay extras
+    if (loadingExtras) return
+
+    let cancelled = false
+    setLoadingCostCodes(true)
+
+    const query = supabase
+      .from('cost_codes')
+      .select('id, phase_code, phase_description, full_code, extra_id')
+      .eq('project_id', projectId)
+      .order('full_code')
+
+    // Filtrar por extra: '__base__' = sin extra, otro valor = ese extra_id
+    const extraFilter = selectedExtraId === '__base__' ? null : selectedExtraId
+    const finalQuery = extraFilter
+      ? query.eq('extra_id', extraFilter)
+      : query.is('extra_id', null)
+
+    finalQuery.then(({ data }) => {
+      if (cancelled) return
+      const options: SelectOption[] = (data ?? []).map((cc) => ({
+        value: cc.id,
+        label: cc.full_code
+          ? `${cc.full_code} — ${cc.phase_description ?? ''}`
+          : `${cc.phase_code} — ${cc.phase_description ?? ''}`,
+      }))
+      setFilteredCostCodes(options)
+
+      // Si el costCodeId actual no esta en las opciones, resetear
+      if (costCodeId && !options.some((o) => o.value === costCodeId)) {
+        setCostCodeId(null)
+        setCostCategoryId(null)
+      }
+      setLoadingCostCodes(false)
+    })
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, selectedExtraId, hasExtras, loadingExtras, supabase])
+
+  // --- Detectar extra del costCode inicial al editar ---
+  useEffect(() => {
+    if (!initialData?.cost_code_id || !projectId || !hasExtras) return
+
+    let cancelled = false
+    supabase
+      .from('cost_codes')
+      .select('extra_id')
+      .eq('id', initialData.cost_code_id)
+      .single()
+      .then(({ data }) => {
+        if (cancelled) return
+        if (data?.extra_id) {
+          setSelectedExtraId(data.extra_id as string)
+        } else {
+          setSelectedExtraId('__base__')
+        }
+      })
+
+    return () => { cancelled = true }
+  }, [initialData?.cost_code_id, projectId, hasExtras, supabase])
 
   // --- Fetch categorias de costo cuando cambia la fase seleccionada ---
   useEffect(() => {
@@ -125,7 +254,7 @@ function LineEditor({
 
     // cost_code_categories y cost_categories no estan en database.ts (tipos no regenerados)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(supabase.from as (table: string) => ReturnType<typeof supabase.from>)('cost_code_categories')
+    ;(supabase.from.bind(supabase) as (table: string) => ReturnType<typeof supabase.from>)('cost_code_categories')
       .select('cost_category_id, cost_categories(id, code, description)')
       .eq('cost_code_id', costCodeId)
       .then(({ data }: { data: Array<{ cost_category_id: string; cost_categories: { id: string; code: string; description: string | null } | null }> | null }) => {
@@ -180,6 +309,13 @@ function LineEditor({
     [lineType],
   )
 
+  // --- Manejar cambio de extra (resetea fase + categoria) ---
+  const handleExtraChange = useCallback((newExtraId: string | null) => {
+    setSelectedExtraId(newExtraId)
+    setCostCodeId(null)
+    setCostCategoryId(null)
+  }, [])
+
   // --- Manejar cambio de fase (resetea categoria) ---
   const handleCostCodeChange = useCallback((newCostCodeId: string | null) => {
     setCostCodeId(newCostCodeId)
@@ -198,7 +334,7 @@ function LineEditor({
       from_text: fromValue.text,
       to_location_id: toValue.id,
       to_text: toValue.text,
-      quantity: parseFloat(quantity) || 0,
+      quantity: Math.round(parseFloat(quantity)) || 0,
       unit_id: unitValue.id,
       unit_text: unitValue.text,
       cost_code_id: costCodeId,
@@ -247,21 +383,6 @@ function LineEditor({
     // Destino requerido
     if (!toValue.id && !toValue.text?.trim()) {
       newErrors.to = 'Indique el destino'
-    }
-
-    // Origen != destino
-    const fromIsId = !!fromValue.id
-    const toIsId = !!toValue.id
-    if (fromIsId && toIsId && fromValue.id === toValue.id) {
-      newErrors.to = 'El origen y destino no pueden ser iguales'
-    } else if (
-      !fromIsId &&
-      !toIsId &&
-      fromValue.text?.trim() &&
-      toValue.text?.trim() &&
-      fromValue.text.trim().toLowerCase() === toValue.text.trim().toLowerCase()
-    ) {
-      newErrors.to = 'El origen y destino no pueden ser iguales'
     }
 
     setErrors(newErrors)
@@ -416,8 +537,8 @@ function LineEditor({
         <Input
           label="Cantidad"
           type="number"
-          min="0.01"
-          step="0.01"
+          min="1"
+          step="1"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           error={errors.quantity}
@@ -433,13 +554,29 @@ function LineEditor({
           fallbackPlaceholder="Escriba la unidad..."
         />
 
+        {/* Dropdown Extra — solo visible si el proyecto tiene extras */}
+        {hasExtras && (
+          <Select
+            label="Extra / Sección"
+            placeholder={loadingExtras ? 'Cargando...' : 'Seleccionar extra...'}
+            options={[
+              { value: '__base__', label: '(Proyecto Base)' },
+              ...extraOptions,
+            ]}
+            value={selectedExtraId}
+            onChange={handleExtraChange}
+            disabled={loadingExtras}
+          />
+        )}
+
         <Select
           label="Fase / Código de Costo"
-          placeholder="Seleccionar fase..."
-          options={costCodes}
+          placeholder={loadingCostCodes ? 'Cargando...' : (hasExtras && !selectedExtraId) ? 'Seleccione un extra primero' : 'Seleccionar fase...'}
+          options={projectId ? filteredCostCodes : costCodes}
           value={costCodeId}
           onChange={handleCostCodeChange}
           searchable
+          disabled={loadingCostCodes || (hasExtras && !selectedExtraId)}
         />
 
         <Select

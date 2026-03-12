@@ -6,7 +6,6 @@ const REQUEST_STATUS_STYLES: Record<RequestStatus, { bg: string; text: string }>
   'Enviada':     { bg: 'bg-blue-100',    text: 'text-blue-700' },
   'En Proceso':  { bg: 'bg-orange-100',  text: 'text-orange-700' },
   'Completada':  { bg: 'bg-green-100',   text: 'text-green-700' },
-  'Parcial':     { bg: 'bg-yellow-100',  text: 'text-yellow-700' },
   'Cancelada':   { bg: 'bg-red-100',     text: 'text-red-700' },
 }
 
@@ -14,7 +13,7 @@ const REQUEST_STATUS_STYLES: Record<RequestStatus, { bg: string; text: string }>
 const LINE_STATUS_STYLES: Record<LineStatus, { bg: string; text: string }> = {
   'Pendiente':    { bg: 'bg-gray-100',    text: 'text-gray-700' },
   'Programada':   { bg: 'bg-purple-100',  text: 'text-purple-700' },
-  'En Tránsito':  { bg: 'bg-orange-100',  text: 'text-orange-700' },
+  'En Transito':  { bg: 'bg-orange-100',  text: 'text-orange-700' },
   'Entregada':    { bg: 'bg-green-100',   text: 'text-green-700' },
   'Parcial':      { bg: 'bg-yellow-100',  text: 'text-yellow-700' },
   'Cancelada':    { bg: 'bg-red-100',     text: 'text-red-700' },

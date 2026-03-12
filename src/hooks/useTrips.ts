@@ -25,6 +25,7 @@ export interface BacklogLine {
   cost_code_id: string | null
   category: string | null
   status: string
+  notes: string | null
   qty_scheduled: number
   qty_delivered: number
   // Relaciones unidas
@@ -50,7 +51,8 @@ export interface TripAssignment {
   trip_id: string
   request_line_id: string
   quantity_assigned: number
-  // Info de la línea asignada (opcional — solo en detalle)
+  qty_delivered: number
+  // Info de la línea asignada
   line: {
     id: string
     line_number: number
@@ -58,6 +60,7 @@ export interface TripAssignment {
     description: string
     quantity: number
     status: string
+    notes: string | null
     from_location: { id: string; name: string } | null
     to_location: { id: string; name: string } | null
     unit: { id: string; code: string } | null
@@ -104,6 +107,7 @@ export interface TripWithRelations {
 
 export interface TripInput {
   scheduled_date: string
+  scheduled_time: string | null
   driver_id: string | null
   vehicle_id: string | null
   trailer_id: string | null
@@ -175,25 +179,28 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
       const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
       const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
       const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
+      const unitRel = unwrapRelation(rawLine.unit as { id: string; code: string } | null)
+      const equipRel = unwrapRelation(rawLine.equipment as { id: string; spectrum_code: string | null; description: string } | null)
       line = {
         id: rawLine.id as string,
-        line_number: 0,
-        line_type: '',
-        description: '',
-        quantity: 0,
-        status: '',
+        line_number: (rawLine.line_number as number) ?? 0,
+        line_type: (rawLine.line_type as string) ?? '',
+        description: (rawLine.description as string) ?? '',
+        quantity: (rawLine.quantity as number) ?? 0,
+        status: (rawLine.status as string) ?? '',
+        notes: (rawLine.notes as string | null) ?? null,
         from_location: fromLoc,
         to_location: toLoc,
-        unit: null,
+        unit: unitRel,
         from_text: (rawLine.from_text as string | null) ?? null,
         to_text: (rawLine.to_text as string | null) ?? null,
-        unit_text: null,
-        equipment: null,
+        unit_text: (rawLine.unit_text as string | null) ?? null,
+        equipment: equipRel,
         request: rawRequest
           ? {
               id: rawRequest['id'] as string,
               request_id: (rawRequest['request_id'] as string | null) ?? null,
-              date_required: null,
+              date_required: (rawRequest['date_required'] as string | null) ?? null,
               project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
             }
           : { id: '', request_id: null, date_required: null, project: null },
@@ -204,6 +211,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
       trip_id: a.trip_id as string,
       request_line_id: a.request_line_id as string,
       quantity_assigned: a.quantity_assigned as number,
+      qty_delivered: (a.qty_delivered as number) ?? 0,
       line,
     }
   })
@@ -257,6 +265,7 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       description: rawLine.description as string,
       quantity: rawLine.quantity as number,
       status: rawLine.status as string,
+      notes: (rawLine.notes as string | null) ?? null,
       from_location: fromLoc,
       to_location: toLoc,
       unit,
@@ -280,6 +289,7 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
     trip_id: a.trip_id as string,
     request_line_id: a.request_line_id as string,
     quantity_assigned: a.quantity_assigned as number,
+    qty_delivered: (a.qty_delivered as number) ?? 0,
     line,
   }
 }
@@ -299,15 +309,18 @@ async function releaseLineFromAssignment(
   // Obtener el estado actual y qty_scheduled de la línea
   const { data: line, error: fetchError } = await supabase
     .from('sm_request_lines')
-    .select('id, status, qty_scheduled')
+    .select('id, status, qty_scheduled, qty_delivered')
     .eq('id', requestLineId)
     .single()
 
   if (fetchError || !line) return false
 
   const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - quantityAssigned)
-  // Si no queda cantidad programada, la línea vuelve al backlog
-  const newStatus = newQtyScheduled <= 0 ? 'Pendiente' : line.status
+  // Si no queda cantidad programada, determinar estado según entregas previas
+  let newStatus = line.status
+  if (newQtyScheduled <= 0) {
+    newStatus = (line.qty_delivered ?? 0) > 0 ? 'Parcial' : 'Pendiente'
+  }
 
   const { error: updateError } = await supabase
     .from('sm_request_lines')
@@ -374,6 +387,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           unit_text,
           cost_code_id,
           category,
+          notes,
           status,
           qty_scheduled,
           qty_delivered,
@@ -392,7 +406,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             requester:requester_id(id, name)
           )
         `)
-        .eq('status', 'Pendiente')
+        .in('status', ['Pendiente', 'Parcial', 'Programada'])
         // Excluir solicitudes que no deben aparecer en el backlog
         .not('request.status', 'in', '("Cancelada","Completada","Borrador")')
 
@@ -440,6 +454,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           unit_text: (row.unit_text as string | null) ?? null,
           cost_code_id: (row.cost_code_id as string | null) ?? null,
           category: (row.category as string | null) ?? null,
+          notes: (row.notes as string | null) ?? null,
           status: row.status as string,
           qty_scheduled: (row.qty_scheduled as number) ?? 0,
           qty_delivered: (row.qty_delivered as number) ?? 0,
@@ -461,7 +476,13 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         return a.request.date_required.localeCompare(b.request.date_required)
       })
 
-      setBacklog(sorted)
+      // Solo líneas con cantidad disponible > 0
+      const available = sorted.filter((line) => {
+        const avail = line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0)
+        return avail > 0
+      })
+
+      setBacklog(available)
     } catch {
       setBacklog([])
     } finally {
@@ -488,15 +509,26 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             trip_id,
             request_line_id,
             quantity_assigned,
+            qty_delivered,
             line:request_line_id(
               id,
+              line_number,
+              line_type,
+              description,
+              quantity,
+              status,
+              notes,
               from_location:from_location_id(id, name),
               to_location:to_location_id(id, name),
               from_text,
               to_text,
+              unit_text,
+              unit:unit_id(id, code),
+              equipment:equipment_id(id, spectrum_code, description),
               request:request_id(
                 id,
                 request_id,
+                date_required,
                 project:project_id(id, code, name)
               )
             )
@@ -563,6 +595,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             trip_id,
             request_line_id,
             quantity_assigned,
+            qty_delivered,
             line:request_line_id(
               id,
               line_number,
@@ -570,6 +603,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               description,
               quantity,
               status,
+              notes,
               from_text,
               to_text,
               unit_text,
@@ -640,6 +674,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
     async (
       input: TripInput,
       assignments: AssignmentInput[],
+      personId?: string,
     ): Promise<{ id: string; tripId: string | null } | null> => {
       setSaving(true)
       setSaveError(null)
@@ -652,6 +687,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           .from('trips')
           .insert({
             scheduled_date: input.scheduled_date,
+            scheduled_time: input.scheduled_time ?? null,
             driver_id: input.driver_id,
             vehicle_id: input.vehicle_id,
             trailer_id: input.trailer_id,
@@ -662,6 +698,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             confirmation_code: confirmationCode,
             notes: input.notes,
             is_external: input.is_external,
+            created_by: personId ?? null,
           })
           .select('id, trip_id')
           .single()
@@ -740,6 +777,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       input: TripInput,
       addAssignments: AssignmentInput[],
       removeAssignmentIds: string[],
+      personId?: string,
     ): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
@@ -750,6 +788,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           .from('trips')
           .update({
             scheduled_date: input.scheduled_date,
+            scheduled_time: input.scheduled_time ?? null,
             driver_id: input.driver_id,
             vehicle_id: input.vehicle_id,
             trailer_id: input.trailer_id,
@@ -759,6 +798,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             escort: input.escort,
             notes: input.notes,
             is_external: input.is_external,
+            updated_by: personId ?? null,
           })
           .eq('id', id)
 

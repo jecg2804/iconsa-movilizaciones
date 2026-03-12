@@ -13,6 +13,7 @@ interface TripFormProps {
   initialData?: {
     tripId?: string | null
     scheduledDate: string
+    scheduledTime?: string | null
     driverId: string | null
     vehicleId: string | null
     trailerId: string | null
@@ -67,6 +68,9 @@ function TripForm({
   const [scheduledDate, setScheduledDate] = useState<string>(
     initialData?.scheduledDate ?? '',
   )
+  const [scheduledTime, setScheduledTime] = useState<string>(
+    initialData?.scheduledTime ?? '',
+  )
   const [driverId, setDriverId] = useState<string | null>(
     initialData?.driverId ?? null,
   )
@@ -98,6 +102,7 @@ function TripForm({
     (overrides?: Partial<TripInput>) => {
       const data: TripInput = {
         scheduled_date: overrides?.scheduled_date ?? scheduledDate,
+        scheduled_time: overrides?.scheduled_time !== undefined ? overrides.scheduled_time : (scheduledTime || null),
         driver_id: overrides?.driver_id !== undefined ? overrides.driver_id : driverId,
         vehicle_id: overrides?.vehicle_id !== undefined ? overrides.vehicle_id : vehicleId,
         trailer_id: overrides?.trailer_id !== undefined ? overrides.trailer_id : trailerId,
@@ -110,7 +115,7 @@ function TripForm({
       }
       onChange(data)
     },
-    [scheduledDate, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, onChange],
+    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -126,6 +131,15 @@ function TripForm({
       const val = e.target.value
       setScheduledDate(val)
       propagate({ scheduled_date: val })
+    },
+    [propagate],
+  )
+
+  const handleTimeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value
+      setScheduledTime(val)
+      propagate({ scheduled_time: val || null })
     },
     [propagate],
   )
@@ -283,6 +297,15 @@ function TripForm({
           type="date"
           value={scheduledDate}
           onChange={handleDateChange}
+          disabled={fieldsDisabled}
+        />
+
+        {/* Hora de Salida (opcional) */}
+        <Input
+          label="Hora de Salida (opcional)"
+          type="time"
+          value={scheduledTime}
+          onChange={handleTimeChange}
           disabled={fieldsDisabled}
         />
 

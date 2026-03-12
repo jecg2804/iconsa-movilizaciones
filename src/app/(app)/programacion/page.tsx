@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Truck, Lock, Siren } from 'lucide-react'
+import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
@@ -15,6 +15,8 @@ import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Select, type SelectOption } from '@/components/ui/Select'
+import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
+import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 // Tipos de línea para el filtro del backlog
 const LINE_TYPES = ['Todos', 'Equipo', 'Material'] as const
@@ -31,18 +33,18 @@ export default function ProgramacionPage() {
     trips,
     listLoading,
     listError,
-    filters,
-    setFilters,
   } = useTrips()
 
-  // Estado local: filtros del backlog (cliente)
+  // --- Filtros unificados ---
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<string | null>(null)
+  const [driverFilter, setDriverFilter] = useState<string | null>(null)
+  const [dateFilter, setDateFilter] = useState<string | null>(null)
+  const [searchFilter, setSearchFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
 
-  // Estado local: conductores para filtro de viajes
+  // Conductores para filtro
   const [conductors, setConductors] = useState<{ id: string; name: string }[]>([])
-
-  // Fetch conductores (campo) para filtro
   useEffect(() => {
     supabase
       .from('people')
@@ -53,76 +55,175 @@ export default function ProgramacionPage() {
       .then(({ data }) => setConductors(data ?? []))
   }, [supabase])
 
-  // Estado local: filtro de proyecto para viajes
-  const [tripProjectFilter, setTripProjectFilter] = useState<string | null>(null)
-
-  // Estado local: líneas seleccionadas para crear viaje
+  // Selección de líneas
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
 
-  // Opciones de proyectos para el dropdown del backlog
+  // Opciones de dropdowns
   const projectOptions: SelectOption[] = useMemo(
-    () =>
-      allProjects.map((p) => ({
-        value: p.id,
-        label: `${p.code} — ${p.name}`,
-      })),
+    () => allProjects.map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` })),
     [allProjects],
   )
-
-  // Opciones de conductores para filtro de viajes
   const conductorOptions: SelectOption[] = useMemo(
     () => conductors.map((c) => ({ value: c.id, label: c.name })),
     [conductors],
   )
 
-  // Filtrar backlog en cliente por proyecto y tipo
+  // Nombre helpers para chips
+  const projectName = useMemo(
+    () => allProjects.find((p) => p.id === projectFilter),
+    [allProjects, projectFilter],
+  )
+  const driverName = useMemo(
+    () => conductors.find((c) => c.id === driverFilter),
+    [conductors, driverFilter],
+  )
+
+  // --- Filtrado ---
   const filteredBacklog = useMemo(() => {
     return backlog.filter((line) => {
-      const matchesProject =
-        projectFilter === null || line.request.project?.id === projectFilter
-      const matchesType =
-        typeFilter === 'Todos' || line.line_type === typeFilter
-      return matchesProject && matchesType
+      if (projectFilter && line.request.project?.id !== projectFilter) return false
+      if (typeFilter !== 'Todos' && line.line_type !== typeFilter) return false
+      if (dateFilter && line.request.date_required !== dateFilter) return false
+      if (searchFilter) {
+        const q = searchFilter.toLowerCase()
+        const matchesId = line.request.request_id?.toLowerCase().includes(q) ?? false
+        const matchesDesc = line.description?.toLowerCase().includes(q) ?? false
+        const matchesEquip = line.equipment?.spectrum_code?.toLowerCase().includes(q) ?? false
+        if (!matchesId && !matchesDesc && !matchesEquip) return false
+      }
+      return true
     })
-  }, [backlog, projectFilter, typeFilter])
+  }, [backlog, projectFilter, typeFilter, dateFilter, searchFilter])
 
-  // Filtrar viajes por proyecto (client-side)
   const filteredTrips = useMemo(() => {
-    if (!tripProjectFilter) return trips
-    return trips.filter((trip) =>
-      trip.assignments.some((a) => a.line?.request?.project?.id === tripProjectFilter),
-    )
-  }, [trips, tripProjectFilter])
+    return trips.filter((trip) => {
+      if (projectFilter) {
+        const matchesProject = trip.assignments.some(
+          (a) => a.line?.request?.project?.id === projectFilter,
+        )
+        if (!matchesProject) return false
+      }
+      if (statusFilter && trip.status !== statusFilter) return false
+      if (driverFilter && trip.driver_id !== driverFilter) return false
+      if (dateFilter && trip.scheduled_date !== dateFilter) return false
+      if (searchFilter) {
+        const q = searchFilter.toLowerCase()
+        const matchesId = trip.trip_id?.toLowerCase().includes(q) ?? false
+        const matchesDriver = trip.driver?.name?.toLowerCase().includes(q) ?? false
+        const matchesVehicle = trip.vehicle?.description?.toLowerCase().includes(q) ?? false
+        if (!matchesId && !matchesDriver && !matchesVehicle) return false
+      }
+      return true
+    })
+  }, [trips, projectFilter, statusFilter, driverFilter, dateFilter, searchFilter])
 
-  // Líneas que están actualmente visibles y seleccionadas
+  // --- MiniCalendar items (viajes como mini-cards, sin filtro de fecha) ---
+  const calendarItems = useMemo<CalendarItem[]>(() => {
+    return trips
+      .filter((trip) => {
+        if (projectFilter) {
+          const match = trip.assignments.some(
+            (a) => a.line?.request?.project?.id === projectFilter,
+          )
+          if (!match) return false
+        }
+        if (statusFilter && trip.status !== statusFilter) return false
+        if (driverFilter && trip.driver_id !== driverFilter) return false
+        return true
+      })
+      .map((t) => {
+        // Ruta abreviada
+        const a = t.assignments?.[0]?.line
+        let route: string | undefined
+        if (a) {
+          const from = a.from_location?.name ?? a.from_text ?? ''
+          const to = a.to_location?.name ?? a.to_text ?? ''
+          if (from && to) route = `${from} → ${to}`
+        }
+        return {
+          id: t.id,
+          date: t.scheduled_date,
+          label: t.trip_id ?? '—',
+          status: t.status,
+          badgeVariant: 'trip' as const,
+          subtitle: `${t.driver?.name ?? 'Sin conductor'} · ${t.assignments.length} lín.`,
+          route,
+          href: `/programacion/viaje/${t.id}`,
+        }
+      })
+  }, [trips, projectFilter, statusFilter, driverFilter])
+
+  // --- Chips de filtros activos ---
+  const filterChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = []
+    if (projectFilter && projectName) {
+      chips.push({
+        key: 'project',
+        label: projectName.code,
+        onRemove: () => setProjectFilter(null),
+      })
+    }
+    if (statusFilter) {
+      chips.push({
+        key: 'status',
+        label: statusFilter,
+        onRemove: () => setStatusFilter(null),
+      })
+    }
+    if (driverFilter && driverName) {
+      chips.push({
+        key: 'driver',
+        label: driverName.name,
+        onRemove: () => setDriverFilter(null),
+      })
+    }
+    if (dateFilter) {
+      const d = new Date(dateFilter + 'T00:00:00')
+      chips.push({
+        key: 'date',
+        label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
+        onRemove: () => setDateFilter(null),
+      })
+    }
+    if (searchFilter) {
+      chips.push({
+        key: 'search',
+        label: `"${searchFilter}"`,
+        onRemove: () => setSearchFilter(''),
+      })
+    }
+    return chips
+  }, [projectFilter, projectName, statusFilter, driverFilter, driverName, dateFilter, searchFilter])
+
+  const clearAllFilters = useCallback(() => {
+    setProjectFilter(null)
+    setStatusFilter(null)
+    setDriverFilter(null)
+    setDateFilter(null)
+    setSearchFilter('')
+  }, [])
+
+  // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
     return filteredBacklog.filter((l) => selectedLineIds.has(l.id)).length
   }, [filteredBacklog, selectedLineIds])
 
-  // Toggle de una línea individual
   const handleToggleSelect = useCallback((lineId: string) => {
     setSelectedLineIds((prev) => {
       const next = new Set(prev)
-      if (next.has(lineId)) {
-        next.delete(lineId)
-      } else {
-        next.add(lineId)
-      }
+      if (next.has(lineId)) next.delete(lineId)
+      else next.add(lineId)
       return next
     })
   }, [])
 
-  // Seleccionar / deseleccionar todas las líneas visibles
   const handleSelectAll = useCallback(
     (selected: boolean) => {
       setSelectedLineIds((prev) => {
         const next = new Set(prev)
         for (const line of filteredBacklog) {
-          if (selected) {
-            next.add(line.id)
-          } else {
-            next.delete(line.id)
-          }
+          if (selected) next.add(line.id)
+          else next.delete(line.id)
         }
         return next
       })
@@ -130,21 +231,11 @@ export default function ProgramacionPage() {
     [filteredBacklog],
   )
 
-  // Navegar a crear viaje con líneas seleccionadas pre-cargadas
   const handleCrearViajeConLineas = useCallback(() => {
     const ids = Array.from(selectedLineIds).join(',')
     router.push(`/programacion/viaje/nuevo?lines=${ids}`)
   }, [selectedLineIds, router])
 
-  // Navegar al detalle de un viaje
-  const handleTripRowClick = useCallback(
-    (row: TripWithRelations) => {
-      router.push(`/programacion/viaje/${row.id}`)
-    },
-    [router],
-  )
-
-  // Navegar al ID de solicitud desde el backlog
   const handleRequestClick = useCallback(
     (requestId: string) => {
       router.push(`/solicitudes/${requestId}`)
@@ -152,10 +243,9 @@ export default function ProgramacionPage() {
     [router],
   )
 
-  // Determinar si el usuario puede crear viajes
   const puedeCrearViaje = canCreateTrip(role)
 
-  // Columnas de la tabla de viajes
+  // --- Columnas de tabla de viajes ---
   const columns: Column<TripWithRelations>[] = useMemo(
     () => [
       {
@@ -164,9 +254,13 @@ export default function ProgramacionPage() {
         sortable: true,
         className: 'w-[150px]',
         render: (row) => (
-          <span className="font-mono text-sm font-medium text-navy">
+          <a
+            href={`/programacion/viaje/${row.id}`}
+            onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
+            className="font-mono text-sm font-medium text-navy hover:underline"
+          >
             {row.trip_id ?? '—'}
-          </span>
+          </a>
         ),
         sortValue: (row) => row.trip_id ?? '',
       },
@@ -267,9 +361,7 @@ export default function ProgramacionPage() {
         header: 'Líneas',
         className: 'w-[80px] text-center',
         render: (row) => (
-          <span className="text-sm text-gray-900">
-            {row.assignments.length}
-          </span>
+          <span className="text-sm text-gray-900">{row.assignments.length}</span>
         ),
       },
       {
@@ -277,7 +369,14 @@ export default function ProgramacionPage() {
         header: 'Estado',
         sortable: true,
         className: 'w-[130px]',
-        render: (row) => <Badge label={row.status} variant="trip" />,
+        render: (row) => (
+          <span className="flex items-center gap-1.5">
+            <Badge label={row.status} variant="trip" />
+            {row.status === 'En Ruta' && row.assignments?.some(a => a.line && (a.line.status === 'Entregada' || a.line.status === 'Parcial')) && (
+              <span className="text-green-600 text-xs" title="Material entregado">✅</span>
+            )}
+          </span>
+        ),
         sortValue: (row) => row.status,
       },
       {
@@ -287,18 +386,12 @@ export default function ProgramacionPage() {
         render: (row) => (
           <span className="flex items-center gap-1">
             {row.att_permit && (
-              <span
-                title="Requiere permiso ATT"
-                className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700"
-              >
+              <span title="Requiere permiso ATT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
                 <Lock className="h-3 w-3" />
               </span>
             )}
             {row.escort && (
-              <span
-                title="Requiere escolta"
-                className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700"
-              >
+              <span title="Requiere escolta" className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
                 <Siren className="h-3 w-3" />
               </span>
             )}
@@ -309,49 +402,30 @@ export default function ProgramacionPage() {
     [],
   )
 
-  // Render mobile para cada viaje
   const mobileRender = useCallback(
     (row: TripWithRelations) => (
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 active:bg-gray-50">
-        {/* Fila 1: ID + Estado */}
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-sm font-bold text-navy">
-            {row.trip_id ?? '—'}
-          </span>
+          <span className="font-mono text-sm font-bold text-navy">{row.trip_id ?? '—'}</span>
           <Badge label={row.status} variant="trip" />
         </div>
-
-        {/* Fila 2: Fecha + Conductor */}
         <div className="flex items-center justify-between gap-2 text-sm text-gray-900">
           <span>{formatDate(row.scheduled_date)}</span>
           <span className="text-iconsa-gray">{row.driver?.name ?? '—'}</span>
         </div>
-
-        {/* Fila 3: Vehículo */}
-        <div className="text-sm text-iconsa-gray truncate">
-          {row.vehicle?.description ?? '—'}
-        </div>
-
-        {/* Fila 4: Líneas + Badges de permiso/escolta */}
+        <div className="text-sm text-iconsa-gray truncate">{row.vehicle?.description ?? '—'}</div>
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-iconsa-gray">
-            {row.assignments.length}{' '}
-            {row.assignments.length === 1 ? 'línea' : 'líneas'}
+            {row.assignments.length} {row.assignments.length === 1 ? 'línea' : 'líneas'}
           </span>
           <span className="flex items-center gap-1">
             {row.att_permit && (
-              <span
-                title="Permiso ATT"
-                className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700"
-              >
+              <span title="Permiso ATT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
                 <Lock className="h-3 w-3" />
               </span>
             )}
             {row.escort && (
-              <span
-                title="Escolta"
-                className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700"
-              >
+              <span title="Escolta" className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
                 <Siren className="h-3 w-3" />
               </span>
             )}
@@ -365,25 +439,59 @@ export default function ProgramacionPage() {
   const isLoading = authLoading
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-navy">Programación de Viajes</h1>
-
         {puedeCrearViaje && (
-          <Button
-            onClick={() => router.push('/programacion/viaje/nuevo')}
-            className="shrink-0"
-          >
+          <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
             <Plus className="h-4 w-4" />
             Crear Viaje
           </Button>
         )}
       </div>
 
+      {/* FilterBar unificado */}
+      <FilterBar chips={filterChips} onClearAll={clearAllFilters}>
+        <div className="w-full sm:w-52">
+          <Select
+            placeholder="Proyecto"
+            options={projectOptions}
+            value={projectFilter}
+            onChange={setProjectFilter}
+            disabled={projectsLoading || isLoading}
+          />
+        </div>
+        <div className="w-full sm:w-40">
+          <Select
+            placeholder="Estado"
+            options={TRIP_STATUSES.map((s) => ({ value: s, label: s }))}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+        </div>
+        <div className="w-full sm:w-44">
+          <Select
+            placeholder="Conductor"
+            options={conductorOptions}
+            value={driverFilter}
+            onChange={setDriverFilter}
+          />
+        </div>
+        <div className="relative w-full sm:w-44">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+          />
+        </div>
+      </FilterBar>
+
       {/* ─── Sección 1: Backlog ─── */}
       <section className="space-y-3">
-        {/* Encabezado de sección */}
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">
             Sin Programar
@@ -393,22 +501,7 @@ export default function ProgramacionPage() {
               </span>
             )}
           </h2>
-        </div>
-
-        {/* Filtros del backlog */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Dropdown de proyecto */}
-          <div className="w-full sm:w-64">
-            <Select
-              placeholder="Todos los proyectos"
-              options={projectOptions}
-              value={projectFilter}
-              onChange={setProjectFilter}
-              disabled={projectsLoading || isLoading}
-            />
-          </div>
-
-          {/* Filtro de tipo (botones) */}
+          {/* Filtro tipo (específico del backlog) */}
           <div className="flex items-center gap-1">
             {LINE_TYPES.map((tipo) => (
               <button
@@ -427,7 +520,6 @@ export default function ProgramacionPage() {
           </div>
         </div>
 
-        {/* Tabla del backlog */}
         <div className="rounded-xl ring-1 ring-gray-200 bg-white p-1">
           <BacklogTable
             lines={filteredBacklog}
@@ -441,75 +533,17 @@ export default function ProgramacionPage() {
         </div>
       </section>
 
+      {/* MiniCalendar */}
+      <MiniCalendar
+        items={calendarItems}
+        selectedDate={dateFilter}
+        onSelectDate={setDateFilter}
+      />
+
       {/* ─── Sección 2: Viajes Recientes ─── */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">
-            Viajes Recientes
-          </h2>
+        <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
 
-          {/* Filtro de estado de viajes */}
-          <div className="flex flex-wrap items-center gap-1">
-            {TRIP_STATUSES.map((status) => {
-              const isActive = filters.status === status
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() =>
-                    setFilters({ status: isActive ? null : status })
-                  }
-                  className={`transition-all ${
-                    isActive
-                      ? 'ring-2 ring-navy ring-offset-1'
-                      : 'opacity-50 hover:opacity-80'
-                  }`}
-                >
-                  <Badge label={status} variant="trip" />
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Filtros adicionales: proyecto, fecha y conductor */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="w-full sm:w-64">
-            <Select
-              placeholder="Todos los proyectos"
-              options={projectOptions}
-              value={tripProjectFilter}
-              onChange={setTripProjectFilter}
-              disabled={projectsLoading}
-            />
-          </div>
-          <input
-            type="date"
-            value={filters.dateFrom ?? ''}
-            onChange={(e) => setFilters({ dateFrom: e.target.value || null })}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
-            placeholder="Desde"
-            title="Fecha desde"
-          />
-          <input
-            type="date"
-            value={filters.dateTo ?? ''}
-            onChange={(e) => setFilters({ dateTo: e.target.value || null })}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy"
-            placeholder="Hasta"
-            title="Fecha hasta"
-          />
-          <div className="w-48">
-            <Select
-              placeholder="Todos los conductores"
-              options={conductorOptions}
-              value={filters.conductorId ?? null}
-              onChange={(val) => setFilters({ conductorId: val })}
-            />
-          </div>
-        </div>
-
-        {/* Error */}
         {listError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
             Error al cargar viajes: {listError}
@@ -520,14 +554,60 @@ export default function ProgramacionPage() {
           columns={columns}
           data={filteredTrips}
           keyExtractor={(row) => row.id}
-          onRowClick={handleTripRowClick}
           loading={listLoading}
           emptyMessage="No hay viajes para mostrar"
           mobileRender={mobileRender}
+          expandRender={(row) => {
+            const assignments = row.assignments ?? []
+            if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
+            return (
+              <div className="space-y-1.5">
+                {assignments.map((a) => {
+                  const line = a.line
+                  if (!line) return null
+                  const fromName = line.from_location?.name ?? line.from_text ?? '—'
+                  const toName = line.to_location?.name ?? line.to_text ?? '—'
+                  const unitName = line.unit?.code ?? line.unit_text ?? ''
+                  const isEquipo = line.line_type === 'Equipo'
+                  return (
+                    <div key={a.id} className="flex items-center gap-2 text-sm">
+                      {isEquipo ? (
+                        <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                      ) : (
+                        <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
+                      )}
+                      <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+                        {line.description}
+                      </span>
+                      <span className="flex items-center gap-1 text-iconsa-gray">
+                        <span className="max-w-[100px] truncate">{fromName}</span>
+                        <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
+                        <span className="max-w-[100px] truncate">{toName}</span>
+                      </span>
+                      <span className="shrink-0 text-gray-600">{a.quantity_assigned} {unitName}</span>
+                      <Badge label={line.status} variant="line" />
+                      {line.notes && (
+                        <span className="max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
+                          {line.notes}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                <a
+                  href={`/programacion/viaje/${row.id}`}
+                  onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
+                  className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
+                >
+                  Ver detalle del viaje
+                </a>
+              </div>
+            )
+          }}
         />
       </section>
 
-      {/* ─── Barra flotante: crear viaje con líneas seleccionadas ─── */}
+      {/* Barra flotante: crear viaje con líneas seleccionadas */}
       {puedeCrearViaje && visibleSelectedCount > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:bottom-4 sm:left-auto sm:right-6 sm:w-auto sm:rounded-xl sm:border sm:shadow-xl">
           <div className="flex items-center gap-3">

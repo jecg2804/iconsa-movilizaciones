@@ -15,12 +15,15 @@ export interface SolicitudWithRelations {
   approved_by: string | null
   date_required: string
   date_created: string | null
+  date_submitted: string | null
+  date_completed: string | null
+  date_cancelled: string | null
   status: string
   priority: string | null
   notes: string | null
   attachments: unknown
-  created_at: string
-  updated_at: string
+  created_at: string | null
+  updated_at: string | null
   project: { id: string; code: string; name: string } | null
   requester: { id: string; name: string } | null
   lines: LineWithRelations[]
@@ -280,7 +283,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           *,
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
-          lines:sm_request_lines(id, status)
+          lines:sm_request_lines(id, status, line_type, description, quantity, notes, from_text, to_text, unit_text, from_location:locations!sm_request_lines_from_location_id_fkey(name), to_location:locations!sm_request_lines_to_location_id_fkey(name), unit:units(code))
         `)
         .order('date_required', { ascending: true })
 
@@ -291,9 +294,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       if (filters.statuses.length > 0) {
         query = query.in('status', filters.statuses)
       }
-      if (filters.priorities.length > 0) {
-        query = query.in('priority', filters.priorities)
-      }
+      // Prioridad se filtra client-side (calculatePriority viva vs BD stale)
       if (filters.dateFrom) {
         query = query.gte('date_required', filters.dateFrom)
       }
@@ -329,6 +330,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           approved_by: row.approved_by,
           date_required: row.date_required,
           date_created: row.date_created,
+          date_submitted: row.date_submitted ?? null,
+          date_completed: row.date_completed ?? null,
+          date_cancelled: row.date_cancelled ?? null,
           status: row.status,
           priority: row.priority,
           notes: row.notes,
@@ -444,6 +448,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         approved_by: data.approved_by,
         date_required: data.date_required,
         date_created: data.date_created,
+        date_submitted: data.date_submitted,
+        date_completed: data.date_completed,
+        date_cancelled: data.date_cancelled,
         status: data.status,
         priority: data.priority,
         notes: data.notes,
@@ -465,6 +472,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       lines: LineInput[],
       _deletedLineIds: string[],
       status: 'Borrador' | 'Enviada',
+      personId?: string,
     ): Promise<{ id: string; requestId: string } | null> => {
       setSaving(true)
       setSaveError(null)
@@ -477,6 +485,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           date_required: header.date_required,
           notes: header.notes ?? null,
           status,
+          created_by: personId ?? null,
         }
 
         // 1. Insertar el header
@@ -560,6 +569,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       header: Partial<SolicitudInput>,
       lines: LineInput[],
       deletedLineIds: string[],
+      personId?: string,
     ): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
@@ -572,6 +582,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.approved_by !== undefined) headerUpdate.approved_by = header.approved_by
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
+        if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
           const { error: headerError } = await supabase
@@ -619,9 +630,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         for (const line of lines) {
           if (line.id) {
             // Linea existente: actualizar
-            const { error: updateError } = await supabase
-              .from('sm_request_lines')
-              .update({
+            const lineUpdate: Record<string, unknown> = {
                 line_type: line.line_type,
                 equipment_id: line.equipment_id,
                 equipment_text: line.equipment_text,
@@ -639,7 +648,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 material_category: line.material_category,
                 po_reference: line.po_reference,
                 notes: line.notes,
-              })
+              }
+            if (personId) lineUpdate.updated_by = personId
+
+            const { error: updateError } = await supabase
+              .from('sm_request_lines')
+              .update(lineUpdate)
               .eq('id', line.id)
 
             if (updateError) {

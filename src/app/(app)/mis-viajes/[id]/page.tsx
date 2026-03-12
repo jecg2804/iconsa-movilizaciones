@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { useTripEvents, type TripEventType, type TripEventInput } from '@/hooks/useTripEvents'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, formatQty } from '@/lib/utils/format'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -77,7 +77,7 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
 
       <div className="shrink-0 flex items-center gap-2">
         <span className="text-sm text-gray-700 whitespace-nowrap">
-          {assignment.quantity_assigned} {unitCode}
+          {formatQty(assignment.quantity_assigned)} {unitCode}
         </span>
         {line?.status && <Badge variant="line" label={line.status} />}
       </div>
@@ -91,14 +91,30 @@ interface EventModalProps {
   eventType: TripEventType
   confirmationCode: string | null
   receiverOptions: Array<{ value: string; label: string }>
+  assignments?: Array<{
+    request_line_id: string
+    quantity_assigned: number
+    line: { description: string; quantity: number; unit?: { code: string } | null } | null
+  }>
   onConfirm: (input: TripEventInput) => void
   onClose: () => void
   loading: boolean
 }
 
-function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, onClose, loading }: EventModalProps) {
+function EventModal({ eventType, confirmationCode, receiverOptions, assignments, onConfirm, onClose, loading }: EventModalProps) {
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
+  const deliveredQtys = useRef<Record<string, number>>({})
+
+  useEffect(() => {
+    if (assignments) {
+      const defaults: Record<string, number> = {}
+      for (const a of assignments) {
+        defaults[a.request_line_id] = a.quantity_assigned
+      }
+      deliveredQtys.current = defaults
+    }
+  }, [assignments])
 
   const handleConfirmCode = useCallback(
     (codeUsed: string, receivedById: string | null, receivedByName: string) => {
@@ -110,6 +126,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, o
         confirmation_code_used: codeUsed || null,
         received_by_id: receivedById ?? null,
         received_by_name: receivedByName || null,
+        deliveredQuantities: { ...deliveredQtys.current },
       })
     },
     [eventType, location, notes, onConfirm],
@@ -155,6 +172,35 @@ function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, o
             />
           </div>
         </div>
+
+        {/* Cantidades a entregar (solo Entrega) */}
+        {eventType === 'Entrega' && assignments && assignments.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-medium text-gray-700">Cantidades a entregar</p>
+            {assignments.map((a) => {
+              const desc = a.line?.description ?? 'Línea'
+              const unitCode = a.line?.unit?.code ?? ''
+              return (
+                <div key={a.request_line_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                  <span className="flex-1 text-sm text-gray-700 truncate">{desc}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={Math.round(a.quantity_assigned)}
+                    step="1"
+                    defaultValue={Math.round(a.quantity_assigned)}
+                    title={`Cantidad a entregar de ${desc}`}
+                    onChange={(e) => {
+                      deliveredQtys.current[a.request_line_id] = parseFloat(e.target.value) || 0
+                    }}
+                    className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+                  />
+                  <span className="text-xs text-iconsa-gray whitespace-nowrap">/ {formatQty(a.quantity_assigned)} {unitCode}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Confirmacion de entrega con codigo */}
         {eventType === 'Entrega' ? (
@@ -205,12 +251,6 @@ export default function MisViajesDetailPage() {
 
   // Opciones de receptor para entrega
   const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
-
-  // --- Carga inicial del viaje ---
-  const loadTrip = useCallback(async () => {
-    const data = await fetchTrip(id)
-    setTrip(data)
-  }, [id, fetchTrip])
 
   // --- Fetch receptores del proyecto destino ---
   const loadReceivers = useCallback(async (tripData: TripWithRelations) => {
@@ -283,6 +323,22 @@ export default function MisViajesDetailPage() {
         if (!seen.has(p.id)) {
           people.push({ value: p.id, label: p.name })
         }
+      }
+    }
+
+    // Incluir personal operativo (pm, logistica, almacen, admin) que no esté ya en la lista
+    const { data: operationalPeople } = await supabase
+      .from('people')
+      .select('id, name')
+      .in('app_role', ['pm', 'logistica', 'almacen', 'admin'])
+      .eq('status', 'Activo')
+      .order('name')
+
+    const seenAll = new Set(people.map((p) => p.value))
+    for (const p of operationalPeople ?? []) {
+      if (!seenAll.has(p.id)) {
+        seenAll.add(p.id)
+        people.push({ value: p.id, label: p.name })
       }
     }
 
@@ -444,6 +500,15 @@ export default function MisViajesDetailPage() {
           <span className="text-sm text-iconsa-gray">{formatDate(trip.scheduled_date)}</span>
         </div>
 
+        {/* Banner material entregado pendiente retorno */}
+        {trip.status === 'En Ruta' && hasEntrega && (
+          <div className="mt-3 rounded-lg bg-green-50 border border-green-200 px-4 py-2.5">
+            <p className="text-sm text-green-700 font-medium">
+              Material entregado — pendiente registro de retorno
+            </p>
+          </div>
+        )}
+
         {/* Detalles conductor/vehiculo */}
         <dl className="mt-3 grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-2">
           {trip.driver && (
@@ -557,6 +622,7 @@ export default function MisViajesDetailPage() {
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}
           receiverOptions={receiverOptions}
+          assignments={trip.assignments}
           onConfirm={handleRegisterEvent}
           onClose={() => setActiveEvent(null)}
           loading={registering}

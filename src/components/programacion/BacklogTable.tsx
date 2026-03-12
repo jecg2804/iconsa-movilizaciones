@@ -1,8 +1,7 @@
 'use client'
 
 import { Wrench, Package, ArrowRight, Loader2 } from 'lucide-react'
-import { Badge } from '@/components/ui/Badge'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatQty } from '@/lib/utils/format'
 import type { BacklogLine } from '@/hooks/useTrips'
 
 interface BacklogTableProps {
@@ -15,16 +14,6 @@ interface BacklogTableProps {
   onSelectAll?: (selected: boolean) => void
   /** Callback cuando se hace click en el ID de solicitud */
   onRequestClick?: (requestId: string) => void
-}
-
-/** Color de texto para la fecha requerida segun prioridad */
-function priorityDateColor(priority: string): string {
-  switch (priority) {
-    case 'Vencida': return 'text-iconsa-red'
-    case 'Urgente': return 'text-iconsa-orange'
-    case 'Próxima': return 'text-iconsa-blue'
-    default: return 'text-iconsa-green'
-  }
 }
 
 /** Resuelve el nombre de origen de una linea de backlog */
@@ -111,8 +100,6 @@ function BacklogTable({
         const toName = resolveTo(line)
         const unitCode = resolveUnit(line)
         const requestDisplayId = line.request.request_id ?? line.request_id.slice(0, 8)
-        const priority = line.request.priority ?? 'Normal'
-
         return (
           <div
             key={line.id}
@@ -130,15 +117,11 @@ function BacklogTable({
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => onToggleSelect?.(line.id)}
+                    aria-label={`Seleccionar linea ${line.description}`}
                     className="rounded border-gray-300 text-navy focus:ring-navy"
                   />
                 </label>
               )}
-
-              {/* Badge de prioridad */}
-              <div className="shrink-0">
-                <Badge variant="priority" label={priority} />
-              </div>
 
               {/* Icono de tipo */}
               <span className="shrink-0" title={line.line_type}>
@@ -151,7 +134,7 @@ function BacklogTable({
 
               {/* Descripcion */}
               <span
-                className="min-w-0 max-w-[200px] truncate font-medium text-gray-900"
+                className="min-w-0 max-w-50 truncate font-medium text-gray-900"
                 title={line.description}
               >
                 {line.description}
@@ -173,18 +156,18 @@ function BacklogTable({
 
               {/* Ruta: desde → hasta */}
               <span className="flex min-w-0 items-center gap-1.5 text-iconsa-gray">
-                <span className="max-w-[110px] truncate text-xs" title={fromName}>
+                <span className="max-w-27.5 truncate text-xs" title={fromName}>
                   {fromName}
                 </span>
                 <ArrowRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                <span className="max-w-[110px] truncate text-xs" title={toName}>
+                <span className="max-w-27.5 truncate text-xs" title={toName}>
                   {toName}
                 </span>
               </span>
 
               {/* Solicitante */}
               {line.request.requester?.name && (
-                <span className="shrink-0 text-xs text-iconsa-gray truncate max-w-[100px]" title={line.request.requester.name}>
+                <span className="shrink-0 text-xs text-iconsa-gray truncate max-w-25" title={line.request.requester.name}>
                   {line.request.requester.name.split(' ').slice(0, 2).join(' ')}
                 </span>
               )}
@@ -192,21 +175,39 @@ function BacklogTable({
               {/* Notas de solicitud (truncadas) */}
               {line.request.notes && (
                 <span
-                  className="shrink-0 max-w-[150px] truncate text-xs italic text-gray-400"
+                  className="shrink-0 max-w-37.5 truncate text-xs italic text-gray-400"
                   title={line.request.notes}
                 >
                   {line.request.notes}
                 </span>
               )}
 
-              {/* Cantidad + unidad */}
+              {/* Notas de línea */}
+              {line.notes && (
+                <span
+                  className="shrink-0 max-w-37.5 truncate text-xs italic text-amber-600"
+                  title={line.notes}
+                >
+                  {line.notes}
+                </span>
+              )}
+
+              {/* Cantidad disponible + unidad */}
               <span className="shrink-0 whitespace-nowrap text-gray-700 text-xs ml-auto">
-                {line.quantity} {unitCode}
+                {formatQty(Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0)))} {unitCode}
+                {(line.qty_delivered ?? 0) > 0 && (
+                  <span className="text-xs text-orange-600 ml-1">
+                    ({formatQty(line.qty_delivered)}/{formatQty(line.quantity)})
+                  </span>
+                )}
               </span>
 
-              {/* Fecha requerida con color de prioridad */}
-              <span className={`shrink-0 whitespace-nowrap text-xs font-medium ${priorityDateColor(priority)}`}>
+              {/* Fecha requerida con color de prioridad + días */}
+              <span className={`shrink-0 whitespace-nowrap text-xs font-medium ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
                 {formatDate(line.request.date_required)}
+                <span className={`ml-1.5 font-mono font-semibold ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
+                  {formatDaysUntilDue(line.request.date_required)}
+                </span>
               </span>
             </div>
 
@@ -220,11 +221,11 @@ function BacklogTable({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => onToggleSelect?.(line.id)}
+                      aria-label={`Seleccionar linea ${line.description}`}
                       className="rounded border-gray-300 text-navy focus:ring-navy"
                     />
                   </label>
                 )}
-                <Badge variant="priority" label={priority} />
                 {isEquipo ? (
                   <Wrench className="h-4 w-4 shrink-0 text-iconsa-blue mt-0.5" />
                 ) : (
@@ -264,6 +265,13 @@ function BacklogTable({
                 </p>
               )}
 
+              {/* Fila 2c: notas de línea */}
+              {line.notes && (
+                <p className="text-xs italic text-amber-600 truncate">
+                  {line.notes}
+                </p>
+              )}
+
               {/* Fila 3: ruta desde → hasta */}
               <div className="flex items-center gap-1.5 text-xs text-iconsa-gray">
                 <span className="max-w-32.5 truncate">{fromName}</span>
@@ -274,10 +282,18 @@ function BacklogTable({
               {/* Fila 4: cantidad + fecha requerida con color */}
               <div className="flex items-center justify-between text-xs text-gray-600">
                 <span>
-                  {line.quantity} {unitCode}
+                  {formatQty(Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0)))} {unitCode}
+                  {(line.qty_delivered ?? 0) > 0 && (
+                    <span className="text-xs text-orange-600 ml-1">
+                      ({formatQty(line.qty_delivered)}/{formatQty(line.quantity)})
+                    </span>
+                  )}
                 </span>
-                <span className={`font-medium ${priorityDateColor(priority)}`}>
+                <span className={`font-medium ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
                   {formatDate(line.request.date_required)}
+                  <span className={`ml-1 font-mono font-semibold ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
+                    {formatDaysUntilDue(line.request.date_required)}
+                  </span>
                 </span>
               </div>
             </div>

@@ -16,6 +16,7 @@ export interface TripEventInput {
   confirmation_code_used?: string | null
   received_by_id?: string | null
   received_by_name?: string | null
+  deliveredQuantities?: Record<string, number> // lineId → qty entregada en ESTE viaje
 }
 
 // --- Hook ---
@@ -73,12 +74,13 @@ export function useTripEvents(tripId: string) {
             return false
           }
 
-          // líneas → En Tránsito
+          // líneas → En Transito
           if (assignedLineIds.length > 0) {
             const { error: linesError } = await supabase
               .from('sm_request_lines')
-              .update({ status: 'En Tránsito' })
+              .update({ status: 'En Transito', updated_by: person?.id ?? null })
               .in('id', assignedLineIds)
+              .eq('status', 'Programada')
 
             if (linesError) {
               setRegisterError(linesError.message)
@@ -97,16 +99,57 @@ export function useTripEvents(tripId: string) {
             return false
           }
         } else if (input.event_type === 'Entrega') {
-          // líneas → Entregada (trigger BD cascade_request_status actualiza solicitudes)
+          // Entregas parciales: acumula qty_delivered, decrementa qty_scheduled
           if (assignedLineIds.length > 0) {
-            const { error: linesError } = await supabase
-              .from('sm_request_lines')
-              .update({ status: 'Entregada' })
-              .in('id', assignedLineIds)
+            const { data: assignments } = await supabase
+              .from('trip_line_assignments')
+              .select('request_line_id, quantity_assigned')
+              .eq('trip_id', tripId)
+              .in('request_line_id', assignedLineIds)
 
-            if (linesError) {
-              setRegisterError(linesError.message)
-              return false
+            const now = new Date().toISOString()
+
+            for (const lineId of assignedLineIds) {
+              const assignment = assignments?.find((a) => a.request_line_id === lineId)
+              const qtyAssigned = assignment?.quantity_assigned ?? 0
+              // qty real entregada (default = lo asignado al viaje)
+              const qtyThisTrip = input.deliveredQuantities?.[lineId] ?? qtyAssigned
+
+              // Leer estado actual de la línea
+              const { data: currentLine } = await supabase
+                .from('sm_request_lines')
+                .select('quantity, qty_scheduled, qty_delivered')
+                .eq('id', lineId)
+                .single()
+
+              if (!currentLine) continue
+
+              const newQtyDelivered = (currentLine.qty_delivered ?? 0) + qtyThisTrip
+              const newQtyScheduled = Math.max(0, (currentLine.qty_scheduled ?? 0) - qtyAssigned)
+              const newStatus = newQtyDelivered >= currentLine.quantity ? 'Entregada' : 'Parcial'
+
+              const { error: lineError } = await supabase
+                .from('sm_request_lines')
+                .update({
+                  status: newStatus,
+                  qty_delivered: newQtyDelivered,
+                  qty_scheduled: newQtyScheduled,
+                  delivered_at: now,
+                  updated_by: person?.id ?? null,
+                })
+                .eq('id', lineId)
+
+              if (lineError) {
+                setRegisterError(lineError.message)
+                return false
+              }
+
+              // Auditoría: guardar qty_delivered en la asignación
+              await supabase
+                .from('trip_line_assignments')
+                .update({ qty_delivered: qtyThisTrip })
+                .eq('trip_id', tripId)
+                .eq('request_line_id', lineId)
             }
           }
         } else if (input.event_type === 'Retorno') {

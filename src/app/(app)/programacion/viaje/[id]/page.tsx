@@ -13,7 +13,7 @@ import {
   type TripWithRelations,
   type TripAssignment,
 } from '@/hooks/useTrips'
-import { formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -26,6 +26,7 @@ import { LineSelector } from '@/components/programacion/LineSelector'
 function tripToInput(trip: TripWithRelations): TripInput {
   return {
     scheduled_date: trip.scheduled_date,
+    scheduled_time: (trip as unknown as Record<string, unknown>).scheduled_time as string | null ?? null,
     driver_id: trip.driver_id,
     vehicle_id: trip.vehicle_id,
     trailer_id: trip.trailer_id,
@@ -71,6 +72,14 @@ interface RateRow {
   rate: number
 }
 
+interface TripEventRow {
+  event_type: string
+  event_timestamp: string
+  registered_by: { name: string } | null
+  received_by_name: string | null
+  notes: string | null
+}
+
 // --- Componente de fila de asignacion existente (modo lectura o edicion) ---
 
 interface AssignmentRowProps {
@@ -80,6 +89,7 @@ interface AssignmentRowProps {
 }
 
 function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) {
+  const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
   const fromName = line?.from_location?.name ?? line?.from_text ?? '—'
@@ -117,9 +127,13 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
           <span className="truncate text-sm font-medium text-gray-900">
             {line?.description ?? 'Cargando...'}
           </span>
-          <span className="font-mono text-xs text-iconsa-gray shrink-0">
+          <button
+            type="button"
+            onClick={() => line?.request?.id && router.push(`/solicitudes/${line.request.id}`)}
+            className="font-mono text-xs text-iconsa-blue hover:underline cursor-pointer shrink-0"
+          >
             {requestDisplayId}
-          </span>
+          </button>
         </div>
 
         {/* Ruta */}
@@ -142,7 +156,12 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
       {/* Cantidad + estado */}
       <div className="shrink-0 flex items-center gap-3">
         <span className="text-sm text-gray-700 whitespace-nowrap">
-          {assignment.quantity_assigned} {unitCode}
+          {formatQty(assignment.quantity_assigned)} {unitCode}
+          {(assignment.qty_delivered ?? 0) > 0 && (
+            <span className="text-xs text-orange-600 ml-1">
+              ({formatQty(assignment.qty_delivered)} entregadas)
+            </span>
+          )}
         </span>
         {line?.status && (
           <Badge variant="line" label={line.status} />
@@ -173,7 +192,7 @@ export default function ViajeDetailPage() {
   const supabase = useMemo(() => createClient(), [])
 
   // Auth y permisos
-  const { role, loading: authLoading } = useAuth()
+  const { person, role, loading: authLoading } = useAuth()
 
   // Vehiculos y remolques
   const { vehicles, trailers, loading: vehiclesLoading } = useVehicles()
@@ -196,6 +215,7 @@ export default function ViajeDetailPage() {
   // Estado editable
   const [tripData, setTripData] = useState<TripInput>({
     scheduled_date: '',
+    scheduled_time: null,
     driver_id: null,
     vehicle_id: null,
     trailer_id: null,
@@ -211,6 +231,9 @@ export default function ViajeDetailPage() {
   const [existingAssignments, setExistingAssignments] = useState<TripAssignment[]>([])
   const [newAssignments, setNewAssignments] = useState<AssignmentInput[]>([])
   const [removedAssignmentIds, setRemovedAssignmentIds] = useState<string[]>([])
+
+  // Eventos de ejecución
+  const [tripEvents, setTripEvents] = useState<TripEventRow[]>([])
 
   // Estado de UI
   const [isDirty, setIsDirty] = useState(false)
@@ -234,6 +257,14 @@ export default function ViajeDetailPage() {
         setNewAssignments([])
         setRemovedAssignmentIds([])
         setIsDirty(false)
+
+        // Fetch eventos de ejecución
+        const { data: events } = await supabase
+          .from('trip_events')
+          .select('event_type, event_timestamp, registered_by:registered_by(name), received_by_name, notes')
+          .eq('trip_id', id)
+          .order('event_timestamp', { ascending: true })
+        setTripEvents((events as unknown as TripEventRow[]) ?? [])
       }
       setPageLoading(false)
     }
@@ -381,7 +412,7 @@ export default function ViajeDetailPage() {
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
     }
-    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds)
+    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id)
     if (success) {
       // Refrescar datos del viaje
       const updated = await fetchTrip(id)
@@ -394,7 +425,7 @@ export default function ViajeDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, updateTrip, fetchTrip, id])
+  }, [trip, tripData, newAssignments, removedAssignmentIds, updateTrip, fetchTrip, id, person?.id])
 
   // --- Cancelar viaje ---
   const handleCancelTrip = useCallback(async () => {
@@ -507,6 +538,15 @@ export default function ViajeDetailPage() {
         />
       </div>
 
+      {/* Banner material entregado pendiente retorno */}
+      {trip.status === 'En Ruta' && tripEvents.some(e => e.event_type === 'Entrega') && (
+        <div className="mt-4 rounded-lg bg-green-50 border border-green-200 px-4 py-2.5">
+          <p className="text-sm text-green-700 font-medium">
+            Material entregado — pendiente registro de retorno
+          </p>
+        </div>
+      )}
+
       {/* Seccion de lineas asignadas */}
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
@@ -554,24 +594,51 @@ export default function ViajeDetailPage() {
         )}
       </div>
 
-      {/* Informacion adicional en modo lectura */}
-      {mode === 'readonly' && (
+      {/* Eventos de ejecución — visible siempre que haya eventos o viaje no esté Programado */}
+      {(tripEvents.length > 0 || trip.status !== 'Programado') && (
         <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
-          <h2 className="mb-1 text-base font-semibold text-gray-900">
-            Eventos de Ejecucion
-          </h2>
-          <p className="text-sm text-iconsa-gray">
-            Registro de eventos de ejecucion disponible en la seccion Mis Viajes.
-          </p>
-          {trip.actual_departure && (
-            <p className="mt-2 text-xs text-gray-500">
-              Salida: {formatDate(trip.actual_departure)}
-            </p>
-          )}
-          {trip.actual_arrival && (
-            <p className="text-xs text-gray-500">
-              Llegada: {formatDate(trip.actual_arrival)}
-            </p>
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Eventos de Ejecucion
+            </h2>
+            {tripEvents.length > 0 && (
+              <span className="rounded-full bg-navy/10 px-2.5 py-0.5 text-xs font-medium text-navy">
+                {tripEvents.length}
+              </span>
+            )}
+          </div>
+          {tripEvents.length === 0 ? (
+            <p className="text-sm text-iconsa-gray">Sin eventos registrados.</p>
+          ) : (
+            <div className="space-y-3">
+              {tripEvents.map((ev, idx) => {
+                const icon = ev.event_type === 'Salida' ? '🚛'
+                  : ev.event_type === 'Llegada' ? '📍'
+                  : ev.event_type === 'Entrega' ? '✅'
+                  : ev.event_type === 'Retorno' ? '🏠'
+                  : '⚠️'
+                return (
+                  <div key={idx} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                    <span className="text-lg shrink-0">{icon}</span>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{ev.event_type}</span>
+                        <span className="text-xs text-iconsa-gray">{formatDateTime(ev.event_timestamp)}</span>
+                      </div>
+                      {ev.registered_by?.name && (
+                        <p className="text-xs text-iconsa-gray">Registrado por: {ev.registered_by.name}</p>
+                      )}
+                      {ev.event_type === 'Entrega' && ev.received_by_name && (
+                        <p className="text-xs text-iconsa-gray">Recibido por: {ev.received_by_name}</p>
+                      )}
+                      {ev.notes && (
+                        <p className="text-xs text-gray-600">{ev.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}

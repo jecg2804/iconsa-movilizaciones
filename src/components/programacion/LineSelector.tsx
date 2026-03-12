@@ -19,7 +19,7 @@ interface LineSelectorProps {
 
 /** Calcula la cantidad disponible de una linea (cantidad total - ya programada) */
 function getAvailableQty(line: BacklogLine): number {
-  return Math.max(0, line.quantity - line.qty_scheduled)
+  return Math.max(0, line.quantity - line.qty_scheduled - (line.qty_delivered ?? 0))
 }
 
 /** Resuelve el nombre de origen de una linea */
@@ -156,6 +156,7 @@ function LineSelector({
                   </label>
                   <input
                     type="number"
+                    title="Cantidad a asignar"
                     value={assignment.quantity_assigned}
                     min={0.01}
                     max={availableQty > 0 ? availableQty : undefined}

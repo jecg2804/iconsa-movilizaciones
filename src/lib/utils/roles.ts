@@ -21,7 +21,8 @@ export function canCreateSolicitud(role: string | null): boolean {
 
 /**
  * PM puede editar solo solicitudes de SUS proyectos.
- * Logística y admin pueden editar cualquier solicitud.
+ * Admin puede editar cualquier solicitud.
+ * Logística NO edita solicitudes (RLS lo bloquea).
  */
 export function canEditSolicitud(
   role: string | null,
@@ -29,7 +30,7 @@ export function canEditSolicitud(
   userProjectIds: string[],
 ): boolean {
   if (!role) return false
-  if (role === 'admin' || role === 'logistica') return true
+  if (role === 'admin') return true
   if (role === 'pm') return userProjectIds.includes(projectId)
   return false
 }

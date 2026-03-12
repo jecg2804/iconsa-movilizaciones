@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import { formatDate, formatDateTime, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
 
 type FormMode = 'create' | 'edit' | 'readonly'
@@ -16,9 +17,13 @@ interface SolicitudFormProps {
     requesterId: string
     approvedBy: string | null
     dateRequired: string
+    dateCreated?: string
     notes: string | null
     status: string
     priority: string | null
+    dateSubmitted?: string | null
+    dateCompleted?: string | null
+    dateCancelled?: string | null
   }
   /** Proyectos disponibles para el dropdown (para PM, solo sus proyectos asignados) */
   projects: SelectOption[]
@@ -30,6 +35,8 @@ interface SolicitudFormProps {
   onChange: (data: SolicitudInput) => void
   /** ID de la persona actualmente logueada (auto-rellena solicitante en modo creacion) */
   currentPersonId: string
+  /** Rol del usuario logueado — admin puede editar solicitante */
+  role?: string | null
 }
 
 function SolicitudForm({
@@ -40,6 +47,7 @@ function SolicitudForm({
   approvers,
   onChange,
   currentPersonId,
+  role,
 }: SolicitudFormProps) {
   const approverOptions = approvers ?? people
   const isReadonly = mode === 'readonly'
@@ -120,7 +128,14 @@ function SolicitudForm({
   // Datos de visualizacion
   const requestId = initialData?.requestId
   const status = initialData?.status
-  const priority = initialData?.priority
+  const isCancelled = status === 'Cancelada'
+  const isCompleted = status === 'Completada'
+  const isTerminal = isCancelled || isCompleted
+
+  // Delta de completación (solo para Completada)
+  const completionDelta = isCompleted && dateRequired && initialData?.dateCompleted
+    ? formatCompletionDelta(dateRequired, initialData.dateCompleted)
+    : null
 
   return (
     <div className="space-y-4">
@@ -137,10 +152,18 @@ function SolicitudForm({
             </span>
           )}
         </div>
-        {(status || priority) && (
+        {(status || dateRequired) && (
           <div className="flex items-center gap-2">
             {status && <Badge variant="status" label={status} />}
-            {priority && <Badge variant="priority" label={priority} />}
+            {completionDelta ? (
+              <span className={`text-xs font-medium ${completionDelta.color}`}>
+                {completionDelta.text}
+              </span>
+            ) : !isTerminal && dateRequired ? (
+              <span className={`text-xs font-medium ${daysUntilDueColor(daysUntilDue(dateRequired))}`}>
+                {formatDaysUntilDue(dateRequired)}
+              </span>
+            ) : null}
           </div>
         )}
       </div>
@@ -157,15 +180,30 @@ function SolicitudForm({
           searchable
         />
 
-        {/* Solicitante — siempre fijo al usuario logueado, no editable */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Solicitante
-          </label>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-            {people.find((p) => p.value === requesterId)?.label ?? '—'}
+        {/* Solicitante — editable solo para admin */}
+        {role === 'admin' ? (
+          <Select
+            label="Solicitante"
+            placeholder="Seleccionar solicitante..."
+            options={people}
+            value={requesterId}
+            onChange={(val) => {
+              setRequesterId(val ?? '')
+              propagate({ requester_id: val ?? '' })
+            }}
+            disabled={isReadonly}
+            searchable
+          />
+        ) : (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Solicitante
+            </label>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {people.find((p) => p.value === requesterId)?.label ?? '—'}
+            </div>
           </div>
-        </div>
+        )}
 
         <Select
           label="Aprobado por"
@@ -184,6 +222,35 @@ function SolicitudForm({
           onChange={handleDateChange}
           disabled={isReadonly}
         />
+
+        {/* Lifecycle timestamps */}
+        {initialData?.dateCreated && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Fechas del Ciclo
+            </label>
+            <div className="flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
+                Creada: {formatDate(initialData.dateCreated)}
+              </span>
+              {initialData.dateSubmitted && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-iconsa-blue">
+                  Enviada: {formatDateTime(initialData.dateSubmitted)}
+                </span>
+              )}
+              {initialData.dateCompleted && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-iconsa-green">
+                  Completada: {formatDateTime(initialData.dateCompleted)}
+                </span>
+              )}
+              {initialData.dateCancelled && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-iconsa-red">
+                  Cancelada: {formatDateTime(initialData.dateCancelled)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Notas — full width */}
         <div className="md:col-span-2">
