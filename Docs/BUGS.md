@@ -23,6 +23,8 @@ Claude Code puede actualizar este archivo directamente.
 | 15 | created_by usaba requester_id en vez de personId | 2026-03-12 | — |
 | 16 | cascade_request_status() orden incorrecto (Parcial antes de En Proceso) | 2026-03-12 | — (fix BD) |
 | 17 | RLS bloqueaba UPDATE sm_request_lines para roles operativos | 2026-03-12 | — (fix BD) |
+| 18 | formatCompletionDelta timezone: TIMESTAMPTZ parseado como DATE causa desfase 1 día en UTC-5 | 2026-03-12 | 6249867 |
+| 19 | Columna "Días" en solicitudes: completadas/canceladas mostraban días vs hoy en vez de delta | 2026-03-12 | 4808839 |
 
 ## Abiertos
 

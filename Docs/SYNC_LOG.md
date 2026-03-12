@@ -4,6 +4,24 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-12 — Code: Bugs 18-19 + eliminar prioridad visual
+
+### Cambios Supabase (James)
+- pg_cron job `recalculate-priorities` ELIMINADO (prioridad ya no se recalcula diario)
+- Trigger `calculate_priority()` sigue activo solo en INSERT/UPDATE de date_required
+
+### Bugs corregidos (Code)
+- **Bug #18**: `formatCompletionDelta` usaba `parseLocalDate` en TIMESTAMPTZ, causando desfase de 1 día en Panama (UTC-5). Fix: convertir TIMESTAMPTZ a fecha local con `new Date()`.
+- **Bug #19**: Columna "Días" en lista de solicitudes siempre mostraba días vs hoy. Ahora: Completada→delta vs date_completed, Cancelada→"—", Activa→días vs hoy.
+
+### Prioridad visual eliminada de UI
+- Eliminados badges de prioridad (Vencida/Urgente/Próxima/Normal) de: lista solicitudes, detalle solicitud, backlog programación, dashboard.
+- Eliminados filter chips de prioridad en lista solicitudes.
+- **Mantenido en BD**: trigger `calculate_priority()`, campo `priority` en sm_requests, constantes en código.
+- **Razón**: La columna "Días" con color ya comunica la misma información sin redundancia.
+
+---
+
 ## 2026-03-12 — Code: Fix created_by semántico
 
 - `useSolicitudes.ts`: `created_by` cambiado de `header.requester_id` → `personId` (el usuario logueado)

@@ -220,7 +220,8 @@ UI: dropdown "Extra / Sección" solo visible si proyecto tiene extras.
 | update_equipment_location() | Actualiza equipment.current_location en evento Entrega (trg_update_equipment_location) |
 | audit_trigger() | Escribe en audit_log en INSERT/UPDATE/DELETE (×4 tablas transaccionales) |
 
-**pg_cron:** Daily 6AM UTC recalcula priority para solicitudes activas (`status NOT IN ('Completada', 'Cancelada')`).
+**pg_cron:** ELIMINADO (era recalculación diaria de prioridad). Trigger `calculate_priority()` sigue activo en INSERT/UPDATE.
+**Prioridad UI:** Badges de prioridad eliminados de la UI. La columna "Días" con color comunica la misma info. Campo `priority` en BD se mantiene.
 
 ---
 
@@ -333,6 +334,8 @@ Bugs #3-8 corregidos 2026-03-06.
 | 15 | created_by usaba requester_id en vez de personId (fix semantico) | 2026-03-12 |
 | 16 | cascade_request_status() orden incorrecto (Parcial antes de En Proceso) | 2026-03-12 (BD) |
 | 17 | RLS bloqueaba UPDATE sm_request_lines para logistica/campo/almacen | 2026-03-12 (BD) |
+| 18 | formatCompletionDelta timezone: TIMESTAMPTZ desfase 1 dia en UTC-5 | 2026-03-12 |
+| 19 | Columna Dias en solicitudes: completadas/canceladas mostraban dias vs hoy | 2026-03-12 |
 
 ---
 
