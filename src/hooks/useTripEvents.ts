@@ -73,11 +73,11 @@ export function useTripEvents(tripId: string) {
             return false
           }
 
-          // líneas → En Tránsito
+          // líneas → En Transito
           if (assignedLineIds.length > 0) {
             const { error: linesError } = await supabase
               .from('sm_request_lines')
-              .update({ status: 'En Tránsito', updated_by: person?.id ?? null })
+              .update({ status: 'En Transito', updated_by: person?.id ?? null })
               .in('id', assignedLineIds)
 
             if (linesError) {

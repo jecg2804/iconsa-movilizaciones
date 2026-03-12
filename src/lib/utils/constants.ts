@@ -25,7 +25,7 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number]
 export const LINE_STATUSES = [
   'Pendiente',
   'Programada',
-  'En Tránsito',
+  'En Transito',
   'Entregada',
   'Parcial',
   'Cancelada',
