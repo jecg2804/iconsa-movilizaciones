@@ -192,9 +192,14 @@ function BacklogTable({
                 </span>
               )}
 
-              {/* Cantidad + unidad */}
+              {/* Cantidad disponible + unidad */}
               <span className="shrink-0 whitespace-nowrap text-gray-700 text-xs ml-auto">
-                {line.quantity} {unitCode}
+                {Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0))} {unitCode}
+                {(line.qty_delivered ?? 0) > 0 && (
+                  <span className="text-xs text-orange-600 ml-1">
+                    ({line.qty_delivered}/{line.quantity})
+                  </span>
+                )}
               </span>
 
               {/* Fecha requerida con color de prioridad + días */}
@@ -277,7 +282,12 @@ function BacklogTable({
               {/* Fila 4: cantidad + fecha requerida con color */}
               <div className="flex items-center justify-between text-xs text-gray-600">
                 <span>
-                  {line.quantity} {unitCode}
+                  {Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0))} {unitCode}
+                  {(line.qty_delivered ?? 0) > 0 && (
+                    <span className="text-xs text-orange-600 ml-1">
+                      ({line.qty_delivered}/{line.quantity})
+                    </span>
+                  )}
                 </span>
                 <span className={`font-medium ${daysUntilDueColor(daysUntilDue(line.request.date_required))}`}>
                   {formatDate(line.request.date_required)}
