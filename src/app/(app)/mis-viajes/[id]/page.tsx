@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -91,14 +91,30 @@ interface EventModalProps {
   eventType: TripEventType
   confirmationCode: string | null
   receiverOptions: Array<{ value: string; label: string }>
+  assignments?: Array<{
+    request_line_id: string
+    quantity_assigned: number
+    line: { description: string; quantity: number; unit?: { code: string } | null } | null
+  }>
   onConfirm: (input: TripEventInput) => void
   onClose: () => void
   loading: boolean
 }
 
-function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, onClose, loading }: EventModalProps) {
+function EventModal({ eventType, confirmationCode, receiverOptions, assignments, onConfirm, onClose, loading }: EventModalProps) {
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
+  const deliveredQtys = useRef<Record<string, number>>({})
+
+  useEffect(() => {
+    if (assignments) {
+      const defaults: Record<string, number> = {}
+      for (const a of assignments) {
+        defaults[a.request_line_id] = a.quantity_assigned
+      }
+      deliveredQtys.current = defaults
+    }
+  }, [assignments])
 
   const handleConfirmCode = useCallback(
     (codeUsed: string, receivedById: string | null, receivedByName: string) => {
@@ -110,6 +126,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, o
         confirmation_code_used: codeUsed || null,
         received_by_id: receivedById ?? null,
         received_by_name: receivedByName || null,
+        deliveredQuantities: { ...deliveredQtys.current },
       })
     },
     [eventType, location, notes, onConfirm],
@@ -155,6 +172,35 @@ function EventModal({ eventType, confirmationCode, receiverOptions, onConfirm, o
             />
           </div>
         </div>
+
+        {/* Cantidades a entregar (solo Entrega) */}
+        {eventType === 'Entrega' && assignments && assignments.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-medium text-gray-700">Cantidades a entregar</p>
+            {assignments.map((a) => {
+              const desc = a.line?.description ?? 'Línea'
+              const unitCode = a.line?.unit?.code ?? ''
+              return (
+                <div key={a.request_line_id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                  <span className="flex-1 text-sm text-gray-700 truncate">{desc}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={a.quantity_assigned}
+                    step="any"
+                    defaultValue={a.quantity_assigned}
+                    title={`Cantidad a entregar de ${desc}`}
+                    onChange={(e) => {
+                      deliveredQtys.current[a.request_line_id] = parseFloat(e.target.value) || 0
+                    }}
+                    className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+                  />
+                  <span className="text-xs text-iconsa-gray whitespace-nowrap">/ {a.quantity_assigned} {unitCode}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Confirmacion de entrega con codigo */}
         {eventType === 'Entrega' ? (
@@ -557,6 +603,7 @@ export default function MisViajesDetailPage() {
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}
           receiverOptions={receiverOptions}
+          assignments={trip.assignments}
           onConfirm={handleRegisterEvent}
           onClose={() => setActiveEvent(null)}
           loading={registering}
