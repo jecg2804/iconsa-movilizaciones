@@ -306,15 +306,18 @@ async function releaseLineFromAssignment(
   // Obtener el estado actual y qty_scheduled de la línea
   const { data: line, error: fetchError } = await supabase
     .from('sm_request_lines')
-    .select('id, status, qty_scheduled')
+    .select('id, status, qty_scheduled, qty_delivered')
     .eq('id', requestLineId)
     .single()
 
   if (fetchError || !line) return false
 
   const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - quantityAssigned)
-  // Si no queda cantidad programada, la línea vuelve al backlog
-  const newStatus = newQtyScheduled <= 0 ? 'Pendiente' : line.status
+  // Si no queda cantidad programada, determinar estado según entregas previas
+  let newStatus = line.status
+  if (newQtyScheduled <= 0) {
+    newStatus = (line.qty_delivered ?? 0) > 0 ? 'Parcial' : 'Pendiente'
+  }
 
   const { error: updateError } = await supabase
     .from('sm_request_lines')
