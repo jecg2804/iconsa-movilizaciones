@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { useTripEvents, type TripEventType, type TripEventInput } from '@/hooks/useTripEvents'
-import { formatDate } from '@/lib/utils/format'
+import { formatDate, formatQty } from '@/lib/utils/format'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -77,7 +77,7 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
 
       <div className="shrink-0 flex items-center gap-2">
         <span className="text-sm text-gray-700 whitespace-nowrap">
-          {assignment.quantity_assigned} {unitCode}
+          {formatQty(assignment.quantity_assigned)} {unitCode}
         </span>
         {line?.status && <Badge variant="line" label={line.status} />}
       </div>
@@ -186,16 +186,16 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
                   <input
                     type="number"
                     min={0}
-                    max={a.quantity_assigned}
-                    step="any"
-                    defaultValue={a.quantity_assigned}
+                    max={Math.round(a.quantity_assigned)}
+                    step="1"
+                    defaultValue={Math.round(a.quantity_assigned)}
                     title={`Cantidad a entregar de ${desc}`}
                     onChange={(e) => {
                       deliveredQtys.current[a.request_line_id] = parseFloat(e.target.value) || 0
                     }}
                     className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
                   />
-                  <span className="text-xs text-iconsa-gray whitespace-nowrap">/ {a.quantity_assigned} {unitCode}</span>
+                  <span className="text-xs text-iconsa-gray whitespace-nowrap">/ {formatQty(a.quantity_assigned)} {unitCode}</span>
                 </div>
               )
             })}
@@ -499,6 +499,15 @@ export default function MisViajesDetailPage() {
           </div>
           <span className="text-sm text-iconsa-gray">{formatDate(trip.scheduled_date)}</span>
         </div>
+
+        {/* Banner material entregado pendiente retorno */}
+        {trip.status === 'En Ruta' && hasEntrega && (
+          <div className="mt-3 rounded-lg bg-green-50 border border-green-200 px-4 py-2.5">
+            <p className="text-sm text-green-700 font-medium">
+              Material entregado — pendiente registro de retorno
+            </p>
+          </div>
+        )}
 
         {/* Detalles conductor/vehiculo */}
         <dl className="mt-3 grid grid-cols-1 gap-y-1 text-sm sm:grid-cols-2">

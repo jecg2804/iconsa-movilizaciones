@@ -42,6 +42,12 @@ export function formatCurrency(amount: number): string {
   })}`
 }
 
+/** Formatea cantidad: entero si es número entero, 2 decimales si tiene fracción */
+export function formatQty(n: number | null | undefined): string {
+  if (n == null) return '0'
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
+}
+
 /**
  * Calcula prioridad basada en la fecha requerida vs hoy.
  * Vencida: fecha ya pasó

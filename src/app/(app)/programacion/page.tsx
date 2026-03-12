@@ -369,7 +369,14 @@ export default function ProgramacionPage() {
         header: 'Estado',
         sortable: true,
         className: 'w-[130px]',
-        render: (row) => <Badge label={row.status} variant="trip" />,
+        render: (row) => (
+          <span className="flex items-center gap-1.5">
+            <Badge label={row.status} variant="trip" />
+            {row.status === 'En Ruta' && row.assignments?.some(a => a.line && (a.line.status === 'Entregada' || a.line.status === 'Parcial')) && (
+              <span className="text-green-600 text-xs" title="Material entregado">✅</span>
+            )}
+          </span>
+        ),
         sortValue: (row) => row.status,
       },
       {

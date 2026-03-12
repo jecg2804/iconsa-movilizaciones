@@ -16,7 +16,7 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
-import { formatDate, formatDateTime } from '@/lib/utils/format'
+import { formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
 import type { SelectOption } from '@/components/ui/Select'
@@ -105,6 +105,7 @@ export default function SolicitudDetailPage() {
     description: string
     line_type: string
     quantity_assigned: number
+    qty_delivered: number
   }
   interface TripEventInfo {
     event_type: string
@@ -173,6 +174,7 @@ export default function SolicitudDetailPage() {
         .select(`
           trip_id,
           quantity_assigned,
+          qty_delivered,
           sm_request_lines!inner(description, line_type),
           trips!inner(
             id,
@@ -207,6 +209,7 @@ export default function SolicitudDetailPage() {
               description: (lineRaw as Record<string, unknown>).description as string,
               line_type: (lineRaw as Record<string, unknown>).line_type as string,
               quantity_assigned: row.quantity_assigned as number,
+              qty_delivered: (row.qty_delivered as number) ?? 0,
             }
           : null
 
@@ -723,8 +726,13 @@ export default function SolicitudDetailPage() {
                         </span>
                         <span className="truncate">{line.description}</span>
                         <span className="shrink-0 text-xs text-iconsa-gray">
-                          ×{line.quantity_assigned}
+                          ×{formatQty(line.quantity_assigned)}
                         </span>
+                        {(line.qty_delivered ?? 0) > 0 && (
+                          <span className="shrink-0 text-xs text-orange-600">
+                            ({formatQty(line.qty_delivered)} entregadas)
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>

@@ -1,7 +1,7 @@
 'use client'
 
 import { Wrench, Package, ArrowRight, Loader2 } from 'lucide-react'
-import { formatDate, formatDaysUntilDue, daysUntilDue, daysUntilDueColor } from '@/lib/utils/format'
+import { formatDate, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatQty } from '@/lib/utils/format'
 import type { BacklogLine } from '@/hooks/useTrips'
 
 interface BacklogTableProps {
@@ -194,10 +194,10 @@ function BacklogTable({
 
               {/* Cantidad disponible + unidad */}
               <span className="shrink-0 whitespace-nowrap text-gray-700 text-xs ml-auto">
-                {Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0))} {unitCode}
+                {formatQty(Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0)))} {unitCode}
                 {(line.qty_delivered ?? 0) > 0 && (
                   <span className="text-xs text-orange-600 ml-1">
-                    ({line.qty_delivered}/{line.quantity})
+                    ({formatQty(line.qty_delivered)}/{formatQty(line.quantity)})
                   </span>
                 )}
               </span>
@@ -282,10 +282,10 @@ function BacklogTable({
               {/* Fila 4: cantidad + fecha requerida con color */}
               <div className="flex items-center justify-between text-xs text-gray-600">
                 <span>
-                  {Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0))} {unitCode}
+                  {formatQty(Math.max(0, line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0)))} {unitCode}
                   {(line.qty_delivered ?? 0) > 0 && (
                     <span className="text-xs text-orange-600 ml-1">
-                      ({line.qty_delivered}/{line.quantity})
+                      ({formatQty(line.qty_delivered)}/{formatQty(line.quantity)})
                     </span>
                   )}
                 </span>

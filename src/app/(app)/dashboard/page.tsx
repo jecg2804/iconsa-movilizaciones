@@ -58,7 +58,7 @@ export default async function DashboardPage() {
     supabase
       .from('sm_request_lines')
       .select('id, sm_requests!inner(status)', { count: 'exact', head: true })
-      .eq('status', 'Pendiente')
+      .in('status', ['Pendiente', 'Parcial'])
       .not('sm_requests.status', 'in', '("Borrador","Cancelada","Completada")')
 
   const buildCompletadasQuery = () =>
@@ -232,7 +232,7 @@ export default async function DashboardPage() {
         <KpiCard
           label="Ítems Sin Programar"
           value={sinProgramarCount}
-          sublabel="Líneas pendientes"
+          sublabel="Líneas sin programar"
           icon={Package}
           color="blue"
         />

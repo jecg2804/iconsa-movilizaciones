@@ -13,7 +13,7 @@ import {
   type TripWithRelations,
   type TripAssignment,
 } from '@/hooks/useTrips'
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils/format'
+import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -156,7 +156,12 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
       {/* Cantidad + estado */}
       <div className="shrink-0 flex items-center gap-3">
         <span className="text-sm text-gray-700 whitespace-nowrap">
-          {assignment.quantity_assigned} {unitCode}
+          {formatQty(assignment.quantity_assigned)} {unitCode}
+          {(assignment.qty_delivered ?? 0) > 0 && (
+            <span className="text-xs text-orange-600 ml-1">
+              ({formatQty(assignment.qty_delivered)} entregadas)
+            </span>
+          )}
         </span>
         {line?.status && (
           <Badge variant="line" label={line.status} />
@@ -532,6 +537,15 @@ export default function ViajeDetailPage() {
           isTrailerRequired={isCabezal}
         />
       </div>
+
+      {/* Banner material entregado pendiente retorno */}
+      {trip.status === 'En Ruta' && tripEvents.some(e => e.event_type === 'Entrega') && (
+        <div className="mt-4 rounded-lg bg-green-50 border border-green-200 px-4 py-2.5">
+          <p className="text-sm text-green-700 font-medium">
+            Material entregado — pendiente registro de retorno
+          </p>
+        </div>
+      )}
 
       {/* Seccion de lineas asignadas */}
       <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">

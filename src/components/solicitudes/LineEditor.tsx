@@ -334,7 +334,7 @@ function LineEditor({
       from_text: fromValue.text,
       to_location_id: toValue.id,
       to_text: toValue.text,
-      quantity: parseFloat(quantity) || 0,
+      quantity: Math.round(parseFloat(quantity)) || 0,
       unit_id: unitValue.id,
       unit_text: unitValue.text,
       cost_code_id: costCodeId,
@@ -537,8 +537,8 @@ function LineEditor({
         <Input
           label="Cantidad"
           type="number"
-          min="0.01"
-          step="0.01"
+          min="1"
+          step="1"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           error={errors.quantity}

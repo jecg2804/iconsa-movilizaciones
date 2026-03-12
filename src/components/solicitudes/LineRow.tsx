@@ -2,6 +2,7 @@
 
 import { Wrench, Package, Pencil, Trash2, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { formatQty } from '@/lib/utils/format'
 import type { LineInput } from '@/hooks/useSolicitudes'
 
 interface LineRowProps {
@@ -79,10 +80,10 @@ function LineRow({
 
           {/* Cantidad + unidad + progreso entrega */}
           <span className="shrink-0 whitespace-nowrap text-gray-700">
-            {line.quantity} {unitName}
+            {formatQty(line.quantity)} {unitName}
             {(line.qty_delivered ?? 0) > 0 && (
               <span className={`ml-1 text-xs ${(line.qty_delivered ?? 0) >= line.quantity ? 'text-iconsa-green' : 'text-orange-600'}`}>
-                ({line.qty_delivered}/{line.quantity} entregadas)
+                ({formatQty(line.qty_delivered)}/{formatQty(line.quantity)} entregadas)
               </span>
             )}
           </span>

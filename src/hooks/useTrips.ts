@@ -51,6 +51,7 @@ export interface TripAssignment {
   trip_id: string
   request_line_id: string
   quantity_assigned: number
+  qty_delivered: number
   // Info de la línea asignada
   line: {
     id: string
@@ -210,6 +211,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
       trip_id: a.trip_id as string,
       request_line_id: a.request_line_id as string,
       quantity_assigned: a.quantity_assigned as number,
+      qty_delivered: (a.qty_delivered as number) ?? 0,
       line,
     }
   })
@@ -287,6 +289,7 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
     trip_id: a.trip_id as string,
     request_line_id: a.request_line_id as string,
     quantity_assigned: a.quantity_assigned as number,
+    qty_delivered: (a.qty_delivered as number) ?? 0,
     line,
   }
 }
@@ -506,6 +509,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             trip_id,
             request_line_id,
             quantity_assigned,
+            qty_delivered,
             line:request_line_id(
               id,
               line_number,
@@ -591,6 +595,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             trip_id,
             request_line_id,
             quantity_assigned,
+            qty_delivered,
             line:request_line_id(
               id,
               line_number,
