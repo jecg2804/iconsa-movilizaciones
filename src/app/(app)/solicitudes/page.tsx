@@ -7,22 +7,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
 import { canCreateSolicitud } from '@/lib/utils/roles'
-import { formatDate, calculatePriority, daysUntilDue, formatDaysUntilDue, daysUntilDueColor } from '@/lib/utils/format'
-import { REQUEST_STATUSES, PRIORITIES } from '@/lib/utils/constants'
+import { formatDate, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
+import { REQUEST_STATUSES } from '@/lib/utils/constants'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
-
-// Orden de prioridad para sort (menor = más urgente)
-const PRIORITY_ORDER: Record<string, number> = {
-  Vencida: 0,
-  Urgente: 1,
-  'Próxima': 2,
-  Normal: 3,
-}
 
 export default function SolicitudesPage() {
   const router = useRouter()
@@ -79,23 +71,15 @@ export default function SolicitudesPage() {
     [allProjects, filters.projectId],
   )
 
-  // Solicitudes filtradas por prioridad viva (client-side, sin dateFilter)
-  const priorityFilteredSolicitudes = useMemo(() => {
-    if (filters.priorities.length === 0) return solicitudes
-    return solicitudes.filter((s) =>
-      filters.priorities.includes(calculatePriority(s.date_required))
-    )
-  }, [solicitudes, filters.priorities])
-
-  // Para la tabla: prioridad + fecha calendario
+  // Para la tabla: filtro por fecha calendario
   const displayedSolicitudes = useMemo(() => {
-    if (!dateFilter) return priorityFilteredSolicitudes
-    return priorityFilteredSolicitudes.filter((s) => s.date_required === dateFilter)
-  }, [priorityFilteredSolicitudes, dateFilter])
+    if (!dateFilter) return solicitudes
+    return solicitudes.filter((s) => s.date_required === dateFilter)
+  }, [solicitudes, dateFilter])
 
-  // calendarItems para MiniCalendar (respeta filtro de prioridad)
+  // calendarItems para MiniCalendar
   const calendarItems = useMemo<CalendarItem[]>(() => {
-    return priorityFilteredSolicitudes.map((s) => ({
+    return solicitudes.map((s) => ({
       id: s.id,
       date: s.date_required,
       label: s.request_id ?? '—',
@@ -104,7 +88,7 @@ export default function SolicitudesPage() {
       subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas${s.lines?.some((l: { notes?: string | null }) => l.notes) ? ' 📝' : ''}`,
       href: `/solicitudes/${s.id}`,
     }))
-  }, [priorityFilteredSolicitudes])
+  }, [solicitudes])
 
   // --- Chips de filtros activos ---
   const filterChips = useMemo<FilterChip[]>(() => {
@@ -123,16 +107,6 @@ export default function SolicitudesPage() {
           label: s,
           onRemove: () =>
             setFilters({ statuses: filters.statuses.filter((x) => x !== s) }),
-        })
-      }
-    }
-    if (filters.priorities.length > 0) {
-      for (const p of filters.priorities) {
-        chips.push({
-          key: `priority-${p}`,
-          label: p,
-          onRemove: () =>
-            setFilters({ priorities: filters.priorities.filter((x) => x !== p) }),
         })
       }
     }
@@ -193,18 +167,6 @@ export default function SolicitudesPage() {
       }
     },
     [filters.statuses, setFilters],
-  )
-
-  const togglePriority = useCallback(
-    (priority: string) => {
-      const current = filters.priorities
-      if (current.includes(priority)) {
-        setFilters({ priorities: current.filter((p) => p !== priority) })
-      } else {
-        setFilters({ priorities: [...current, priority] })
-      }
-    },
-    [filters.priorities, setFilters],
   )
 
   const handleRowClick = useCallback(
@@ -284,22 +246,18 @@ export default function SolicitudesPage() {
         sortValue: (row) => row.status,
       },
       {
-        key: 'priority',
-        header: 'Prioridad',
-        sortable: true,
-        className: 'w-[110px]',
-        render: (row) => {
-          const livePriority = calculatePriority(row.date_required)
-          return <Badge label={livePriority} variant="priority" />
-        },
-        sortValue: (row) => PRIORITY_ORDER[calculatePriority(row.date_required)] ?? 3,
-      },
-      {
         key: 'days',
-        header: 'Vence',
+        header: 'Días',
         sortable: true,
-        className: 'w-[70px] text-center',
+        className: 'w-[80px] text-center',
         render: (row) => {
+          if (row.status === 'Cancelada') {
+            return <span className="font-mono text-xs text-gray-400">—</span>
+          }
+          if (row.status === 'Completada' && row.date_completed) {
+            const delta = formatCompletionDelta(row.date_required, row.date_completed)
+            return <span className={`font-mono text-xs font-semibold ${delta.color}`}>{delta.text}</span>
+          }
           const days = daysUntilDue(row.date_required)
           return (
             <span className={`font-mono text-xs font-semibold ${daysUntilDueColor(days)}`}>
@@ -307,7 +265,16 @@ export default function SolicitudesPage() {
             </span>
           )
         },
-        sortValue: (row) => daysUntilDue(row.date_required),
+        sortValue: (row) => {
+          if (row.status === 'Cancelada') return 9999
+          if (row.status === 'Completada' && row.date_completed) {
+            const completedFull = new Date(row.date_completed)
+            const completed = new Date(completedFull.getFullYear(), completedFull.getMonth(), completedFull.getDate())
+            const required = new Date(row.date_required + 'T00:00:00')
+            return required.getTime() - completed.getTime()
+          }
+          return daysUntilDue(row.date_required)
+        },
       },
     ],
     [],
@@ -318,7 +285,7 @@ export default function SolicitudesPage() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 active:bg-gray-50">
         <div className="flex items-center justify-between gap-2">
           <span className="font-mono text-sm font-bold text-navy">{row.request_id ?? '—'}</span>
-          <Badge label={calculatePriority(row.date_required)} variant="priority" />
+          <Badge label={row.status} variant="status" />
         </div>
         <div className="text-sm text-gray-900">
           {row.project ? (
@@ -332,11 +299,19 @@ export default function SolicitudesPage() {
           <span>{row.requester?.name ?? '—'}</span>
           <span>{formatDate(row.date_required)}</span>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <Badge label={row.status} variant="status" />
-          <span className="text-xs text-iconsa-gray">
-            {row.lines?.length ?? 0} {(row.lines?.length ?? 0) === 1 ? 'linea' : 'lineas'}
-          </span>
+        <div className="flex items-center justify-between gap-2 text-xs text-iconsa-gray">
+          <span>{row.lines?.length ?? 0} {(row.lines?.length ?? 0) === 1 ? 'línea' : 'líneas'}</span>
+          {row.status !== 'Cancelada' && (
+            <span className={`font-mono font-semibold ${
+              row.status === 'Completada' && row.date_completed
+                ? formatCompletionDelta(row.date_required, row.date_completed).color
+                : daysUntilDueColor(daysUntilDue(row.date_required))
+            }`}>
+              {row.status === 'Completada' && row.date_completed
+                ? formatCompletionDelta(row.date_required, row.date_completed).text
+                : formatDaysUntilDue(row.date_required)}
+            </span>
+          )}
         </div>
       </div>
     ),
@@ -399,46 +374,25 @@ export default function SolicitudesPage() {
         </div>
       </FilterBar>
 
-      {/* Badges: Estado + Prioridad */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-iconsa-gray">Estado:</span>
-          {REQUEST_STATUSES.map((status) => {
-            const isActive = filters.statuses.includes(status)
-            return (
-              <button
-                key={status}
-                type="button"
-                aria-label={`Filtrar por estado ${status}`}
-                onClick={() => toggleStatus(status)}
-                className={`transition-all ${
-                  isActive ? 'ring-2 ring-navy ring-offset-1' : 'opacity-50 hover:opacity-80'
-                }`}
-              >
-                <Badge label={status} variant="status" />
-              </button>
-            )
-          })}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-iconsa-gray">Prioridad:</span>
-          {PRIORITIES.map((priority) => {
-            const isActive = filters.priorities.includes(priority)
-            return (
-              <button
-                key={priority}
-                type="button"
-                aria-label={`Filtrar por prioridad ${priority}`}
-                onClick={() => togglePriority(priority)}
-                className={`transition-all ${
-                  isActive ? 'ring-2 ring-navy ring-offset-1' : 'opacity-50 hover:opacity-80'
-                }`}
-              >
-                <Badge label={priority} variant="priority" />
-              </button>
-            )
-          })}
-        </div>
+      {/* Badges: Estado */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-iconsa-gray">Estado:</span>
+        {REQUEST_STATUSES.map((status) => {
+          const isActive = filters.statuses.includes(status)
+          return (
+            <button
+              key={status}
+              type="button"
+              aria-label={`Filtrar por estado ${status}`}
+              onClick={() => toggleStatus(status)}
+              className={`transition-all ${
+                isActive ? 'ring-2 ring-navy ring-offset-1' : 'opacity-50 hover:opacity-80'
+              }`}
+            >
+              <Badge label={status} variant="status" />
+            </button>
+          )
+        })}
       </div>
 
       {/* MiniCalendar */}
