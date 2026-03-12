@@ -332,6 +332,22 @@ export default function MisViajesDetailPage() {
       }
     }
 
+    // Incluir personal operativo (pm, logistica, almacen, admin) que no esté ya en la lista
+    const { data: operationalPeople } = await supabase
+      .from('people')
+      .select('id, name')
+      .in('app_role', ['pm', 'logistica', 'almacen', 'admin'])
+      .eq('status', 'Activo')
+      .order('name')
+
+    const seenAll = new Set(people.map((p) => p.value))
+    for (const p of operationalPeople ?? []) {
+      if (!seenAll.has(p.id)) {
+        seenAll.add(p.id)
+        people.push({ value: p.id, label: p.name })
+      }
+    }
+
     people.sort((a, b) => a.label.localeCompare(b.label))
     setReceiverOptions(people)
   }, [supabase])
