@@ -236,13 +236,6 @@ export default function ProgramacionPage() {
     router.push(`/programacion/viaje/nuevo?lines=${ids}`)
   }, [selectedLineIds, router])
 
-  const handleTripRowClick = useCallback(
-    (row: TripWithRelations) => {
-      router.push(`/programacion/viaje/${row.id}`)
-    },
-    [router],
-  )
-
   const handleRequestClick = useCallback(
     (requestId: string) => {
       router.push(`/solicitudes/${requestId}`)

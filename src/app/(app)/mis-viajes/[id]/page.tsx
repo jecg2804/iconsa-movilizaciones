@@ -252,12 +252,6 @@ export default function MisViajesDetailPage() {
   // Opciones de receptor para entrega
   const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
 
-  // --- Carga inicial del viaje ---
-  const loadTrip = useCallback(async () => {
-    const data = await fetchTrip(id)
-    setTrip(data)
-  }, [id, fetchTrip])
-
   // --- Fetch receptores del proyecto destino ---
   const loadReceivers = useCallback(async (tripData: TripWithRelations) => {
     // Recopilar to_location_id de las líneas del viaje
