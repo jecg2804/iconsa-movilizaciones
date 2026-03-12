@@ -183,7 +183,7 @@ export default async function DashboardPage() {
     .select(
       'id, description, line_type, sm_requests!inner(request_id, date_required, priority, project:projects(code))',
     )
-    .eq('status', 'Pendiente')
+    .in('status', ['Pendiente', 'Parcial'])
     .order('created_at', { ascending: true })
     .limit(10)
 
