@@ -89,6 +89,7 @@ interface AssignmentRowProps {
 }
 
 function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) {
+  const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
   const fromName = line?.from_location?.name ?? line?.from_text ?? '—'
@@ -126,9 +127,13 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
           <span className="truncate text-sm font-medium text-gray-900">
             {line?.description ?? 'Cargando...'}
           </span>
-          <span className="font-mono text-xs text-iconsa-gray shrink-0">
+          <button
+            type="button"
+            onClick={() => line?.request?.id && router.push(`/solicitudes/${line.request.id}`)}
+            className="font-mono text-xs text-iconsa-blue hover:underline cursor-pointer shrink-0"
+          >
             {requestDisplayId}
-          </span>
+          </button>
         </div>
 
         {/* Ruta */}
