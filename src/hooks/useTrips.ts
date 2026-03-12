@@ -400,7 +400,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             requester:requester_id(id, name)
           )
         `)
-        .eq('status', 'Pendiente')
+        .in('status', ['Pendiente', 'Parcial', 'Programada'])
         // Excluir solicitudes que no deben aparecer en el backlog
         .not('request.status', 'in', '("Cancelada","Completada","Borrador")')
 
@@ -470,7 +470,13 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         return a.request.date_required.localeCompare(b.request.date_required)
       })
 
-      setBacklog(sorted)
+      // Solo líneas con cantidad disponible > 0
+      const available = sorted.filter((line) => {
+        const avail = line.quantity - (line.qty_scheduled ?? 0) - (line.qty_delivered ?? 0)
+        return avail > 0
+      })
+
+      setBacklog(available)
     } catch {
       setBacklog([])
     } finally {
