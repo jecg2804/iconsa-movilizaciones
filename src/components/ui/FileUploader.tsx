@@ -11,6 +11,7 @@ import {
   isWithinSizeLimit,
 } from '@/lib/supabase/storage'
 import { useAuth } from '@/hooks/useAuth'
+import FileDisplay from './FileDisplay'
 
 interface FileUploaderProps {
   attachments: Attachment[]
@@ -237,6 +238,11 @@ export default function FileUploader({
         <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
           <p className="text-sm text-red-700">{error}</p>
         </div>
+      )}
+
+      {/* Preview inline de archivos existentes */}
+      {attachments.length > 0 && (
+        <FileDisplay attachments={attachments} label="Vista previa" />
       )}
     </div>
   )
