@@ -33,6 +33,7 @@ interface TripEvent {
 // --- Componente de fila de asignacion (solo lectura) ---
 
 function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignments'][number] }) {
+  const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
   const fromName = line?.from_location?.name ?? line?.from_text ?? '—'
@@ -59,9 +60,13 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
           <span className="truncate text-sm font-medium text-gray-900">
             {line?.description ?? '—'}
           </span>
-          <span className="font-mono text-xs text-iconsa-gray shrink-0">
+          <button
+            type="button"
+            onClick={() => router.push(`/solicitudes/${line?.request?.id}`)}
+            className="font-mono text-xs text-iconsa-gray shrink-0 hover:text-iconsa-blue hover:underline cursor-pointer"
+          >
             {requestDisplayId}
-          </span>
+          </button>
         </div>
 
         {line && (

@@ -57,13 +57,25 @@ export async function uploadFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const path = `${folder}/${Date.now()}-${safeName}`
 
-  const { error } = await supabase.storage
+  const { data: uploadData, error } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { upsert: false })
 
+  console.log('[Storage] upload response:', { path, uploadData, error })
+
   if (error) {
-    console.error('Upload error:', error)
+    console.error('[Storage] upload error:', error)
     return { attachment: null, error: 'Error al subir archivo. Intente de nuevo' }
+  }
+
+  // Verificar que el archivo realmente existe en storage
+  const { data: check } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(path, 60)
+
+  if (!check?.signedUrl) {
+    console.error('[Storage] upload reported success but file not found:', path)
+    return { attachment: null, error: 'Error al subir archivo. Verifique permisos.' }
   }
 
   return {
