@@ -562,6 +562,8 @@ export default function SolicitudDetailPage() {
           onChange={handleHeaderChange}
           currentPersonId={person?.id ?? ''}
           role={role}
+          solicitudId={solicitud.id}
+          initialAttachments={(solicitud.attachments as unknown[])?.map(a => a as import('@/lib/supabase/storage').Attachment) ?? []}
         />
       </div>
 

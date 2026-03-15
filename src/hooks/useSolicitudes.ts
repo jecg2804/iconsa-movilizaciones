@@ -69,6 +69,7 @@ export interface SolicitudInput {
   approved_by?: string | null
   date_required: string
   notes?: string | null
+  attachments?: unknown[] | null
 }
 
 export interface LineInput {
@@ -484,6 +485,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           approved_by: header.approved_by ?? null,
           date_required: header.date_required,
           notes: header.notes ?? null,
+          attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
           status,
           created_by: personId ?? null,
         }
@@ -582,6 +584,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.approved_by !== undefined) headerUpdate.approved_by = header.approved_by
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
+        if (header.attachments !== undefined) headerUpdate.attachments = header.attachments
         if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
