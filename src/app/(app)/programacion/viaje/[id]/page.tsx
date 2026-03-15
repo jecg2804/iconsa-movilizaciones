@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
 import { LineSelector } from '@/components/programacion/LineSelector'
+import type { Attachment } from '@/lib/supabase/storage'
 
 // --- Helpers ---
 
@@ -535,6 +536,8 @@ export default function ViajeDetailPage() {
           onChange={handleTripDataChange}
           onRateChange={handleRateChange}
           isTrailerRequired={isCabezal}
+          tripId={trip.id}
+          initialAttachments={(trip.attachments as unknown[])?.map(a => a as Attachment) ?? []}
         />
       </div>
 

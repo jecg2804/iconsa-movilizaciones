@@ -95,6 +95,7 @@ export interface TripWithRelations {
   actual_arrival: string | null
   route_summary: string | null
   is_external: boolean | null
+  attachments: unknown[] | null
   created_at: string
   updated_at: string
   // Relaciones unidas
@@ -117,6 +118,7 @@ export interface TripInput {
   escort: boolean
   notes: string | null
   is_external: boolean
+  attachments?: unknown[] | null
 }
 
 export interface AssignmentInput {
@@ -234,6 +236,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     actual_arrival: (row.actual_arrival as string | null) ?? null,
     route_summary: (row.route_summary as string | null) ?? null,
     is_external: (row.is_external as boolean | null) ?? null,
+    attachments: (row.attachments as unknown[] | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     driver,
@@ -657,6 +660,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         actual_arrival: (row.actual_arrival as string | null) ?? null,
         route_summary: (row.route_summary as string | null) ?? null,
         is_external: (row.is_external as boolean | null) ?? null,
+        attachments: (row.attachments as unknown[] | null) ?? null,
         created_at: row.created_at as string,
         updated_at: row.updated_at as string,
         driver,
@@ -698,6 +702,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             confirmation_code: confirmationCode,
             notes: input.notes,
             is_external: input.is_external,
+            attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             created_by: personId ?? null,
           })
           .select('id, trip_id')
@@ -798,6 +803,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             escort: input.escort,
             notes: input.notes,
             is_external: input.is_external,
+            attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             updated_by: personId ?? null,
           })
           .eq('id', id)
