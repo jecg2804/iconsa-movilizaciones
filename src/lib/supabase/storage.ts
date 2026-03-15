@@ -7,6 +7,8 @@ const ALLOWED_TYPES = [
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/heic',
+  'image/heif',
 ]
 
 export interface Attachment {
@@ -36,6 +38,28 @@ export function isImageType(type: string): boolean {
   return type.startsWith('image/')
 }
 
+const EXT_TO_MIME: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+}
+
+/**
+ * Infiere el MIME type de un archivo.
+ * Necesario porque Android WebView a veces retorna file.type vacío en capturas de cámara.
+ */
+export function inferMimeType(file: File): string {
+  if (file.type && ALLOWED_TYPES.includes(file.type)) {
+    return file.type
+  }
+  const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] ?? ''
+  return EXT_TO_MIME[ext] ?? file.type
+}
+
 /**
  * Sube un archivo a Supabase Storage.
  * Retorna metadata del attachment o null si falla.
@@ -45,7 +69,8 @@ export async function uploadFile(
   folder: string,
   userId: string,
 ): Promise<{ attachment: Attachment | null; error: string | null }> {
-  if (!isAllowedType(file.type)) {
+  const inferredType = inferMimeType(file)
+  if (!isAllowedType(inferredType)) {
     return { attachment: null, error: `Tipo de archivo no permitido. Use PDF, JPG, PNG o WEBP` }
   }
   if (!isWithinSizeLimit(file.size)) {
@@ -59,7 +84,7 @@ export async function uploadFile(
 
   const { data: uploadData, error } = await supabase.storage
     .from(BUCKET)
-    .upload(path, file, { upsert: false })
+    .upload(path, file, { upsert: false, contentType: inferredType })
 
   console.log('[Storage] upload response:', { path, uploadData, error })
 
@@ -83,7 +108,7 @@ export async function uploadFile(
       name: file.name,
       path,
       size: file.size,
-      type: file.type,
+      type: inferredType,
       uploaded_at: new Date().toISOString(),
       uploaded_by: userId,
     },

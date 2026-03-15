@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   type Attachment,
   uploadFile,
@@ -9,6 +9,7 @@ import {
   isImageType,
   isAllowedType,
   isWithinSizeLimit,
+  inferMimeType,
 } from '@/lib/supabase/storage'
 import { useAuth } from '@/hooks/useAuth'
 import FileDisplay from './FileDisplay'
@@ -36,15 +37,20 @@ export default function FileUploader({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
+  const [deleting, setDeleting] = useState<Set<number>>(new Set())
+  const attachmentsRef = useRef(attachments)
+  const timerRef = useRef<NodeJS.Timeout>(null)
+
+  useEffect(() => { attachmentsRef.current = attachments }, [attachments])
 
   const atLimit = attachments.length >= maxFiles
 
-  // Auto-clear error after 5 seconds
-  const showError = useCallback((msg: string) => {
-    setError(msg)
-    setTimeout(() => setError(null), 5000)
+  const addError = useCallback((msg: string) => {
+    setErrors((prev) => [...prev, msg])
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setErrors([]), 5000)
   }, [])
 
   const handleFiles = useCallback(
@@ -52,33 +58,33 @@ export default function FileUploader({
       if (!person?.id) return
       const fileArray = Array.from(files)
 
-      // Validate count
-      const remaining = maxFiles - attachments.length
+      const remaining = maxFiles - attachmentsRef.current.length
       if (remaining <= 0) {
-        showError(`Máximo ${maxFiles} archivos`)
+        addError(`Máximo ${maxFiles} archivos`)
         return
       }
       const toUpload = fileArray.slice(0, remaining)
 
       setUploading(true)
-      setError(null)
+      setErrors([])
 
-      const newAttachments = [...attachments]
+      const newAttachments = [...attachmentsRef.current]
+      const newErrors: string[] = []
 
       for (const file of toUpload) {
-        // Pre-validate before upload
-        if (!isAllowedType(file.type)) {
-          showError(`Tipo de archivo no permitido: ${file.name}. Use PDF, JPG, PNG o WEBP`)
+        const inferredType = inferMimeType(file)
+        if (!isAllowedType(inferredType)) {
+          newErrors.push(`Tipo no permitido: ${file.name}. Use PDF, JPG, PNG o WEBP`)
           continue
         }
         if (!isWithinSizeLimit(file.size)) {
-          showError(`El archivo "${file.name}" excede el límite de 10MB`)
+          newErrors.push(`"${file.name}" excede 10MB`)
           continue
         }
 
         const result = await uploadFile(file, folder, person.id)
         if (result.error) {
-          showError(result.error)
+          newErrors.push(result.error)
         } else if (result.attachment) {
           newAttachments.push(result.attachment)
         }
@@ -86,34 +92,48 @@ export default function FileUploader({
 
       onChange(newAttachments)
       setUploading(false)
+      if (newErrors.length > 0) {
+        setErrors(newErrors)
+        if (timerRef.current) clearTimeout(timerRef.current)
+        timerRef.current = setTimeout(() => setErrors([]), 5000)
+      }
     },
-    [attachments, folder, maxFiles, onChange, person?.id, showError],
+    [folder, maxFiles, onChange, person?.id, addError],
   )
 
   const handleDelete = useCallback(
     async (index: number) => {
-      const file = attachments[index]
+      const current = attachmentsRef.current
+      const file = current[index]
       if (!file) return
+
+      setDeleting((prev) => new Set(prev).add(index))
 
       const ok = await deleteFile(file.path)
       if (ok) {
-        const updated = attachments.filter((_, i) => i !== index)
+        const updated = attachmentsRef.current.filter((_, i) => i !== index)
         onChange(updated)
       } else {
-        showError('Error al eliminar archivo')
+        addError('Error al eliminar archivo')
       }
+
+      setDeleting((prev) => {
+        const next = new Set(prev)
+        next.delete(index)
+        return next
+      })
     },
-    [attachments, onChange, showError],
+    [onChange, addError],
   )
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setDragOver(false)
-      if (disabled || atLimit) return
+      if (disabled || atLimit || uploading) return
       void handleFiles(e.dataTransfer.files)
     },
-    [disabled, atLimit, handleFiles],
+    [disabled, atLimit, uploading, handleFiles],
   )
 
   const handleDragOver = useCallback(
@@ -151,10 +171,11 @@ export default function FileUploader({
                 <button
                   type="button"
                   onClick={() => void handleDelete(idx)}
-                  className="ml-1 text-red-400 hover:text-red-600"
+                  className="ml-1 text-red-400 hover:text-red-600 disabled:opacity-40"
                   title="Eliminar archivo"
+                  disabled={deleting.has(idx)}
                 >
-                  🗑
+                  {deleting.has(idx) ? '⏳' : '🗑'}
                 </button>
               )}
             </div>
@@ -234,9 +255,11 @@ export default function FileUploader({
       )}
 
       {/* Error inline */}
-      {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
-          <p className="text-sm text-red-700">{error}</p>
+      {errors.length > 0 && (
+        <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 space-y-1">
+          {errors.map((err, i) => (
+            <p key={i} className="text-sm text-red-700">{err}</p>
+          ))}
         </div>
       )}
 
