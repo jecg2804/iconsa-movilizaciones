@@ -14,6 +14,9 @@ import { Input } from '@/components/ui/Input'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
 import { CodeConfirmation } from '@/components/viajes/CodeConfirmation'
+import FileUploader from '@/components/ui/FileUploader'
+import FileDisplay from '@/components/ui/FileDisplay'
+import type { Attachment } from '@/lib/supabase/storage'
 
 // --- Tipos ---
 
@@ -24,6 +27,7 @@ interface TripEvent {
   registered_by: { name: string } | null
   received_by_name: string | null
   notes: string | null
+  attachments: Attachment[]
 }
 
 // --- Componente de fila de asignacion (solo lectura) ---
@@ -104,6 +108,8 @@ interface EventModalProps {
 function EventModal({ eventType, confirmationCode, receiverOptions, assignments, onConfirm, onClose, loading }: EventModalProps) {
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const eventIdRef = useRef(crypto.randomUUID())
   const deliveredQtys = useRef<Record<string, number>>({})
 
   useEffect(() => {
@@ -119,6 +125,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
   const handleConfirmCode = useCallback(
     (codeUsed: string, receivedById: string | null, receivedByName: string) => {
       onConfirm({
+        id: eventIdRef.current,
         event_type: eventType,
         event_timestamp: new Date().toISOString(),
         location: location.trim() || null,
@@ -127,19 +134,22 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
         received_by_id: receivedById ?? null,
         received_by_name: receivedByName || null,
         deliveredQuantities: { ...deliveredQtys.current },
+        attachments,
       })
     },
-    [eventType, location, notes, onConfirm],
+    [eventType, location, notes, attachments, onConfirm],
   )
 
   const handleDirectConfirm = useCallback(() => {
     onConfirm({
+      id: eventIdRef.current,
       event_type: eventType,
       event_timestamp: new Date().toISOString(),
       location: location.trim() || null,
       notes: notes.trim() || null,
+      attachments,
     })
-  }, [eventType, location, notes, onConfirm])
+  }, [eventType, location, notes, attachments, onConfirm])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
@@ -171,6 +181,15 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
             />
           </div>
+
+          {/* Fotos / Adjuntos */}
+          <FileUploader
+            attachments={attachments}
+            folder={`events/${eventIdRef.current}`}
+            onChange={setAttachments}
+            label="Fotos"
+            hint="PDF, JPG, PNG o WEBP (max 10MB)"
+          />
         </div>
 
         {/* Cantidades a entregar (solo Entrega) */}
@@ -356,7 +375,8 @@ export default function MisViajesDetailPage() {
         event_timestamp,
         registered_by:registered_by(name),
         received_by_name,
-        notes
+        notes,
+        attachments
       `)
       .eq('trip_id', id)
       .order('event_timestamp', { ascending: true })
@@ -365,6 +385,10 @@ export default function MisViajesDetailPage() {
       const mapped: TripEvent[] = (data as unknown as Record<string, unknown>[]).map((row) => {
         const rb = row.registered_by
         const registeredBy = Array.isArray(rb) ? (rb[0] ?? null) : rb
+        const rawAtt = row.attachments
+        const att: Attachment[] = Array.isArray(rawAtt)
+          ? (rawAtt as unknown[]).map(a => a as Attachment)
+          : []
         return {
           id: row.id as string,
           event_type: row.event_type as string,
@@ -372,6 +396,7 @@ export default function MisViajesDetailPage() {
           registered_by: registeredBy as { name: string } | null,
           received_by_name: (row.received_by_name as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
+          attachments: att,
         }
       })
       setEvents(mapped)

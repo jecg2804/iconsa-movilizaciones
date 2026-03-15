@@ -1,6 +1,8 @@
 'use client'
 
 import { Truck, MapPin, CheckCircle, Home, AlertTriangle } from 'lucide-react'
+import FileDisplay from '@/components/ui/FileDisplay'
+import type { Attachment } from '@/lib/supabase/storage'
 
 interface EventItem {
   id: string
@@ -9,6 +11,7 @@ interface EventItem {
   registered_by: { name: string } | null
   received_by_name: string | null
   notes: string | null
+  attachments?: Attachment[]
 }
 
 interface EventTimelineProps {
@@ -103,6 +106,12 @@ export function EventTimeline({ events }: EventTimelineProps) {
 
             {event.notes && (
               <p className="mt-1 text-sm text-gray-700">{event.notes}</p>
+            )}
+
+            {event.attachments && event.attachments.length > 0 && (
+              <div className="mt-2">
+                <FileDisplay attachments={event.attachments} collapsible={false} />
+              </div>
             )}
           </div>
         </li>

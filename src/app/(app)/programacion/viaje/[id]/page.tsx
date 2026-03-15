@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
 import { LineSelector } from '@/components/programacion/LineSelector'
 import type { Attachment } from '@/lib/supabase/storage'
+import FileDisplay from '@/components/ui/FileDisplay'
 
 // --- Helpers ---
 
@@ -79,6 +80,7 @@ interface TripEventRow {
   registered_by: { name: string } | null
   received_by_name: string | null
   notes: string | null
+  attachments: unknown[] | null
 }
 
 // --- Componente de fila de asignacion existente (modo lectura o edicion) ---
@@ -262,7 +264,7 @@ export default function ViajeDetailPage() {
         // Fetch eventos de ejecución
         const { data: events } = await supabase
           .from('trip_events')
-          .select('event_type, event_timestamp, registered_by:registered_by(name), received_by_name, notes')
+          .select('event_type, event_timestamp, registered_by:registered_by(name), received_by_name, notes, attachments')
           .eq('trip_id', id)
           .order('event_timestamp', { ascending: true })
         setTripEvents((events as unknown as TripEventRow[]) ?? [])
@@ -636,6 +638,14 @@ export default function ViajeDetailPage() {
                       )}
                       {ev.notes && (
                         <p className="text-xs text-gray-600">{ev.notes}</p>
+                      )}
+                      {ev.attachments && Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
+                        <div className="mt-1">
+                          <FileDisplay
+                            attachments={(ev.attachments as unknown[]).map(a => a as Attachment)}
+                            collapsible={false}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>

@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 export type TripEventType = 'Salida' | 'Llegada' | 'Entrega' | 'Retorno' | 'Incidencia'
 
 export interface TripEventInput {
+  id?: string // UUID pre-generado para folder de storage
   event_type: TripEventType
   event_timestamp: string
   location?: string | null
@@ -17,6 +18,7 @@ export interface TripEventInput {
   received_by_id?: string | null
   received_by_name?: string | null
   deliveredQuantities?: Record<string, number> // lineId → qty entregada en ESTE viaje
+  attachments?: unknown[] | null
 }
 
 // --- Hook ---
@@ -41,6 +43,7 @@ export function useTripEvents(tripId: string) {
       try {
         // 1. INSERT trip_events (INMUTABLE — sin UPDATE/DELETE)
         const { error: eventError } = await supabase.from('trip_events').insert({
+          ...(input.id ? { id: input.id } : {}),
           trip_id: tripId,
           event_type: input.event_type,
           event_timestamp: input.event_timestamp,
@@ -50,6 +53,7 @@ export function useTripEvents(tripId: string) {
           received_by_id: input.received_by_id ?? null,
           received_by_name: input.received_by_name ?? null,
           notes: input.notes ?? null,
+          attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
         })
 
         if (eventError) {
