@@ -446,8 +446,8 @@ function TripForm({
             />
           )}
           {attPermit && attachments.length === 0 && !isReadonly && (
-            <p className="mt-1 text-xs text-orange-600">
-              Adjunte el permiso ATT
+            <p className="mt-1 text-xs text-blue-600">
+              ℹ️ Este viaje requiere permiso ATT. Puede adjuntarlo cuando esté disponible.
             </p>
           )}
         </div>
