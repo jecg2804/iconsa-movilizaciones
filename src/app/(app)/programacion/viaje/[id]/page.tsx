@@ -142,9 +142,9 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
         {/* Ruta */}
         {line && (
           <div className="flex items-center gap-1 text-xs text-iconsa-gray">
-            <span className="truncate max-w-[100px] sm:max-w-[150px]">{fromName}</span>
+            <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-            <span className="truncate max-w-[100px] sm:max-w-[150px]">{toName}</span>
+            <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
           </div>
         )}
 

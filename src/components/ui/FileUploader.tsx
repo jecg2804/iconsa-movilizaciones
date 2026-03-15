@@ -163,7 +163,7 @@ export default function FileUploader({
               ) : (
                 <span className="text-sm">📄</span>
               )}
-              <span className="max-w-[160px] truncate text-sm text-gray-700" title={file.name}>
+              <span className="max-w-40 truncate text-sm text-gray-700" title={file.name}>
                 {file.name}
               </span>
               <span className="text-xs text-gray-400">({formatFileSize(file.size)})</span>
@@ -220,6 +220,7 @@ export default function FileUploader({
             className="hidden"
             multiple
             accept=".pdf,.jpg,.jpeg,.png,.webp"
+            title="Seleccionar archivos"
             onChange={(e) => {
               if (e.target.files) void handleFiles(e.target.files)
               e.target.value = ''
@@ -241,6 +242,7 @@ export default function FileUploader({
             className="hidden"
             accept="image/*"
             capture="environment"
+            title="Tomar foto"
             onChange={(e) => {
               if (e.target.files) void handleFiles(e.target.files)
               e.target.value = ''

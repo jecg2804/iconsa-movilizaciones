@@ -90,7 +90,7 @@ export default function FileDisplay({
                         <span className="text-2xl">🖼️</span>
                       </div>
                     )}
-                    <p className="mt-1 max-w-[80px] truncate text-xs text-gray-500" title={file.name}>
+                    <p className="mt-1 max-w-20 truncate text-xs text-gray-500" title={file.name}>
                       {file.name}
                     </p>
                   </div>
@@ -124,7 +124,7 @@ export default function FileDisplay({
                 {url && file.type === 'application/pdf' && (
                   <iframe
                     src={url}
-                    className="h-[400px] w-full rounded-lg border border-gray-200"
+                    className="h-100 w-full rounded-lg border border-gray-200"
                     title={file.name}
                   />
                 )}
