@@ -1,6 +1,6 @@
 'use client'
 
-import { Wrench, Package, ArrowRight, Loader2 } from 'lucide-react'
+import { Wrench, Package, ArrowRight, Loader2, Paperclip } from 'lucide-react'
 import { formatDate, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatQty } from '@/lib/utils/format'
 import type { BacklogLine } from '@/hooks/useTrips'
 
@@ -141,12 +141,17 @@ function BacklogTable({
               </span>
 
               {/* ID de solicitud */}
-              <span
-                className={`shrink-0 font-mono text-xs text-iconsa-gray ${onRequestClick ? 'cursor-pointer hover:text-iconsa-blue hover:underline' : ''}`}
-                title={`Solicitud ${requestDisplayId}`}
-                onClick={onRequestClick ? () => onRequestClick(line.request_id) : undefined}
-              >
-                {requestDisplayId}
+              <span className="shrink-0 inline-flex items-center gap-0.5">
+                <span
+                  className={`font-mono text-xs text-iconsa-gray ${onRequestClick ? 'cursor-pointer hover:text-iconsa-blue hover:underline' : ''}`}
+                  title={`Solicitud ${requestDisplayId}`}
+                  onClick={onRequestClick ? () => onRequestClick(line.request_id) : undefined}
+                >
+                  {requestDisplayId}
+                </span>
+                {Array.isArray(line.request.attachments) && line.request.attachments.length > 0 && (
+                  <span title="Solicitud tiene adjuntos"><Paperclip className="h-3 w-3 text-iconsa-gray" /></span>
+                )}
               </span>
 
               {/* Codigo de proyecto */}

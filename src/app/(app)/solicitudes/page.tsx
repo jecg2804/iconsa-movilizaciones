@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Wrench, Package, ArrowRight } from 'lucide-react'
+import { Plus, Search, Wrench, Package, ArrowRight, Paperclip } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
@@ -184,15 +184,23 @@ export default function SolicitudesPage() {
         header: 'ID',
         sortable: true,
         className: 'w-[160px]',
-        render: (row) => (
-          <a
-            href={`/solicitudes/${row.id}`}
-            onClick={(e) => { e.stopPropagation(); router.push(`/solicitudes/${row.id}`) }}
-            className="font-mono text-sm font-medium text-navy hover:underline"
-          >
-            {row.request_id ?? '—'}
-          </a>
-        ),
+        render: (row) => {
+          const hasAttachments = Array.isArray(row.attachments) && row.attachments.length > 0
+          return (
+            <span className="inline-flex items-center gap-1">
+              <a
+                href={`/solicitudes/${row.id}`}
+                onClick={(e) => { e.stopPropagation(); router.push(`/solicitudes/${row.id}`) }}
+                className="font-mono text-sm font-medium text-navy hover:underline"
+              >
+                {row.request_id ?? '—'}
+              </a>
+              {hasAttachments && (
+                <span title="Tiene adjuntos"><Paperclip className="h-3.5 w-3.5 text-iconsa-gray" /></span>
+              )}
+            </span>
+          )
+        },
         sortValue: (row) => row.request_id ?? '',
       },
       {
@@ -294,7 +302,12 @@ export default function SolicitudesPage() {
     (row: SolicitudWithRelations) => (
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 active:bg-gray-50">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-sm font-bold text-navy">{row.request_id ?? '—'}</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="font-mono text-sm font-bold text-navy">{row.request_id ?? '—'}</span>
+            {Array.isArray(row.attachments) && row.attachments.length > 0 && (
+              <Paperclip className="h-3.5 w-3.5 text-iconsa-gray" />
+            )}
+          </span>
           <Badge label={row.status} variant="status" />
         </div>
         <div className="text-sm text-gray-900">

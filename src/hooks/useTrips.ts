@@ -43,6 +43,7 @@ export interface BacklogLine {
     date_required: string
     status: string
     notes: string | null
+    attachments: unknown[] | null
   }
 }
 
@@ -405,6 +406,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             date_required,
             status,
             notes,
+            attachments,
             project:project_id(id, code, name),
             requester:requester_id(id, name)
           )
@@ -436,10 +438,11 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               date_required: rawRequest.date_required as string,
               status: rawRequest.status as string,
               notes: (rawRequest.notes as string | null) ?? null,
+              attachments: (rawRequest.attachments as unknown[] | null) ?? null,
               project: unwrapRelation(rawRequest.project as BacklogLine['request']['project'] | null),
               requester: unwrapRelation(rawRequest.requester as BacklogLine['request']['requester'] | null),
             }
-          : { id: '', request_id: null, priority: null, date_required: '', status: '', notes: null, project: null, requester: null }
+          : { id: '', request_id: null, priority: null, date_required: '', status: '', notes: null, attachments: null, project: null, requester: null }
 
         return {
           id: row.id as string,
