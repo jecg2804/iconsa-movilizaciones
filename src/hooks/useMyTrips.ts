@@ -100,8 +100,7 @@ export function useMyTrips() {
             notes
           )
         `)
-        .in('status', ['Programado', 'En Ruta'])
-        .order('scheduled_date', { ascending: true })
+        .order('scheduled_date', { ascending: false })
 
       if (fetchError) {
         setError(fetchError.message)
