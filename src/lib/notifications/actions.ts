@@ -8,149 +8,211 @@ import * as templates from './templates'
 // HELPERS — resolución de destinatarios (usa service client, bypassa RLS)
 // =============================================================================
 
-async function getPeopleByRole(role: string) {
+type Recipient = { id: string; email: string | null; name: string }
+
+/** Personas por rol del sistema (logistica, admin, etc.) con notificaciones habilitadas */
+async function getPeopleByRole(role: string): Promise<Recipient[]> {
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from('people')
     .select('id, email, name')
     .eq('app_role', role)
     .eq('status', 'Activo')
+    .eq('notifications_enabled', true)
   if (error) console.error('[Notify] getPeopleByRole error:', error.message)
   console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`, data?.map(p => `${p.name} <${p.email}>`))
   return data ?? []
 }
 
-async function getRequester(requestId: string) {
+/** Todos los PMs asignados a un proyecto con notificaciones habilitadas */
+async function getProjectPMs(projectId: string, excludePersonId?: string): Promise<Recipient[]> {
   const supabase = createServiceClient()
-  const { data: req } = await supabase
-    .from('sm_requests')
-    .select('requester_id')
-    .eq('id', requestId)
-    .single()
+  const { data: assignments, error: aErr } = await supabase
+    .from('person_projects')
+    .select('person_id')
+    .eq('project_id', projectId)
+    .eq('is_active', true)
 
-  if (!req?.requester_id) return []
+  if (aErr) console.error('[Notify] getProjectPMs assignments error:', aErr.message)
+  if (!assignments?.length) { console.log(`[Notify] getProjectPMs: no assignments for project ${projectId}`); return [] }
 
-  const { data: person } = await supabase
+  const personIds = assignments.map(a => a.person_id)
+  const { data: people, error: pErr } = await supabase
     .from('people')
     .select('id, email, name')
-    .eq('id', req.requester_id)
-    .single()
+    .in('id', personIds)
+    .eq('app_role', 'pm')
+    .eq('notifications_enabled', true)
+    .eq('status', 'Activo')
+    .not('email', 'is', null)
 
-  return person ? [person] : []
+  if (pErr) console.error('[Notify] getProjectPMs people error:', pErr.message)
+
+  const recipients = (people ?? []).filter(p => !excludePersonId || p.id !== excludePersonId)
+  console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`, recipients.map(r => `${r.name} <${r.email}>`))
+  return recipients
 }
 
-async function getTripRequesters(tripId: string) {
+/** Todos los PMs de TODOS los proyectos afectados por un viaje (deduped) */
+async function getTripProjectPMs(tripId: string): Promise<Recipient[]> {
   const supabase = createServiceClient()
-  const { data: assignments } = await supabase
+
+  // Trip → assignments → lines → requests → project_ids
+  const { data: assignments, error: aErr } = await supabase
     .from('trip_line_assignments')
     .select('request_line_id')
     .eq('trip_id', tripId)
 
+  if (aErr) console.error('[Notify] getTripProjectPMs assignments error:', aErr.message)
   if (!assignments?.length) return []
 
   const lineIds = assignments.map(a => a.request_line_id)
-  const { data: lines } = await supabase
+  const { data: lines, error: lErr } = await supabase
     .from('sm_request_lines')
     .select('request_id')
     .in('id', lineIds)
 
+  if (lErr) console.error('[Notify] getTripProjectPMs lines error:', lErr.message)
   if (!lines?.length) return []
 
   const uniqueRequestIds = [...new Set(lines.map(l => l.request_id))]
-  const { data: requests } = await supabase
+  const { data: requests, error: rErr } = await supabase
     .from('sm_requests')
-    .select('requester_id')
+    .select('project_id')
     .in('id', uniqueRequestIds)
 
+  if (rErr) console.error('[Notify] getTripProjectPMs requests error:', rErr.message)
   if (!requests?.length) return []
 
-  const uniqueRequesterIds = [...new Set(requests.map(r => r.requester_id))]
-  const { data: people } = await supabase
-    .from('people')
-    .select('id, email, name')
-    .in('id', uniqueRequesterIds)
+  const projectIds = [...new Set(requests.map(r => r.project_id))]
+  console.log(`[Notify] getTripProjectPMs: trip affects ${projectIds.length} project(s)`)
 
-  return people ?? []
+  // Obtener PMs de todos los proyectos, deduped
+  const allRecipients: Recipient[] = []
+  const seen = new Set<string>()
+  for (const projId of projectIds) {
+    const pms = await getProjectPMs(projId)
+    for (const pm of pms) {
+      if (!seen.has(pm.id)) {
+        seen.add(pm.id)
+        allRecipients.push(pm)
+      }
+    }
+  }
+
+  console.log(`[Notify] getTripProjectPMs: ${allRecipients.length} unique PMs total`)
+  return allRecipients
 }
 
-async function getTripDriver(tripId: string) {
+/** Conductor del viaje con notificaciones habilitadas */
+async function getTripDriver(tripId: string): Promise<Recipient[]> {
   const supabase = createServiceClient()
-  const { data: trip } = await supabase
+  const { data: trip, error: tErr } = await supabase
     .from('trips')
     .select('driver_id')
     .eq('id', tripId)
     .single()
 
+  if (tErr) console.error('[Notify] getTripDriver trip error:', tErr.message)
   if (!trip?.driver_id) return []
 
-  const { data: person } = await supabase
+  const { data: person, error: pErr } = await supabase
     .from('people')
-    .select('id, email, name')
+    .select('id, email, name, notifications_enabled')
     .eq('id', trip.driver_id)
     .single()
 
-  return person ? [person] : []
+  if (pErr) console.error('[Notify] getTripDriver people error:', pErr.message)
+  if (!person) return []
+  if (!person.notifications_enabled) {
+    console.log(`[Notify] Driver ${person.name} has notifications disabled, skipping`)
+    return []
+  }
+  return [{ id: person.id, email: person.email, name: person.name }]
 }
 
+/** Nombre de una persona por ID */
 async function getPersonName(personId: string): Promise<string> {
   if (!personId) return 'Sistema'
   const supabase = createServiceClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('people')
     .select('name')
     .eq('id', personId)
     .single()
+  if (error) console.error('[Notify] getPersonName error:', error.message)
   return data?.name ?? 'Sistema'
 }
 
+/** IDs de solicitud (request_id texto, ej: 25-506-SM-001) afectados por un viaje */
 async function getTripRequestIds(tripId: string): Promise<string[]> {
   const supabase = createServiceClient()
-  const { data: assignments } = await supabase
+  const { data: assignments, error: aErr } = await supabase
     .from('trip_line_assignments')
     .select('request_line_id')
     .eq('trip_id', tripId)
 
+  if (aErr) console.error('[Notify] getTripRequestIds assignments error:', aErr.message)
   if (!assignments?.length) return []
 
   const lineIds = assignments.map(a => a.request_line_id)
-  const { data: lines } = await supabase
+  const { data: lines, error: lErr } = await supabase
     .from('sm_request_lines')
     .select('request_id')
     .in('id', lineIds)
 
+  if (lErr) console.error('[Notify] getTripRequestIds lines error:', lErr.message)
   if (!lines?.length) return []
 
   const uniqueRequestIds = [...new Set(lines.map(l => l.request_id))]
-  const { data: requests } = await supabase
+  const { data: requests, error: rErr } = await supabase
     .from('sm_requests')
     .select('request_id')
     .in('id', uniqueRequestIds)
 
+  if (rErr) console.error('[Notify] getTripRequestIds requests error:', rErr.message)
   return (requests ?? []).map(r => r.request_id).filter(Boolean) as string[]
 }
 
-// Helper: obtener info de solicitud + proyecto
+/** Solicitud + nombre de proyecto */
 async function getRequestWithProject(requestId: string) {
   const supabase = createServiceClient()
-  const { data: req } = await supabase
+  const { data: req, error: reqErr } = await supabase
     .from('sm_requests')
     .select('id, request_id, date_required, status, project_id, requester_id')
     .eq('id', requestId)
     .single()
 
+  if (reqErr) console.error('[Notify] getRequestWithProject sm_requests error:', reqErr.message)
   if (!req) return null
 
-  const { data: project } = await supabase
+  const { data: project, error: pErr } = await supabase
     .from('projects')
     .select('name')
     .eq('id', req.project_id)
     .single()
 
+  if (pErr) console.error('[Notify] getRequestWithProject projects error:', pErr.message)
   return { ...req, projectName: project?.name ?? '' }
 }
 
+/** Combina dos listas de recipients sin duplicados */
+function dedup(...lists: Recipient[][]): Recipient[] {
+  const seen = new Set<string>()
+  const result: Recipient[] = []
+  for (const list of lists) {
+    for (const r of list) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id)
+        result.push(r)
+      }
+    }
+  }
+  return result
+}
+
 // =============================================================================
-// 1. SOLICITUD ENVIADA → Charris
+// 1. SOLICITUD ENVIADA → Charris + ALL project PMs
 // =============================================================================
 export async function notifySolicitudEnviada(requestId: string): Promise<void> {
   try {
@@ -165,7 +227,9 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
       .eq('request_id', requestId)
 
     const requesterName = await getPersonName(req.requester_id)
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getProjectPMs(req.project_id)
+    const recipients = dedup(charris, pms)
 
     const template = templates.solicitudEnviada({
       requestId: req.request_id ?? '',
@@ -190,7 +254,7 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
 }
 
 // =============================================================================
-// 2. SOLICITUD EDITADA → Charris
+// 2. SOLICITUD EDITADA → Charris + ALL project PMs
 // =============================================================================
 export async function notifySolicitudEditada(requestId: string, personId: string): Promise<void> {
   try {
@@ -200,7 +264,9 @@ export async function notifySolicitudEditada(requestId: string, personId: string
     if (!['Enviada', 'En Proceso'].includes(req.status)) { console.log('[Notify] solicitud_editada: skipped, status =', req.status); return }
 
     const editorName = await getPersonName(personId)
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getProjectPMs(req.project_id)
+    const recipients = dedup(charris, pms)
 
     const template = templates.solicitudEditada({
       requestId: req.request_id ?? '',
@@ -222,7 +288,7 @@ export async function notifySolicitudEditada(requestId: string, personId: string
 }
 
 // =============================================================================
-// 3. SOLICITUD CANCELADA → Charris
+// 3. SOLICITUD CANCELADA → Charris + ALL project PMs EXCEPT canceller
 // =============================================================================
 export async function notifySolicitudCancelada(requestId: string, personId?: string): Promise<void> {
   try {
@@ -231,7 +297,9 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
     if (!req) { console.warn('[Notify] solicitud_cancelada: request not found'); return }
 
     const cancellerName = personId ? await getPersonName(personId) : 'Sistema'
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getProjectPMs(req.project_id, personId)
+    const recipients = dedup(charris, pms)
 
     const template = templates.solicitudCancelada({
       requestId: req.request_id ?? '',
@@ -253,7 +321,7 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
 }
 
 // =============================================================================
-// 4. SOLICITUD COMPLETADA → PM solicitante
+// 4. SOLICITUD COMPLETADA → ALL project PMs (no Charris)
 // =============================================================================
 export async function notifySolicitudCompletada(requestId: string): Promise<void> {
   try {
@@ -261,7 +329,7 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
     const req = await getRequestWithProject(requestId)
     if (!req || req.status !== 'Completada') { console.log('[Notify] solicitud_completada: skipped, status =', req?.status); return }
 
-    const recipients = await getRequester(requestId)
+    const recipients = await getProjectPMs(req.project_id)
 
     const template = templates.solicitudCompletada({
       requestId: req.request_id ?? '',
@@ -282,7 +350,7 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
 }
 
 // =============================================================================
-// 5. LÍNEAS PROGRAMADAS → PM solicitante
+// 5. LÍNEAS PROGRAMADAS → ALL project PMs (no Charris)
 // =============================================================================
 export async function notifyLineasProgramadas(tripId: string, requestId: string): Promise<void> {
   try {
@@ -309,13 +377,13 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 
     const { data: req } = await supabase
       .from('sm_requests')
-      .select('id, request_id')
+      .select('id, request_id, project_id')
       .eq('id', requestId)
       .single()
 
     if (!req) { console.warn('[Notify] lineas_programadas: request not found'); return }
 
-    const recipients = await getRequester(requestId)
+    const recipients = await getProjectPMs(req.project_id)
 
     const template = templates.lineasProgramadas({
       requestId: req.request_id ?? '',
@@ -341,7 +409,7 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 }
 
 // =============================================================================
-// 6. VIAJE CANCELADO → PM(s) afectados
+// 6. VIAJE CANCELADO → ALL PMs of ALL affected projects
 // =============================================================================
 export async function notifyViajeCancelado(tripId: string): Promise<void> {
   try {
@@ -356,7 +424,7 @@ export async function notifyViajeCancelado(tripId: string): Promise<void> {
     if (!trip) { console.warn('[Notify] viaje_cancelado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripRequesters(tripId)
+    const recipients = await getTripProjectPMs(tripId)
 
     const template = templates.viajeCancelado({
       tripId: trip.trip_id ?? '',
@@ -377,7 +445,7 @@ export async function notifyViajeCancelado(tripId: string): Promise<void> {
 }
 
 // =============================================================================
-// 7. VIAJE REPROGRAMADO → PM(s) afectados
+// 7. VIAJE REPROGRAMADO → ALL PMs of ALL affected projects
 // =============================================================================
 export async function notifyViajeReprogramado(
   tripId: string,
@@ -396,7 +464,7 @@ export async function notifyViajeReprogramado(
     if (!trip) { console.warn('[Notify] viaje_reprogramado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripRequesters(tripId)
+    const recipients = await getTripProjectPMs(tripId)
 
     const template = templates.viajeReprogramado({
       tripId: trip.trip_id ?? '',
@@ -419,7 +487,7 @@ export async function notifyViajeReprogramado(
 }
 
 // =============================================================================
-// 8. VIAJE ASIGNADO A CONDUCTOR
+// 8. VIAJE ASIGNADO A CONDUCTOR — ONLY the conductor
 // =============================================================================
 export async function notifyViajeAsignadoConductor(tripId: string): Promise<void> {
   try {
@@ -471,7 +539,7 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
 }
 
 // =============================================================================
-// 9. ENTREGA CONFIRMADA → PM solicitante
+// 9. ENTREGA CONFIRMADA → ALL PMs of the request's project
 // =============================================================================
 export async function notifyEntregaConfirmada(requestLineId: string): Promise<void> {
   try {
@@ -487,7 +555,7 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
 
     const { data: req } = await supabase
       .from('sm_requests')
-      .select('id, request_id, project_id, requester_id')
+      .select('id, request_id, project_id')
       .eq('id', line.request_id)
       .single()
 
@@ -499,14 +567,8 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
       .eq('id', req.project_id)
       .single()
 
-    const { data: requester } = await supabase
-      .from('people')
-      .select('id, email, name')
-      .eq('id', req.requester_id)
-      .single()
-
     const isPartial = (line.qty_delivered ?? 0) < line.quantity
-    const recipients = requester ? [requester] : []
+    const recipients = await getProjectPMs(req.project_id)
 
     const template = templates.entregaConfirmada({
       requestId: req.request_id ?? '',
@@ -532,7 +594,7 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
 }
 
 // =============================================================================
-// 10. SALIDA REGISTRADA → PM(s) afectados
+// 10. SALIDA REGISTRADA → ALL PMs of ALL affected projects
 // =============================================================================
 export async function notifySalidaRegistrada(tripId: string): Promise<void> {
   try {
@@ -546,7 +608,6 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
 
     if (!trip) { console.warn('[Notify] salida_registrada: trip not found'); return }
 
-    // Obtener destinos de las líneas asignadas
     const { data: assignments } = await supabase
       .from('trip_line_assignments')
       .select('request_line_id')
@@ -575,7 +636,7 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripRequesters(tripId)
+    const recipients = await getTripProjectPMs(tripId)
 
     const now = new Date()
     const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
@@ -601,7 +662,7 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
 }
 
 // =============================================================================
-// 11. INCIDENCIA EN RUTA → Charris + PM(s) afectados
+// 11. INCIDENCIA EN RUTA → ONLY Charris
 // =============================================================================
 export async function notifyIncidenciaRuta(tripId: string, notes: string): Promise<void> {
   try {
@@ -615,18 +676,7 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 
     if (!trip) { console.warn('[Notify] incidencia_ruta: trip not found'); return }
 
-    const pmRecipients = await getTripRequesters(tripId)
-    const logisticaRecipients = await getPeopleByRole('logistica')
-
-    // Dedup por id
-    const seen = new Set<string>()
-    const allRecipients: Array<{ id: string; email: string | null; name: string }> = []
-    for (const r of [...pmRecipients, ...logisticaRecipients]) {
-      if (!seen.has(r.id)) {
-        seen.add(r.id)
-        allRecipients.push(r)
-      }
-    }
+    const recipients = await getPeopleByRole('logistica')
 
     const template = templates.incidenciaRuta({
       tripId: trip.trip_id ?? '',
@@ -638,7 +688,7 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
       eventType: 'incidencia_ruta',
       referenceType: 'trip',
       referenceId: trip.id,
-      recipients: allRecipients,
+      recipients,
       ...template,
     })
   } catch (err) {
@@ -647,7 +697,47 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 }
 
 // =============================================================================
-// 12. SUGERENCIA FALLBACK → Admin (NO conectado en MVP — template listo)
+// 12. RETORNO REGISTRADO → ONLY Charris
+// =============================================================================
+export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
+  try {
+    console.log('[Notify] retorno_registrado called', { tripId })
+    const supabase = createServiceClient()
+
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id, actual_arrival')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] retorno_registrado: trip not found'); return }
+
+    const requestIds = await getTripRequestIds(tripId)
+    const recipients = await getPeopleByRole('logistica')
+
+    const arrivalTime = trip.actual_arrival ?? new Date().toISOString()
+
+    const template = templates.retornoRegistrado({
+      tripId: trip.trip_id ?? '',
+      arrivalTime,
+      requestIds,
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'retorno_registrado',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] retorno_registrado FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 13. SUGERENCIA FALLBACK → Admin (NO conectado en MVP — template listo)
 // =============================================================================
 export async function notifySugerenciaFallback(suggestionId: string): Promise<void> {
   try {
