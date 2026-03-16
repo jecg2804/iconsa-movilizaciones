@@ -132,6 +132,13 @@ export interface AssignmentInput {
   quantity_assigned: number
 }
 
+export interface ModifiedAssignment {
+  id: string                // trip_line_assignments.id
+  request_line_id: string
+  quantity_assigned: number // nuevo valor
+  original_quantity: number // valor original para calcular delta
+}
+
 export interface TripsFilter {
   status?: string | null
   dateFrom?: string | null
@@ -803,6 +810,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       addAssignments: AssignmentInput[],
       removeAssignmentIds: string[],
       personId?: string,
+      modifiedAssignments?: ModifiedAssignment[],
     ): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
@@ -856,6 +864,35 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             assignment.request_line_id,
             assignment.quantity_assigned,
           )
+        }
+
+        // 2.5. Actualizar cantidades de asignaciones existentes modificadas
+        if (modifiedAssignments && modifiedAssignments.length > 0) {
+          for (const mod of modifiedAssignments) {
+            const delta = mod.quantity_assigned - mod.original_quantity
+
+            // Actualizar la asignación
+            await supabase
+              .from('trip_line_assignments')
+              .update({ quantity_assigned: mod.quantity_assigned })
+              .eq('id', mod.id)
+
+            // Ajustar qty_scheduled de la línea
+            if (delta !== 0) {
+              const { data: currentLine } = await supabase
+                .from('sm_request_lines')
+                .select('qty_scheduled')
+                .eq('id', mod.request_line_id)
+                .single()
+
+              const newQtyScheduled = Math.max(0, (currentLine?.qty_scheduled ?? 0) + delta)
+
+              await supabase
+                .from('sm_request_lines')
+                .update({ qty_scheduled: newQtyScheduled })
+                .eq('id', mod.request_line_id)
+            }
+          }
         }
 
         // 3. Agregar nuevas asignaciones y marcar las líneas como Programadas
