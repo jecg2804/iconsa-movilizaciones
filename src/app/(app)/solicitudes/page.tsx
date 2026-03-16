@@ -18,15 +18,8 @@ import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 export default function SolicitudesPage() {
   const router = useRouter()
-  const { role, userProjects, loading: authLoading } = useAuth()
+  const { role, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
-
-  // PM default filter
-  const [initialFilterApplied, setInitialFilterApplied] = useState(false)
-  const defaultProjectId = useMemo(() => {
-    if (role === 'pm' && userProjects.length > 0) return userProjects[0].id
-    return null
-  }, [role, userProjects])
 
   const {
     solicitudes,
@@ -34,18 +27,7 @@ export default function SolicitudesPage() {
     setFilters,
     listLoading,
     listError,
-  } = useSolicitudes(
-    defaultProjectId ? { projectId: defaultProjectId } : undefined,
-  )
-
-  useEffect(() => {
-    if (!authLoading && !initialFilterApplied && role === 'pm' && defaultProjectId) {
-      setFilters({ projectId: defaultProjectId })
-      setInitialFilterApplied(true)
-    } else if (!authLoading && !initialFilterApplied) {
-      setInitialFilterApplied(true)
-    }
-  }, [authLoading, role, defaultProjectId, initialFilterApplied, setFilters])
+  } = useSolicitudes()
 
   // Búsqueda local (debounced)
   const [searchInput, setSearchInput] = useState('')
