@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
+import {
+  notifyLineasProgramadas,
+  notifyViajeAsignadoConductor,
+  notifyViajeCancelado,
+} from '@/lib/notifications/actions'
 
 // --- Tipos exportados ---
 
@@ -43,6 +48,7 @@ export interface BacklogLine {
     date_required: string
     status: string
     notes: string | null
+    attachments: unknown[] | null
   }
 }
 
@@ -95,6 +101,7 @@ export interface TripWithRelations {
   actual_arrival: string | null
   route_summary: string | null
   is_external: boolean | null
+  attachments: unknown[] | null
   created_at: string
   updated_at: string
   // Relaciones unidas
@@ -117,11 +124,19 @@ export interface TripInput {
   escort: boolean
   notes: string | null
   is_external: boolean
+  attachments?: unknown[] | null
 }
 
 export interface AssignmentInput {
   request_line_id: string
   quantity_assigned: number
+}
+
+export interface ModifiedAssignment {
+  id: string                // trip_line_assignments.id
+  request_line_id: string
+  quantity_assigned: number // nuevo valor
+  original_quantity: number // valor original para calcular delta
 }
 
 export interface TripsFilter {
@@ -234,6 +249,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     actual_arrival: (row.actual_arrival as string | null) ?? null,
     route_summary: (row.route_summary as string | null) ?? null,
     is_external: (row.is_external as boolean | null) ?? null,
+    attachments: (row.attachments as unknown[] | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     driver,
@@ -402,6 +418,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             date_required,
             status,
             notes,
+            attachments,
             project:project_id(id, code, name),
             requester:requester_id(id, name)
           )
@@ -433,10 +450,11 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               date_required: rawRequest.date_required as string,
               status: rawRequest.status as string,
               notes: (rawRequest.notes as string | null) ?? null,
+              attachments: (rawRequest.attachments as unknown[] | null) ?? null,
               project: unwrapRelation(rawRequest.project as BacklogLine['request']['project'] | null),
               requester: unwrapRelation(rawRequest.requester as BacklogLine['request']['requester'] | null),
             }
-          : { id: '', request_id: null, priority: null, date_required: '', status: '', notes: null, project: null, requester: null }
+          : { id: '', request_id: null, priority: null, date_required: '', status: '', notes: null, attachments: null, project: null, requester: null }
 
         return {
           id: row.id as string,
@@ -657,6 +675,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         actual_arrival: (row.actual_arrival as string | null) ?? null,
         route_summary: (row.route_summary as string | null) ?? null,
         is_external: (row.is_external as boolean | null) ?? null,
+        attachments: (row.attachments as unknown[] | null) ?? null,
         created_at: row.created_at as string,
         updated_at: row.updated_at as string,
         driver,
@@ -698,6 +717,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             confirmation_code: confirmationCode,
             notes: input.notes,
             is_external: input.is_external,
+            attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             created_by: personId ?? null,
           })
           .select('id, trip_id')
@@ -755,6 +775,18 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           .eq('id', newTripId)
           .single()
 
+        // 5. Notificaciones: líneas programadas a PMs + viaje asignado a conductor
+        const { data: lineRequests } = await supabase
+          .from('sm_request_lines')
+          .select('request_id')
+          .in('id', assignments.map(a => a.request_line_id))
+
+        const uniqueRequestIds = [...new Set((lineRequests ?? []).map(l => l.request_id))]
+        for (const reqId of uniqueRequestIds) {
+          notifyLineasProgramadas(newTripId, reqId).catch(console.error)
+        }
+        notifyViajeAsignadoConductor(newTripId).catch(console.error)
+
         return {
           id: newTripId,
           tripId: refreshed?.trip_id ?? null,
@@ -778,6 +810,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       addAssignments: AssignmentInput[],
       removeAssignmentIds: string[],
       personId?: string,
+      modifiedAssignments?: ModifiedAssignment[],
     ): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
@@ -798,6 +831,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             escort: input.escort,
             notes: input.notes,
             is_external: input.is_external,
+            attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             updated_by: personId ?? null,
           })
           .eq('id', id)
@@ -830,6 +864,35 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             assignment.request_line_id,
             assignment.quantity_assigned,
           )
+        }
+
+        // 2.5. Actualizar cantidades de asignaciones existentes modificadas
+        if (modifiedAssignments && modifiedAssignments.length > 0) {
+          for (const mod of modifiedAssignments) {
+            const delta = mod.quantity_assigned - mod.original_quantity
+
+            // Actualizar la asignación
+            await supabase
+              .from('trip_line_assignments')
+              .update({ quantity_assigned: mod.quantity_assigned })
+              .eq('id', mod.id)
+
+            // Ajustar qty_scheduled de la línea
+            if (delta !== 0) {
+              const { data: currentLine } = await supabase
+                .from('sm_request_lines')
+                .select('qty_scheduled')
+                .eq('id', mod.request_line_id)
+                .single()
+
+              const newQtyScheduled = Math.max(0, (currentLine?.qty_scheduled ?? 0) + delta)
+
+              await supabase
+                .from('sm_request_lines')
+                .update({ qty_scheduled: newQtyScheduled })
+                .eq('id', mod.request_line_id)
+            }
+          }
         }
 
         // 3. Agregar nuevas asignaciones y marcar las líneas como Programadas
@@ -931,6 +994,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           setSaveError(cancelError.message)
           return false
         }
+
+        // Notificar cancelación de viaje a PMs afectados
+        notifyViajeCancelado(id).catch(console.error)
 
         return true
       } catch (err) {

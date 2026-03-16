@@ -91,6 +91,7 @@ export const ROLE_ROUTES: Record<AppRole, string[]> = {
     '/dashboard',
     '/solicitudes',
     '/programacion', // solo lectura
+    '/mis-viajes',   // solo lectura — ver viajes de sus solicitudes
   ],
   logistica: [
     '/dashboard',

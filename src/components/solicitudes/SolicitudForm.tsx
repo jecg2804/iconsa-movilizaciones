@@ -1,11 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import FileUploader from '@/components/ui/FileUploader'
+import FileDisplay from '@/components/ui/FileDisplay'
 import { formatDate, formatDateTime, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
+import type { Attachment } from '@/lib/supabase/storage'
 
 type FormMode = 'create' | 'edit' | 'readonly'
 
@@ -37,6 +40,10 @@ interface SolicitudFormProps {
   currentPersonId: string
   /** Rol del usuario logueado — admin puede editar solicitante */
   role?: string | null
+  /** UUID de la solicitud (para folder de storage). En modo crear se genera uno temporal. */
+  solicitudId?: string
+  /** Adjuntos iniciales de la solicitud */
+  initialAttachments?: Attachment[]
 }
 
 function SolicitudForm({
@@ -48,6 +55,8 @@ function SolicitudForm({
   onChange,
   currentPersonId,
   role,
+  solicitudId,
+  initialAttachments,
 }: SolicitudFormProps) {
   const approverOptions = approvers ?? people
   const isReadonly = mode === 'readonly'
@@ -66,6 +75,9 @@ function SolicitudForm({
     initialData?.dateRequired ?? '',
   )
   const [notes, setNotes] = useState<string>(initialData?.notes ?? '')
+  const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments ?? [])
+  // UUID estable para folder de storage (en modo crear, genera uno temporal)
+  const folderIdRef = useRef(solicitudId ?? crypto.randomUUID())
 
   // --- Propagar cambios al padre ---
   const propagate = useCallback(
@@ -76,10 +88,11 @@ function SolicitudForm({
         approved_by: overrides?.approved_by !== undefined ? overrides.approved_by : approvedBy,
         date_required: overrides?.date_required ?? dateRequired,
         notes: overrides?.notes !== undefined ? overrides.notes : notes || null,
+        attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
       }
       onChange(data)
     },
-    [projectId, requesterId, approvedBy, dateRequired, notes, onChange],
+    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -272,11 +285,18 @@ function SolicitudForm({
         </div>
       </div>
 
-      {/* Placeholder de adjuntos en modo lectura */}
-      {isReadonly && (
-        <p className="text-xs italic text-iconsa-gray">
-          Adjuntos disponibles proximamente
-        </p>
+      {/* Adjuntos */}
+      {isReadonly ? (
+        <FileDisplay attachments={attachments} />
+      ) : (
+        <FileUploader
+          attachments={attachments}
+          folder={`requests/${folderIdRef.current}`}
+          onChange={(files) => {
+            setAttachments(files)
+            propagate({ attachments: files })
+          }}
+        />
       )}
     </div>
   )

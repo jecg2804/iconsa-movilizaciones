@@ -36,6 +36,8 @@ export default function MisViajesPage() {
   const statusOptions: SelectOption[] = [
     { value: 'Programado', label: 'Programado' },
     { value: 'En Ruta', label: 'En Ruta' },
+    { value: 'Completado', label: 'Completado' },
+    { value: 'Cancelado', label: 'Cancelado' },
   ]
 
   const driverOptions: SelectOption[] = useMemo(
@@ -52,18 +54,6 @@ export default function MisViajesPage() {
       return true
     })
   }, [trips, statusFilter, dateFrom, dateTo, driverFilter])
-
-  // Guard de acceso: pm no tiene acceso a esta pantalla
-  if (!authLoading && role === 'pm') {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4">
-        <h1 className="text-xl font-bold text-gray-900">Acceso denegado</h1>
-        <p className="text-sm text-iconsa-gray">
-          Los ingenieros de proyecto no tienen acceso a esta pantalla.
-        </p>
-      </div>
-    )
-  }
 
   if (authLoading || tripsLoading) {
     return (
@@ -118,11 +108,11 @@ export default function MisViajesPage() {
 
       {filteredTrips.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <p className="text-base font-medium text-gray-900">No hay viajes activos</p>
+          <p className="text-base font-medium text-gray-900">No hay viajes registrados</p>
           <p className="mt-1 text-sm text-iconsa-gray">
             {trips.length > 0
               ? 'Ningún viaje coincide con los filtros seleccionados.'
-              : 'Los viajes en estado Programado o En Ruta aparecerán aquí.'}
+              : 'Los viajes aparecerán aquí cuando se creen.'}
           </p>
         </div>
       ) : (

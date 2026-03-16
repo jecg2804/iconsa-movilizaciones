@@ -7,6 +7,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { useTripEvents, type TripEventType, type TripEventInput } from '@/hooks/useTripEvents'
+import {
+  notifySalidaRegistrada,
+  notifyEntregaConfirmada,
+  notifySolicitudCompletada,
+  notifyIncidenciaRuta,
+  notifyRetornoRegistrado,
+} from '@/lib/notifications/actions'
 import { formatDate, formatQty } from '@/lib/utils/format'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -14,6 +21,9 @@ import { Input } from '@/components/ui/Input'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
 import { CodeConfirmation } from '@/components/viajes/CodeConfirmation'
+import FileUploader from '@/components/ui/FileUploader'
+import FileDisplay from '@/components/ui/FileDisplay'
+import type { Attachment } from '@/lib/supabase/storage'
 
 // --- Tipos ---
 
@@ -24,11 +34,13 @@ interface TripEvent {
   registered_by: { name: string } | null
   received_by_name: string | null
   notes: string | null
+  attachments: Attachment[]
 }
 
 // --- Componente de fila de asignacion (solo lectura) ---
 
 function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignments'][number] }) {
+  const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
   const fromName = line?.from_location?.name ?? line?.from_text ?? '—'
@@ -55,16 +67,20 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
           <span className="truncate text-sm font-medium text-gray-900">
             {line?.description ?? '—'}
           </span>
-          <span className="font-mono text-xs text-iconsa-gray shrink-0">
+          <button
+            type="button"
+            onClick={() => router.push(`/solicitudes/${line?.request?.id}`)}
+            className="font-mono text-xs text-iconsa-gray shrink-0 hover:text-iconsa-blue hover:underline cursor-pointer"
+          >
             {requestDisplayId}
-          </span>
+          </button>
         </div>
 
         {line && (
           <div className="flex items-center gap-1 text-xs text-iconsa-gray">
-            <span className="truncate max-w-[100px] sm:max-w-[150px]">{fromName}</span>
+            <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-            <span className="truncate max-w-[100px] sm:max-w-[150px]">{toName}</span>
+            <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
           </div>
         )}
 
@@ -104,6 +120,8 @@ interface EventModalProps {
 function EventModal({ eventType, confirmationCode, receiverOptions, assignments, onConfirm, onClose, loading }: EventModalProps) {
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const eventIdRef = useRef(crypto.randomUUID())
   const deliveredQtys = useRef<Record<string, number>>({})
 
   useEffect(() => {
@@ -119,6 +137,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
   const handleConfirmCode = useCallback(
     (codeUsed: string, receivedById: string | null, receivedByName: string) => {
       onConfirm({
+        id: eventIdRef.current,
         event_type: eventType,
         event_timestamp: new Date().toISOString(),
         location: location.trim() || null,
@@ -127,19 +146,22 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
         received_by_id: receivedById ?? null,
         received_by_name: receivedByName || null,
         deliveredQuantities: { ...deliveredQtys.current },
+        attachments,
       })
     },
-    [eventType, location, notes, onConfirm],
+    [eventType, location, notes, attachments, onConfirm],
   )
 
   const handleDirectConfirm = useCallback(() => {
     onConfirm({
+      id: eventIdRef.current,
       event_type: eventType,
       event_timestamp: new Date().toISOString(),
       location: location.trim() || null,
       notes: notes.trim() || null,
+      attachments,
     })
-  }, [eventType, location, notes, onConfirm])
+  }, [eventType, location, notes, attachments, onConfirm])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
@@ -171,6 +193,15 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
             />
           </div>
+
+          {/* Fotos / Adjuntos */}
+          <FileUploader
+            attachments={attachments}
+            folder={`events/${eventIdRef.current}`}
+            onChange={setAttachments}
+            label="Fotos"
+            hint="PDF, JPG, PNG o WEBP (max 10MB)"
+          />
         </div>
 
         {/* Cantidades a entregar (solo Entrega) */}
@@ -356,7 +387,8 @@ export default function MisViajesDetailPage() {
         event_timestamp,
         registered_by:registered_by(name),
         received_by_name,
-        notes
+        notes,
+        attachments
       `)
       .eq('trip_id', id)
       .order('event_timestamp', { ascending: true })
@@ -365,6 +397,10 @@ export default function MisViajesDetailPage() {
       const mapped: TripEvent[] = (data as unknown as Record<string, unknown>[]).map((row) => {
         const rb = row.registered_by
         const registeredBy = Array.isArray(rb) ? (rb[0] ?? null) : rb
+        const rawAtt = row.attachments
+        const att: Attachment[] = Array.isArray(rawAtt)
+          ? (rawAtt as unknown[]).map(a => a as Attachment)
+          : []
         return {
           id: row.id as string,
           event_type: row.event_type as string,
@@ -372,6 +408,7 @@ export default function MisViajesDetailPage() {
           registered_by: registeredBy as { name: string } | null,
           received_by_name: (row.received_by_name as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
+          attachments: att,
         }
       })
       setEvents(mapped)
@@ -430,6 +467,30 @@ export default function MisViajesDetailPage() {
 
       const success = await registerEvent(input, lineIds)
       if (success) {
+        // Notificaciones por tipo de evento
+        if (input.event_type === 'Salida' && trip) {
+          notifySalidaRegistrada(trip.id).catch(console.error)
+        }
+        if (input.event_type === 'Entrega' && trip) {
+          // Notificar por cada línea entregada
+          for (const lineId of assignedLineIds) {
+            notifyEntregaConfirmada(lineId).catch(console.error)
+          }
+          // Verificar si alguna solicitud padre quedó Completada
+          const reqIds = [...new Set(
+            trip.assignments.map(a => a.line?.request?.id).filter(Boolean)
+          )] as string[]
+          for (const reqId of reqIds) {
+            notifySolicitudCompletada(reqId).catch(console.error)
+          }
+        }
+        if (input.event_type === 'Incidencia' && trip) {
+          notifyIncidenciaRuta(trip.id, input.notes ?? '').catch(console.error)
+        }
+        if (input.event_type === 'Retorno' && trip) {
+          notifyRetornoRegistrado(trip.id).catch(console.error)
+        }
+
         setActiveEvent(null)
         // Recargar viaje y eventos
         const tripData = await fetchTrip(id)
@@ -437,7 +498,7 @@ export default function MisViajesDetailPage() {
         await loadEvents()
       }
     },
-    [registerEvent, assignedLineIds, fetchTrip, id, loadEvents],
+    [registerEvent, assignedLineIds, fetchTrip, id, loadEvents, trip],
   )
 
   // --- Guards ---
@@ -464,8 +525,10 @@ export default function MisViajesDetailPage() {
     )
   }
 
-  // Código de confirmación solo visible para logistica y admin
+  // Código de confirmación solo visible para logistica y admin y pm
   const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
+  // PMs solo ven viajes — no registran eventos
+  const canRegisterEvents = role !== 'pm'
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
@@ -576,8 +639,8 @@ export default function MisViajesDetailPage() {
         <EventTimeline events={events} />
       </div>
 
-      {/* Panel de acciones — sticky en mobile */}
-      {!tripDone && (
+      {/* Panel de acciones — sticky en mobile (PMs solo ven, no registran) */}
+      {!tripDone && canRegisterEvents && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:static sm:inset-auto sm:z-auto sm:rounded-lg sm:border sm:shadow-sm sm:px-6 sm:py-4">
           <div className="mx-auto max-w-2xl space-y-2">
             {/* Error de registro */}

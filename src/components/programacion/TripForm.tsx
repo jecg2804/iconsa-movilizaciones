@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import FileUploader from '@/components/ui/FileUploader'
+import FileDisplay from '@/components/ui/FileDisplay'
 import type { TripInput } from '@/hooks/useTrips'
+import type { Attachment } from '@/lib/supabase/storage'
 
 type TripFormMode = 'create' | 'edit' | 'readonly'
 
@@ -46,6 +49,10 @@ interface TripFormProps {
   onRateChange?: (rateId: string | null) => void
   /** Si true, el remolque es obligatorio (vehículo es cabezal) */
   isTrailerRequired?: boolean
+  /** UUID del viaje (para folder de storage). En modo crear se genera uno temporal. */
+  tripId?: string
+  /** Adjuntos iniciales del viaje */
+  initialAttachments?: Attachment[]
 }
 
 function TripForm({
@@ -58,6 +65,8 @@ function TripForm({
   onChange,
   onRateChange,
   isTrailerRequired = false,
+  tripId: tripIdProp,
+  initialAttachments,
 }: TripFormProps) {
   // En modo edicion con viaje En Ruta, solo las notas son editables
   const isEnRuta = mode === 'edit' && initialData?.status === 'En Ruta'
@@ -96,6 +105,9 @@ function TripForm({
   const [isExternal, setIsExternal] = useState<boolean>(
     initialData?.isExternal ?? false,
   )
+  const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments ?? [])
+  // UUID estable para folder de storage (en modo crear, genera uno temporal)
+  const folderIdRef = useRef(tripIdProp ?? crypto.randomUUID())
 
   // --- Propagar cambios al padre ---
   const propagate = useCallback(
@@ -112,10 +124,11 @@ function TripForm({
         escort: overrides?.escort !== undefined ? overrides.escort : escort,
         notes: overrides?.notes !== undefined ? overrides.notes : (notes.trim() || null),
         is_external: overrides?.is_external !== undefined ? overrides.is_external : isExternal,
+        attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
       }
       onChange(data)
     },
-    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, onChange],
+    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, attachments, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -415,6 +428,28 @@ function TripForm({
               Viaje externo
             </span>
           </label>
+        </div>
+
+        {/* Adjuntos */}
+        <div className="md:col-span-2">
+          {isReadonly ? (
+            <FileDisplay attachments={attachments} />
+          ) : (
+            <FileUploader
+              attachments={attachments}
+              folder={`trips/${folderIdRef.current}`}
+              onChange={(files) => {
+                setAttachments(files)
+                propagate({ attachments: files })
+              }}
+              disabled={fieldsDisabled}
+            />
+          )}
+          {attPermit && attachments.length === 0 && !isReadonly && (
+            <p className="mt-1 text-xs text-blue-600">
+              ℹ️ Este viaje requiere permiso ATT. Puede adjuntarlo cuando esté disponible.
+            </p>
+          )}
         </div>
 
         {/* Notas — ancho completo. En modo En Ruta, este campo SI es editable */}

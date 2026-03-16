@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Wrench, Package, ArrowRight } from 'lucide-react'
+import { Plus, Search, Wrench, Package, ArrowRight, Paperclip } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
@@ -18,15 +18,8 @@ import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 export default function SolicitudesPage() {
   const router = useRouter()
-  const { role, userProjects, loading: authLoading } = useAuth()
+  const { role, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
-
-  // PM default filter
-  const [initialFilterApplied, setInitialFilterApplied] = useState(false)
-  const defaultProjectId = useMemo(() => {
-    if (role === 'pm' && userProjects.length > 0) return userProjects[0].id
-    return null
-  }, [role, userProjects])
 
   const {
     solicitudes,
@@ -34,18 +27,7 @@ export default function SolicitudesPage() {
     setFilters,
     listLoading,
     listError,
-  } = useSolicitudes(
-    defaultProjectId ? { projectId: defaultProjectId } : undefined,
-  )
-
-  useEffect(() => {
-    if (!authLoading && !initialFilterApplied && role === 'pm' && defaultProjectId) {
-      setFilters({ projectId: defaultProjectId })
-      setInitialFilterApplied(true)
-    } else if (!authLoading && !initialFilterApplied) {
-      setInitialFilterApplied(true)
-    }
-  }, [authLoading, role, defaultProjectId, initialFilterApplied, setFilters])
+  } = useSolicitudes()
 
   // Búsqueda local (debounced)
   const [searchInput, setSearchInput] = useState('')
@@ -184,15 +166,23 @@ export default function SolicitudesPage() {
         header: 'ID',
         sortable: true,
         className: 'w-[160px]',
-        render: (row) => (
-          <a
-            href={`/solicitudes/${row.id}`}
-            onClick={(e) => { e.stopPropagation(); router.push(`/solicitudes/${row.id}`) }}
-            className="font-mono text-sm font-medium text-navy hover:underline"
-          >
-            {row.request_id ?? '—'}
-          </a>
-        ),
+        render: (row) => {
+          const hasAttachments = Array.isArray(row.attachments) && row.attachments.length > 0
+          return (
+            <span className="inline-flex items-center gap-1">
+              <a
+                href={`/solicitudes/${row.id}`}
+                onClick={(e) => { e.stopPropagation(); router.push(`/solicitudes/${row.id}`) }}
+                className="font-mono text-sm font-medium text-navy hover:underline"
+              >
+                {row.request_id ?? '—'}
+              </a>
+              {hasAttachments && (
+                <span title="Tiene adjuntos"><Paperclip className="h-3.5 w-3.5 text-iconsa-gray" /></span>
+              )}
+            </span>
+          )
+        },
         sortValue: (row) => row.request_id ?? '',
       },
       {
@@ -236,6 +226,16 @@ export default function SolicitudesPage() {
           <span className="text-sm text-gray-900">{formatDate(row.date_required)}</span>
         ),
         sortValue: (row) => row.date_required,
+      },
+      {
+        key: 'date_submitted',
+        header: 'Fecha Enviada',
+        sortable: true,
+        className: 'w-[120px]',
+        render: (row) => (
+          <span className="text-sm text-gray-900">{row.date_submitted ? formatDate(row.date_submitted) : '—'}</span>
+        ),
+        sortValue: (row) => row.date_submitted ?? '',
       },
       {
         key: 'status',
@@ -284,7 +284,12 @@ export default function SolicitudesPage() {
     (row: SolicitudWithRelations) => (
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 active:bg-gray-50">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-sm font-bold text-navy">{row.request_id ?? '—'}</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="font-mono text-sm font-bold text-navy">{row.request_id ?? '—'}</span>
+            {Array.isArray(row.attachments) && row.attachments.length > 0 && (
+              <Paperclip className="h-3.5 w-3.5 text-iconsa-gray" />
+            )}
+          </span>
           <Badge label={row.status} variant="status" />
         </div>
         <div className="text-sm text-gray-900">
@@ -299,6 +304,11 @@ export default function SolicitudesPage() {
           <span>{row.requester?.name ?? '—'}</span>
           <span>{formatDate(row.date_required)}</span>
         </div>
+        {row.date_submitted && (
+          <div className="text-xs text-iconsa-gray">
+            Enviada: {formatDate(row.date_submitted)}
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2 text-xs text-iconsa-gray">
           <span>{row.lines?.length ?? 0} {(row.lines?.length ?? 0) === 1 ? 'línea' : 'líneas'}</span>
           {row.status !== 'Cancelada' && (

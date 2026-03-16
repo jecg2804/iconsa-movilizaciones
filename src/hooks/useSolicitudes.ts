@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
+import {
+  notifySolicitudEnviada,
+  notifySolicitudEditada,
+  notifySolicitudCancelada,
+} from '@/lib/notifications/actions'
 
 // --- Tipos exportados ---
 
@@ -69,6 +74,7 @@ export interface SolicitudInput {
   approved_by?: string | null
   date_required: string
   notes?: string | null
+  attachments?: unknown[] | null
 }
 
 export interface LineInput {
@@ -484,6 +490,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           approved_by: header.approved_by ?? null,
           date_required: header.date_required,
           notes: header.notes ?? null,
+          attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
           status,
           created_by: personId ?? null,
         }
@@ -547,6 +554,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           .eq('id', newId)
           .single()
 
+        // Notificar si se envió directamente (status = Enviada)
+        if (status === 'Enviada') {
+          notifySolicitudEnviada(newId).catch(console.error)
+        }
+
         return {
           id: newId,
           requestId: refreshed?.request_id ?? '',
@@ -582,6 +594,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.approved_by !== undefined) headerUpdate.approved_by = header.approved_by
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
+        if (header.attachments !== undefined) headerUpdate.attachments = header.attachments
         if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
@@ -683,6 +696,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           }
         }
 
+        // Notificar edición (action verifica que status sea Enviada/En Proceso)
+        if (personId) {
+          notifySolicitudEditada(id, personId).catch(console.error)
+        }
+
         return true
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Error inesperado al actualizar'
@@ -697,7 +715,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
 
   // --- Cancelar solicitud ---
   const cancelSolicitud = useCallback(
-    async (id: string): Promise<boolean> => {
+    async (id: string, personId?: string): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
 
@@ -749,6 +767,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           setSaveError(cancelError.message)
           return false
         }
+
+        // Notificar cancelación
+        notifySolicitudCancelada(id, personId).catch(console.error)
 
         return true
       } catch (err) {

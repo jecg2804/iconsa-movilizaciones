@@ -12,13 +12,18 @@ import {
   type AssignmentInput,
   type TripWithRelations,
   type TripAssignment,
+  type BacklogLine,
+  type ModifiedAssignment,
 } from '@/hooks/useTrips'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
+import { notifyViajeReprogramado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
 import { LineSelector } from '@/components/programacion/LineSelector'
+import type { Attachment } from '@/lib/supabase/storage'
+import FileDisplay from '@/components/ui/FileDisplay'
 
 // --- Helpers ---
 
@@ -78,6 +83,7 @@ interface TripEventRow {
   registered_by: { name: string } | null
   received_by_name: string | null
   notes: string | null
+  attachments: unknown[] | null
 }
 
 // --- Componente de fila de asignacion existente (modo lectura o edicion) ---
@@ -85,10 +91,12 @@ interface TripEventRow {
 interface AssignmentRowProps {
   assignment: TripAssignment
   canRemove: boolean
+  canEdit: boolean
   onRemove: (assignmentId: string) => void
+  onQtyChange?: (assignmentId: string, newQty: number) => void
 }
 
-function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) {
+function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
   const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
@@ -134,14 +142,19 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
           >
             {requestDisplayId}
           </button>
+          {line?.request?.project?.code && (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600">
+              {line.request.project.code}
+            </span>
+          )}
         </div>
 
         {/* Ruta */}
         {line && (
           <div className="flex items-center gap-1 text-xs text-iconsa-gray">
-            <span className="truncate max-w-[100px] sm:max-w-[150px]">{fromName}</span>
+            <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-            <span className="truncate max-w-[100px] sm:max-w-[150px]">{toName}</span>
+            <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
           </div>
         )}
 
@@ -155,14 +168,30 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
 
       {/* Cantidad + estado */}
       <div className="shrink-0 flex items-center gap-3">
-        <span className="text-sm text-gray-700 whitespace-nowrap">
-          {formatQty(assignment.quantity_assigned)} {unitCode}
-          {(assignment.qty_delivered ?? 0) > 0 && (
-            <span className="text-xs text-orange-600 ml-1">
-              ({formatQty(assignment.qty_delivered)} entregadas)
-            </span>
-          )}
-        </span>
+        {canEdit ? (
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <input
+              type="number"
+              value={assignment.quantity_assigned}
+              min={0.01}
+              max={line?.quantity ? line.quantity - (assignment.qty_delivered ?? 0) : undefined}
+              step={0.01}
+              onChange={(e) => onQtyChange?.(assignment.id, parseFloat(e.target.value) || 0)}
+              title="Cantidad asignada"
+              className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+            />
+            <span className="text-xs text-iconsa-gray">{unitCode}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-700 whitespace-nowrap">
+            {formatQty(assignment.quantity_assigned)} {unitCode}
+            {(assignment.qty_delivered ?? 0) > 0 && (
+              <span className="text-xs text-orange-600 ml-1">
+                ({formatQty(assignment.qty_delivered)} entregadas)
+              </span>
+            )}
+          </span>
+        )}
         {line?.status && (
           <Badge variant="line" label={line.status} />
         )}
@@ -229,8 +258,10 @@ export default function ViajeDetailPage() {
 
   // Asignaciones: las originales del viaje + las nuevas seleccionadas
   const [existingAssignments, setExistingAssignments] = useState<TripAssignment[]>([])
+  const [originalAssignments, setOriginalAssignments] = useState<Map<string, number>>(new Map())
   const [newAssignments, setNewAssignments] = useState<AssignmentInput[]>([])
   const [removedAssignmentIds, setRemovedAssignmentIds] = useState<string[]>([])
+  const [removedLines, setRemovedLines] = useState<BacklogLine[]>([])
 
   // Eventos de ejecución
   const [tripEvents, setTripEvents] = useState<TripEventRow[]>([])
@@ -254,14 +285,16 @@ export default function ViajeDetailPage() {
         setTrip(data)
         setTripData(tripToInput(data))
         setExistingAssignments(data.assignments)
+        setOriginalAssignments(new Map(data.assignments.map((a: TripAssignment) => [a.id, a.quantity_assigned])))
         setNewAssignments([])
         setRemovedAssignmentIds([])
+        setRemovedLines([])
         setIsDirty(false)
 
         // Fetch eventos de ejecución
         const { data: events } = await supabase
           .from('trip_events')
-          .select('event_type, event_timestamp, registered_by:registered_by(name), received_by_name, notes')
+          .select('event_type, event_timestamp, registered_by:registered_by(name), received_by_name, notes, attachments')
           .eq('trip_id', id)
           .order('event_timestamp', { ascending: true })
         setTripEvents((events as unknown as TripEventRow[]) ?? [])
@@ -346,8 +379,60 @@ export default function ViajeDetailPage() {
 
   // --- Quitar asignacion existente ---
   const handleRemoveExisting = useCallback((assignmentId: string) => {
+    const removed = existingAssignments.find((a) => a.id === assignmentId)
     setExistingAssignments((prev) => prev.filter((a) => a.id !== assignmentId))
     setRemovedAssignmentIds((prev) => [...prev, assignmentId])
+
+    // Reconstruir como BacklogLine para que aparezca inmediatamente en disponibles
+    if (removed?.line) {
+      const l = removed.line
+      const bl: BacklogLine = {
+        id: removed.request_line_id,
+        request_id: l.request?.id ?? '',
+        line_number: l.line_number,
+        line_type: l.line_type,
+        equipment_id: l.equipment?.id ?? null,
+        description: l.description,
+        from_location_id: l.from_location?.id ?? null,
+        from_text: l.from_text ?? null,
+        to_location_id: l.to_location?.id ?? null,
+        to_text: l.to_text ?? null,
+        quantity: l.quantity,
+        unit_id: l.unit?.id ?? null,
+        unit_text: l.unit_text ?? null,
+        cost_code_id: null,
+        category: null,
+        status: 'Pendiente',
+        notes: l.notes ?? null,
+        qty_scheduled: 0,
+        qty_delivered: 0,
+        equipment: l.equipment ?? null,
+        from_location: l.from_location ?? null,
+        to_location: l.to_location ?? null,
+        unit: l.unit ?? null,
+        request: {
+          id: l.request?.id ?? '',
+          request_id: l.request?.request_id ?? '',
+          project: l.request?.project ?? { id: '', code: '', name: '' },
+          requester: { id: '', name: '' },
+          priority: null,
+          date_required: l.request?.date_required ?? '',
+          status: 'Enviada',
+          notes: null,
+          attachments: null,
+        },
+      }
+      setRemovedLines((prev) => [...prev, bl])
+    }
+
+    setIsDirty(true)
+  }, [existingAssignments])
+
+  // --- Cambiar cantidad de asignacion existente ---
+  const handleExistingQtyChange = useCallback((assignmentId: string, newQty: number) => {
+    setExistingAssignments((prev) =>
+      prev.map((a) => (a.id === assignmentId ? { ...a, quantity_assigned: newQty } : a)),
+    )
     setIsDirty(true)
   }, [])
 
@@ -399,10 +484,13 @@ export default function ViajeDetailPage() {
     [existingAssignments],
   )
 
-  // Backlog disponible = solo las lineas que no estan ya asignadas al viaje actual
+  // Backlog disponible = lineas no asignadas al viaje + lineas recién removidas del viaje
   const availableBacklog = useMemo(
-    () => backlog.filter((l) => !existingLineIds.has(l.id)),
-    [backlog, existingLineIds],
+    () => [
+      ...backlog.filter((l) => !existingLineIds.has(l.id)),
+      ...removedLines.filter((l) => !existingLineIds.has(l.id)),
+    ],
+    [backlog, existingLineIds, removedLines],
   )
 
   // --- Guardar cambios ---
@@ -412,20 +500,40 @@ export default function ViajeDetailPage() {
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
     }
-    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id)
+    // Calcular asignaciones existentes con cantidad modificada
+    const modified: ModifiedAssignment[] = existingAssignments
+      .filter((a) => {
+        const orig = originalAssignments.get(a.id)
+        return orig !== undefined && orig !== a.quantity_assigned
+      })
+      .map((a) => ({
+        id: a.id,
+        request_line_id: a.request_line_id,
+        quantity_assigned: a.quantity_assigned,
+        original_quantity: originalAssignments.get(a.id) ?? a.quantity_assigned,
+      }))
+
+    const originalDate = trip.scheduled_date
+    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id, modified)
     if (success) {
+      // Notificar si se cambió la fecha
+      if (originalDate !== tripData.scheduled_date) {
+        notifyViajeReprogramado(trip.id, originalDate, tripData.scheduled_date).catch(console.error)
+      }
       // Refrescar datos del viaje
       const updated = await fetchTrip(id)
       if (updated) {
         setTrip(updated)
         setTripData(tripToInput(updated))
         setExistingAssignments(updated.assignments)
+        setOriginalAssignments(new Map(updated.assignments.map((a: TripAssignment) => [a.id, a.quantity_assigned])))
         setNewAssignments([])
         setRemovedAssignmentIds([])
+        setRemovedLines([])
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, updateTrip, fetchTrip, id, person?.id])
+  }, [trip, tripData, newAssignments, removedAssignmentIds, existingAssignments, originalAssignments, updateTrip, fetchTrip, id, person?.id])
 
   // --- Cancelar viaje ---
   const handleCancelTrip = useCallback(async () => {
@@ -535,6 +643,8 @@ export default function ViajeDetailPage() {
           onChange={handleTripDataChange}
           onRateChange={handleRateChange}
           isTrailerRequired={isCabezal}
+          tripId={trip.id}
+          initialAttachments={(trip.attachments as unknown[])?.map(a => a as Attachment) ?? []}
         />
       </div>
 
@@ -572,7 +682,9 @@ export default function ViajeDetailPage() {
                 key={assignment.id}
                 assignment={assignment}
                 canRemove={canRemoveAssignments}
+                canEdit={canEditFullTrip}
                 onRemove={handleRemoveExisting}
+                onQtyChange={handleExistingQtyChange}
               />
             ))}
           </div>
@@ -633,6 +745,14 @@ export default function ViajeDetailPage() {
                       )}
                       {ev.notes && (
                         <p className="text-xs text-gray-600">{ev.notes}</p>
+                      )}
+                      {ev.attachments && Array.isArray(ev.attachments) && ev.attachments.length > 0 && (
+                        <div className="mt-1">
+                          <FileDisplay
+                            attachments={(ev.attachments as unknown[]).map(a => a as Attachment)}
+                            collapsible={false}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
