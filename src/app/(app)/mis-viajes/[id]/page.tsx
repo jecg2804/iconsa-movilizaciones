@@ -7,6 +7,12 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { useTripEvents, type TripEventType, type TripEventInput } from '@/hooks/useTripEvents'
+import {
+  notifySalidaRegistrada,
+  notifyEntregaConfirmada,
+  notifySolicitudCompletada,
+  notifyIncidenciaRuta,
+} from '@/lib/notifications/actions'
 import { formatDate, formatQty } from '@/lib/utils/format'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -460,6 +466,27 @@ export default function MisViajesDetailPage() {
 
       const success = await registerEvent(input, lineIds)
       if (success) {
+        // Notificaciones por tipo de evento
+        if (input.event_type === 'Salida' && trip) {
+          notifySalidaRegistrada(trip.id).catch(console.error)
+        }
+        if (input.event_type === 'Entrega' && trip) {
+          // Notificar por cada línea entregada
+          for (const lineId of assignedLineIds) {
+            notifyEntregaConfirmada(lineId).catch(console.error)
+          }
+          // Verificar si alguna solicitud padre quedó Completada
+          const reqIds = [...new Set(
+            trip.assignments.map(a => a.line?.request?.id).filter(Boolean)
+          )] as string[]
+          for (const reqId of reqIds) {
+            notifySolicitudCompletada(reqId).catch(console.error)
+          }
+        }
+        if (input.event_type === 'Incidencia' && trip) {
+          notifyIncidenciaRuta(trip.id, input.notes ?? '').catch(console.error)
+        }
+
         setActiveEvent(null)
         // Recargar viaje y eventos
         const tripData = await fetchTrip(id)
@@ -467,7 +494,7 @@ export default function MisViajesDetailPage() {
         await loadEvents()
       }
     },
-    [registerEvent, assignedLineIds, fetchTrip, id, loadEvents],
+    [registerEvent, assignedLineIds, fetchTrip, id, loadEvents, trip],
   )
 
   // --- Guards ---

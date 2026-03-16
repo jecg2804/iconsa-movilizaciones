@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
+import {
+  notifySolicitudEnviada,
+  notifySolicitudEditada,
+  notifySolicitudCancelada,
+} from '@/lib/notifications/actions'
 
 // --- Tipos exportados ---
 
@@ -549,6 +554,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           .eq('id', newId)
           .single()
 
+        // Notificar si se envió directamente (status = Enviada)
+        if (status === 'Enviada') {
+          notifySolicitudEnviada(newId).catch(console.error)
+        }
+
         return {
           id: newId,
           requestId: refreshed?.request_id ?? '',
@@ -686,6 +696,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           }
         }
 
+        // Notificar edición (action verifica que status sea Enviada/En Proceso)
+        if (personId) {
+          notifySolicitudEditada(id, personId).catch(console.error)
+        }
+
         return true
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Error inesperado al actualizar'
@@ -700,7 +715,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
 
   // --- Cancelar solicitud ---
   const cancelSolicitud = useCallback(
-    async (id: string): Promise<boolean> => {
+    async (id: string, personId?: string): Promise<boolean> => {
       setSaving(true)
       setSaveError(null)
 
@@ -752,6 +767,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           setSaveError(cancelError.message)
           return false
         }
+
+        // Notificar cancelación
+        notifySolicitudCancelada(id, personId).catch(console.error)
 
         return true
       } catch (err) {

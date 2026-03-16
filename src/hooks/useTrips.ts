@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
+import {
+  notifyLineasProgramadas,
+  notifyViajeAsignadoConductor,
+  notifyViajeCancelado,
+} from '@/lib/notifications/actions'
 
 // --- Tipos exportados ---
 
@@ -763,6 +768,18 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           .eq('id', newTripId)
           .single()
 
+        // 5. Notificaciones: líneas programadas a PMs + viaje asignado a conductor
+        const { data: lineRequests } = await supabase
+          .from('sm_request_lines')
+          .select('request_id')
+          .in('id', assignments.map(a => a.request_line_id))
+
+        const uniqueRequestIds = [...new Set((lineRequests ?? []).map(l => l.request_id))]
+        for (const reqId of uniqueRequestIds) {
+          notifyLineasProgramadas(newTripId, reqId).catch(console.error)
+        }
+        notifyViajeAsignadoConductor(newTripId).catch(console.error)
+
         return {
           id: newTripId,
           tripId: refreshed?.trip_id ?? null,
@@ -940,6 +957,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           setSaveError(cancelError.message)
           return false
         }
+
+        // Notificar cancelación de viaje a PMs afectados
+        notifyViajeCancelado(id).catch(console.error)
 
         return true
       } catch (err) {
