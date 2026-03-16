@@ -57,11 +57,3 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
 - `main` — Versión estable. Docs y código aprobado.
 - `jaime/dev` — Branch de desarrollo de James.
-- `andy/dev` — Branch de desarrollo de Andy.
-
-## Workflow
-
-- **Claude.ai Chat** — Arquitectura, decisiones, documentación
-- **Claude Code (VS Code)** — Construcción, código, debugging
-- **James** — Director del proyecto, verificación, documentación
-- **Andy** — Co-developer, arquitectura backend
