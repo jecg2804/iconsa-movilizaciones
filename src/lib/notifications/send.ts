@@ -35,11 +35,18 @@ export async function sendNotification(params: {
   const supabase = createServiceClient()
   let sent = 0, skipped = 0, failed = 0
 
+  if (params.recipients.length === 0) {
+    console.warn(`[Notification] WARNING: 0 recipients for event "${params.eventType}" ref=${params.referenceId}. No emails will be sent.`)
+    return { sent, skipped, failed }
+  }
+
+  console.log(`[Notification] ${params.eventType}: sending to ${params.recipients.length} recipient(s)`)
+
   for (const recipient of params.recipients) {
     const targetEmail = TEST_EMAIL ?? recipient.email
 
     if (!targetEmail) {
-      await supabase.from('notification_log').insert({
+      const { error: logErr } = await supabase.from('notification_log').insert({
         event_type: params.eventType,
         recipient_id: recipient.id,
         recipient_email: null,
@@ -50,6 +57,7 @@ export async function sendNotification(params: {
         error_message: 'No email address',
         payload: params.data ?? {},
       })
+      if (logErr) console.error('[Notification] Failed to log skip to notification_log:', logErr.message)
       skipped++
       continue
     }
@@ -85,7 +93,7 @@ export async function sendNotification(params: {
 
       if (error) throw new Error(error.message)
 
-      await supabase.from('notification_log').insert({
+      const { error: logErr } = await supabase.from('notification_log').insert({
         event_type: params.eventType,
         recipient_id: recipient.id,
         recipient_email: targetEmail,
@@ -97,10 +105,11 @@ export async function sendNotification(params: {
         payload: params.data ?? {},
         sent_at: new Date().toISOString(),
       })
+      if (logErr) console.error('[Notification] Failed to log sent to notification_log:', logErr.message)
       sent++
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-      await supabase.from('notification_log').insert({
+      const { error: logErr } = await supabase.from('notification_log').insert({
         event_type: params.eventType,
         recipient_id: recipient.id,
         recipient_email: targetEmail,
@@ -111,10 +120,12 @@ export async function sendNotification(params: {
         error_message: errorMsg,
         payload: params.data ?? {},
       })
+      if (logErr) console.error('[Notification] Failed to log error to notification_log:', logErr.message)
       failed++
       console.error(`[Notification] failed for ${recipient.name}:`, errorMsg)
     }
   }
 
+  console.log(`[Notification] ${params.eventType} result: sent=${sent} skipped=${skipped} failed=${failed}`)
   return { sent, skipped, failed }
 }
