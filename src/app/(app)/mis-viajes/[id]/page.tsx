@@ -12,6 +12,7 @@ import {
   notifyEntregaConfirmada,
   notifySolicitudCompletada,
   notifyIncidenciaRuta,
+  notifyRetornoRegistrado,
 } from '@/lib/notifications/actions'
 import { formatDate, formatQty } from '@/lib/utils/format'
 import { Button } from '@/components/ui/Button'
@@ -485,6 +486,9 @@ export default function MisViajesDetailPage() {
         }
         if (input.event_type === 'Incidencia' && trip) {
           notifyIncidenciaRuta(trip.id, input.notes ?? '').catch(console.error)
+        }
+        if (input.event_type === 'Retorno' && trip) {
+          notifyRetornoRegistrado(trip.id).catch(console.error)
         }
 
         setActiveEvent(null)

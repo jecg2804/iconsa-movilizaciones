@@ -15,6 +15,7 @@ async function getPeopleByRole(role: string) {
     .select('id, email, name')
     .eq('app_role', role)
     .eq('status', 'Activo')
+    .eq('notifications_enabled', true)
   if (error) console.error('[Notify] getPeopleByRole error:', error.message)
   console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`, data?.map(p => `${p.name} <${p.email}>`))
   return data ?? []
@@ -22,130 +23,155 @@ async function getPeopleByRole(role: string) {
 
 async function getRequester(requestId: string) {
   const supabase = createServiceClient()
-  const { data: req } = await supabase
+  const { data: req, error: reqErr } = await supabase
     .from('sm_requests')
     .select('requester_id')
     .eq('id', requestId)
     .single()
 
+  if (reqErr) console.error('[Notify] getRequester sm_requests error:', reqErr.message)
   if (!req?.requester_id) return []
 
-  const { data: person } = await supabase
+  const { data: person, error: pErr } = await supabase
     .from('people')
-    .select('id, email, name')
+    .select('id, email, name, notifications_enabled')
     .eq('id', req.requester_id)
     .single()
 
-  return person ? [person] : []
+  if (pErr) console.error('[Notify] getRequester people error:', pErr.message)
+  if (!person) return []
+  if (!person.notifications_enabled) {
+    console.log(`[Notify] Requester ${person.name} has notifications disabled, skipping`)
+    return []
+  }
+  return [{ id: person.id, email: person.email, name: person.name }]
 }
 
 async function getTripRequesters(tripId: string) {
   const supabase = createServiceClient()
-  const { data: assignments } = await supabase
+  const { data: assignments, error: aErr } = await supabase
     .from('trip_line_assignments')
     .select('request_line_id')
     .eq('trip_id', tripId)
 
+  if (aErr) console.error('[Notify] getTripRequesters assignments error:', aErr.message)
   if (!assignments?.length) return []
 
   const lineIds = assignments.map(a => a.request_line_id)
-  const { data: lines } = await supabase
+  const { data: lines, error: lErr } = await supabase
     .from('sm_request_lines')
     .select('request_id')
     .in('id', lineIds)
 
+  if (lErr) console.error('[Notify] getTripRequesters lines error:', lErr.message)
   if (!lines?.length) return []
 
   const uniqueRequestIds = [...new Set(lines.map(l => l.request_id))]
-  const { data: requests } = await supabase
+  const { data: requests, error: rErr } = await supabase
     .from('sm_requests')
     .select('requester_id')
     .in('id', uniqueRequestIds)
 
+  if (rErr) console.error('[Notify] getTripRequesters requests error:', rErr.message)
   if (!requests?.length) return []
 
   const uniqueRequesterIds = [...new Set(requests.map(r => r.requester_id))]
-  const { data: people } = await supabase
+  const { data: people, error: pErr } = await supabase
     .from('people')
     .select('id, email, name')
     .in('id', uniqueRequesterIds)
+    .eq('notifications_enabled', true)
 
+  if (pErr) console.error('[Notify] getTripRequesters people error:', pErr.message)
   return people ?? []
 }
 
 async function getTripDriver(tripId: string) {
   const supabase = createServiceClient()
-  const { data: trip } = await supabase
+  const { data: trip, error: tErr } = await supabase
     .from('trips')
     .select('driver_id')
     .eq('id', tripId)
     .single()
 
+  if (tErr) console.error('[Notify] getTripDriver trip error:', tErr.message)
   if (!trip?.driver_id) return []
 
-  const { data: person } = await supabase
+  const { data: person, error: pErr } = await supabase
     .from('people')
-    .select('id, email, name')
+    .select('id, email, name, notifications_enabled')
     .eq('id', trip.driver_id)
     .single()
 
-  return person ? [person] : []
+  if (pErr) console.error('[Notify] getTripDriver people error:', pErr.message)
+  if (!person) return []
+  if (!person.notifications_enabled) {
+    console.log(`[Notify] Driver ${person.name} has notifications disabled, skipping`)
+    return []
+  }
+  return [{ id: person.id, email: person.email, name: person.name }]
 }
 
 async function getPersonName(personId: string): Promise<string> {
   if (!personId) return 'Sistema'
   const supabase = createServiceClient()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('people')
     .select('name')
     .eq('id', personId)
     .single()
+  if (error) console.error('[Notify] getPersonName error:', error.message)
   return data?.name ?? 'Sistema'
 }
 
 async function getTripRequestIds(tripId: string): Promise<string[]> {
   const supabase = createServiceClient()
-  const { data: assignments } = await supabase
+  const { data: assignments, error: aErr } = await supabase
     .from('trip_line_assignments')
     .select('request_line_id')
     .eq('trip_id', tripId)
 
+  if (aErr) console.error('[Notify] getTripRequestIds assignments error:', aErr.message)
   if (!assignments?.length) return []
 
   const lineIds = assignments.map(a => a.request_line_id)
-  const { data: lines } = await supabase
+  const { data: lines, error: lErr } = await supabase
     .from('sm_request_lines')
     .select('request_id')
     .in('id', lineIds)
 
+  if (lErr) console.error('[Notify] getTripRequestIds lines error:', lErr.message)
   if (!lines?.length) return []
 
   const uniqueRequestIds = [...new Set(lines.map(l => l.request_id))]
-  const { data: requests } = await supabase
+  const { data: requests, error: rErr } = await supabase
     .from('sm_requests')
     .select('request_id')
     .in('id', uniqueRequestIds)
 
+  if (rErr) console.error('[Notify] getTripRequestIds requests error:', rErr.message)
   return (requests ?? []).map(r => r.request_id).filter(Boolean) as string[]
 }
 
 // Helper: obtener info de solicitud + proyecto
 async function getRequestWithProject(requestId: string) {
   const supabase = createServiceClient()
-  const { data: req } = await supabase
+  const { data: req, error: reqErr } = await supabase
     .from('sm_requests')
     .select('id, request_id, date_required, status, project_id, requester_id')
     .eq('id', requestId)
     .single()
 
+  if (reqErr) console.error('[Notify] getRequestWithProject sm_requests error:', reqErr.message)
   if (!req) return null
 
-  const { data: project } = await supabase
+  const { data: project, error: pErr } = await supabase
     .from('projects')
     .select('name')
     .eq('id', req.project_id)
     .single()
 
+  if (pErr) console.error('[Notify] getRequestWithProject projects error:', pErr.message)
   return { ...req, projectName: project?.name ?? '' }
 }
 
@@ -501,12 +527,12 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
 
     const { data: requester } = await supabase
       .from('people')
-      .select('id, email, name')
+      .select('id, email, name, notifications_enabled')
       .eq('id', req.requester_id)
       .single()
 
     const isPartial = (line.qty_delivered ?? 0) < line.quantity
-    const recipients = requester ? [requester] : []
+    const recipients = (requester && requester.notifications_enabled) ? [{ id: requester.id, email: requester.email, name: requester.name }] : []
 
     const template = templates.entregaConfirmada({
       requestId: req.request_id ?? '',
@@ -647,7 +673,47 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 }
 
 // =============================================================================
-// 12. SUGERENCIA FALLBACK → Admin (NO conectado en MVP — template listo)
+// 12. RETORNO REGISTRADO → PM(s) afectados
+// =============================================================================
+export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
+  try {
+    console.log('[Notify] retorno_registrado called', { tripId })
+    const supabase = createServiceClient()
+
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id, actual_arrival')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] retorno_registrado: trip not found'); return }
+
+    const requestIds = await getTripRequestIds(tripId)
+    const recipients = await getTripRequesters(tripId)
+
+    const arrivalTime = trip.actual_arrival ?? new Date().toISOString()
+
+    const template = templates.retornoRegistrado({
+      tripId: trip.trip_id ?? '',
+      arrivalTime,
+      requestIds,
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'retorno_registrado',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] retorno_registrado FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 13. SUGERENCIA FALLBACK → Admin (NO conectado en MVP — template listo)
 // =============================================================================
 export async function notifySugerenciaFallback(suggestionId: string): Promise<void> {
   try {

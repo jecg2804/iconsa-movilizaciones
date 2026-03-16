@@ -203,7 +203,8 @@ ${dataTable(
   dataRow('Fecha anterior', formatDate(data.previousDate)) +
   dataRow('Nueva fecha', formatDate(data.newDate)) +
   dataRow('Solicitudes afectadas', data.requestIds)
-)}`
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/programacion/viaje/${data.referenceId}`)}`
 
   return {
     subject: `Viaje ${data.tripId} Reprogramado — ${formatDate(data.newDate)}`,
@@ -292,7 +293,8 @@ ${dataTable(
   dataRow('Hora de salida', data.departureTime) +
   dataRow('Destino', data.destination) +
   dataRow('Solicitudes', data.requestIds)
-)}`
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
 
   return {
     subject: `Viaje ${data.tripId} En Ruta → ${data.destination}`,
@@ -323,7 +325,33 @@ ${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
 }
 
 // =============================================================================
-// 12. SUGERENCIA FALLBACK → Admin (template creado, NO conectado en MVP)
+// 12. RETORNO REGISTRADO → PM(s) afectados
+// =============================================================================
+export function retornoRegistrado(data: {
+  tripId: string
+  arrivalTime: string
+  requestIds: string[]
+  referenceId: string
+}): TemplateResult {
+  const arrivalFormatted = new Date(data.arrivalTime).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
+
+  const body = `
+${alertBanner('El viaje completó su ruta y retornó a base.', 'success')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Hora de retorno', arrivalFormatted) +
+  dataRow('Solicitudes', data.requestIds.join(', ') || '—')
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+
+  return {
+    subject: `Viaje ${data.tripId} — Retorno Confirmado`,
+    html: emailLayout('Retorno Confirmado', body),
+  }
+}
+
+// =============================================================================
+// 13. SUGERENCIA FALLBACK → Admin (template creado, NO conectado en MVP)
 // =============================================================================
 export function sugerenciaFallback(data: {
   tableName: string
