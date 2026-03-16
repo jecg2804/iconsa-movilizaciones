@@ -35,13 +35,18 @@ export default function ProgramacionPage() {
     listError,
   } = useTrips()
 
-  // --- Filtros unificados ---
+  // --- Filtros de viajes ---
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [driverFilter, setDriverFilter] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<string | null>(null)
   const [searchFilter, setSearchFilter] = useState('')
+
+  // --- Filtros del backlog (independientes) ---
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
+  const [backlogProjectFilter, setBacklogProjectFilter] = useState<string | null>(null)
+  const [backlogSearch, setBacklogSearch] = useState('')
+  const [backlogUrgencyFilter, setBacklogUrgencyFilter] = useState<string | null>(null)
 
   // Conductores para filtro
   const [conductors, setConductors] = useState<{ id: string; name: string }[]>([])
@@ -80,20 +85,24 @@ export default function ProgramacionPage() {
 
   // --- Filtrado ---
   const filteredBacklog = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
     return backlog.filter((line) => {
-      if (projectFilter && line.request.project?.id !== projectFilter) return false
+      if (backlogProjectFilter && line.request.project?.id !== backlogProjectFilter) return false
       if (typeFilter !== 'Todos' && line.line_type !== typeFilter) return false
-      if (dateFilter && line.request.date_required !== dateFilter) return false
-      if (searchFilter) {
-        const q = searchFilter.toLowerCase()
+      if (backlogSearch) {
+        const q = backlogSearch.toLowerCase()
         const matchesId = line.request.request_id?.toLowerCase().includes(q) ?? false
         const matchesDesc = line.description?.toLowerCase().includes(q) ?? false
         const matchesEquip = line.equipment?.spectrum_code?.toLowerCase().includes(q) ?? false
         if (!matchesId && !matchesDesc && !matchesEquip) return false
       }
+      if (backlogUrgencyFilter === 'Vencidas' && line.request.date_required >= today) return false
+      if (backlogUrgencyFilter === 'Esta semana' && line.request.date_required > nextWeek) return false
       return true
     })
-  }, [backlog, projectFilter, typeFilter, dateFilter, searchFilter])
+  }, [backlog, backlogProjectFilter, typeFilter, backlogSearch, backlogUrgencyFilter])
 
   const filteredTrips = useMemo(() => {
     return trips.filter((trip) => {
@@ -518,6 +527,49 @@ export default function ProgramacionPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Filtros del backlog */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-full sm:w-44">
+            <Select
+              placeholder="Proyecto"
+              options={projectOptions}
+              value={backlogProjectFilter}
+              onChange={setBacklogProjectFilter}
+              disabled={projectsLoading}
+            />
+          </div>
+          <div className="w-full sm:w-36">
+            <Select
+              placeholder="Urgencia"
+              options={[
+                { value: 'Vencidas', label: 'Vencidas' },
+                { value: 'Esta semana', label: 'Esta semana' },
+              ]}
+              value={backlogUrgencyFilter}
+              onChange={setBacklogUrgencyFilter}
+            />
+          </div>
+          <div className="relative w-full sm:w-44">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar en backlog..."
+              value={backlogSearch}
+              onChange={(e) => setBacklogSearch(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+            />
+          </div>
+          {(backlogProjectFilter || backlogUrgencyFilter || backlogSearch) && (
+            <button
+              type="button"
+              onClick={() => { setBacklogProjectFilter(null); setBacklogUrgencyFilter(null); setBacklogSearch('') }}
+              className="text-xs text-iconsa-blue hover:underline"
+            >
+              Limpiar
+            </button>
+          )}
         </div>
 
         <div className="rounded-xl ring-1 ring-gray-200 bg-white p-1">
