@@ -525,8 +525,10 @@ export default function MisViajesDetailPage() {
     )
   }
 
-  // Código de confirmación solo visible para logistica y admin
+  // Código de confirmación solo visible para logistica y admin y pm
   const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
+  // PMs solo ven viajes — no registran eventos
+  const canRegisterEvents = role !== 'pm'
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
@@ -637,8 +639,8 @@ export default function MisViajesDetailPage() {
         <EventTimeline events={events} />
       </div>
 
-      {/* Panel de acciones — sticky en mobile */}
-      {!tripDone && (
+      {/* Panel de acciones — sticky en mobile (PMs solo ven, no registran) */}
+      {!tripDone && canRegisterEvents && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:static sm:inset-auto sm:z-auto sm:rounded-lg sm:border sm:shadow-sm sm:px-6 sm:py-4">
           <div className="mx-auto max-w-2xl space-y-2">
             {/* Error de registro */}
