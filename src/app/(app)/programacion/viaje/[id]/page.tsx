@@ -14,6 +14,7 @@ import {
   type TripAssignment,
 } from '@/hooks/useTrips'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
+import { notifyViajeReprogramado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -415,8 +416,13 @@ export default function ViajeDetailPage() {
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
     }
+    const originalDate = trip.scheduled_date
     const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id)
     if (success) {
+      // Notificar si se cambió la fecha
+      if (originalDate !== tripData.scheduled_date) {
+        notifyViajeReprogramado(trip.id, originalDate, tripData.scheduled_date).catch(console.error)
+      }
       // Refrescar datos del viaje
       const updated = await fetchTrip(id)
       if (updated) {

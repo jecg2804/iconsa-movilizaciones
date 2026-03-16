@@ -45,6 +45,12 @@ export type Database = {
         Update: { address?: string | null; contact_name?: string | null; contact_phone?: string | null; created_at?: string | null; id?: string; is_active?: boolean | null; location_type?: string | null; name?: string; notes?: string | null; project_id?: string | null; updated_at?: string | null }
         Relationships: []
       }
+      notification_log: {
+        Row: { id: string; event_type: string; recipient_id: string | null; recipient_email: string | null; reference_type: string; reference_id: string; channel: string; status: string; provider_message_id: string | null; error_message: string | null; payload: Record<string, unknown>; sent_at: string | null; created_at: string }
+        Insert: { id?: string; event_type: string; recipient_id?: string | null; recipient_email?: string | null; reference_type: string; reference_id: string; channel?: string; status?: string; provider_message_id?: string | null; error_message?: string | null; payload?: Record<string, unknown>; sent_at?: string | null; created_at?: string }
+        Update: { id?: string; event_type?: string; recipient_id?: string | null; recipient_email?: string | null; reference_type?: string; reference_id?: string; channel?: string; status?: string; provider_message_id?: string | null; error_message?: string | null; payload?: Record<string, unknown>; sent_at?: string | null; created_at?: string }
+        Relationships: []
+      }
       mobilization_rates: {
         Row: { code: string; created_at: string | null; description: string; id: string; is_active: boolean | null; rate: number; updated_at: string | null }
         Insert: { code: string; created_at?: string | null; description: string; id?: string; is_active?: boolean | null; rate: number; updated_at?: string | null }
