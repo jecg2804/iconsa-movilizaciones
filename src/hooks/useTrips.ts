@@ -70,6 +70,8 @@ export interface TripAssignment {
     from_location: { id: string; name: string } | null
     to_location: { id: string; name: string } | null
     unit: { id: string; code: string } | null
+    qty_scheduled: number
+    qty_delivered: number
     from_text: string | null
     to_text: string | null
     unit_text: string | null
@@ -205,6 +207,8 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         quantity: (rawLine.quantity as number) ?? 0,
         status: (rawLine.status as string) ?? '',
         notes: (rawLine.notes as string | null) ?? null,
+        qty_scheduled: (rawLine.qty_scheduled as number) ?? 0,
+        qty_delivered: (rawLine.qty_delivered as number) ?? 0,
         from_location: fromLoc,
         to_location: toLoc,
         unit: unitRel,
@@ -284,6 +288,8 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       quantity: rawLine.quantity as number,
       status: rawLine.status as string,
       notes: (rawLine.notes as string | null) ?? null,
+      qty_scheduled: (rawLine.qty_scheduled as number) ?? 0,
+      qty_delivered: (rawLine.qty_delivered as number) ?? 0,
       from_location: fromLoc,
       to_location: toLoc,
       unit,
@@ -539,6 +545,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               quantity,
               status,
               notes,
+              qty_scheduled,
+              qty_delivered,
               from_location:from_location_id(id, name),
               to_location:to_location_id(id, name),
               from_text,
@@ -626,6 +634,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               quantity,
               status,
               notes,
+              qty_scheduled,
+              qty_delivered,
               from_text,
               to_text,
               unit_text,

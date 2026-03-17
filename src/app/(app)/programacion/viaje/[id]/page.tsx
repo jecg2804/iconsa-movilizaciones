@@ -16,7 +16,7 @@ import {
   type ModifiedAssignment,
 } from '@/hooks/useTrips'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
-import { notifyViajeReprogramado } from '@/lib/notifications/actions'
+import { notifyViajeEditado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -142,9 +142,10 @@ function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }
           >
             {requestDisplayId}
           </button>
-          {line?.request?.project?.code && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600">
-              {line.request.project.code}
+          {line?.request?.project?.name && (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600"
+              title={line.request.project.code ?? undefined}>
+              {line.request.project.name}
             </span>
           )}
         </div>
@@ -393,6 +394,8 @@ export default function ViajeDetailPage() {
     // Reconstruir como BacklogLine para que aparezca inmediatamente en disponibles
     if (removed?.line) {
       const l = removed.line
+      // qty_scheduled real MENOS lo que este viaje tenía asignado
+      const adjustedQtyScheduled = Math.max(0, (l.qty_scheduled ?? 0) - removed.quantity_assigned)
       const bl: BacklogLine = {
         id: removed.request_line_id,
         request_id: l.request?.id ?? '',
@@ -409,10 +412,10 @@ export default function ViajeDetailPage() {
         unit_text: l.unit_text ?? null,
         cost_code_id: null,
         category: null,
-        status: 'Pendiente',
+        status: adjustedQtyScheduled > 0 ? 'Programada' : 'Pendiente',
         notes: l.notes ?? null,
-        qty_scheduled: 0,
-        qty_delivered: 0,
+        qty_scheduled: adjustedQtyScheduled,
+        qty_delivered: l.qty_delivered ?? 0,
         equipment: l.equipment ?? null,
         from_location: l.from_location ?? null,
         to_location: l.to_location ?? null,
@@ -421,7 +424,7 @@ export default function ViajeDetailPage() {
           id: l.request?.id ?? '',
           request_id: l.request?.request_id ?? '',
           project: l.request?.project ?? { id: '', code: '', name: '' },
-          requester: { id: '', name: '' },
+          requester: l.request?.requester ?? { id: '', name: '' },
           priority: null,
           date_required: l.request?.date_required ?? '',
           status: 'Enviada',
@@ -429,7 +432,16 @@ export default function ViajeDetailPage() {
           attachments: null,
         },
       }
-      setRemovedLines((prev) => [...prev, bl])
+      setRemovedLines((prev) => {
+        // Si ya existe en removedLines, reemplazar (evitar duplicados)
+        const idx = prev.findIndex((rl) => rl.id === bl.id)
+        if (idx >= 0) {
+          const copy = [...prev]
+          copy[idx] = bl
+          return copy
+        }
+        return [...prev, bl]
+      })
     }
 
     setIsDirty(true)
@@ -438,7 +450,15 @@ export default function ViajeDetailPage() {
   // --- Cambiar cantidad de asignacion existente ---
   const handleExistingQtyChange = useCallback((assignmentId: string, newQty: number) => {
     setExistingAssignments((prev) =>
-      prev.map((a) => (a.id === assignmentId ? { ...a, quantity_assigned: newQty } : a)),
+      prev.map((a) => {
+        if (a.id !== assignmentId) return a
+        // Clamp: max = quantity total - lo ya entregado
+        const maxQty = a.line?.quantity
+          ? a.line.quantity - (a.line.qty_delivered ?? 0)
+          : newQty
+        const clamped = Math.min(Math.max(0.01, newQty), maxQty)
+        return { ...a, quantity_assigned: clamped }
+      }),
     )
     setIsDirty(true)
   }, [])
@@ -523,9 +543,22 @@ export default function ViajeDetailPage() {
     const originalDate = trip.scheduled_date
     const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id, modified)
     if (success) {
-      // Notificar si se cambió la fecha
-      if (originalDate !== tripData.scheduled_date) {
-        notifyViajeReprogramado(trip.id, originalDate, tripData.scheduled_date).catch(console.error)
+      // Detectar cambios significativos para notificación
+      const changes: string[] = []
+      if (originalDate !== tripData.scheduled_date)
+        changes.push(`Fecha: ${originalDate} → ${tripData.scheduled_date}`)
+      if (removedAssignmentIds.length > 0)
+        changes.push(`${removedAssignmentIds.length} línea(s) removida(s)`)
+      if (newAssignments.length > 0)
+        changes.push(`${newAssignments.length} línea(s) agregada(s)`)
+      if (modified.length > 0)
+        changes.push('Cantidades ajustadas')
+      if (trip.vehicle_id !== tripData.vehicle_id)
+        changes.push('Vehículo cambiado')
+      if (trip.trailer_id !== tripData.trailer_id)
+        changes.push('Remolque cambiado')
+      if (changes.length > 0) {
+        notifyViajeEditado(trip.id, changes).catch(console.error)
       }
       // Refrescar datos del viaje
       const updated = await fetchTrip(id)

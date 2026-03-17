@@ -77,9 +77,10 @@ function LineInfo({ line }: { line: BacklogLine }) {
         >
           {requestDisplayId}
         </button>
-        {line.request.project?.code && (
-          <span className="text-xs font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
-            {line.request.project.code}
+        {line.request.project?.name && (
+          <span className="text-xs font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded shrink-0"
+            title={line.request.project.code ?? undefined}>
+            {line.request.project.name}
           </span>
         )}
       </div>
@@ -138,9 +139,12 @@ function LineSelector({
   // --- Actualizar cantidad asignada ---
   const handleQtyChange = useCallback(
     (lineId: string, newQty: number) => {
+      const line = findLineById(lineId)
+      const maxQty = line ? getAvailableQty(line) : newQty
+      const clamped = Math.min(Math.max(0.01, newQty), maxQty > 0 ? maxQty : newQty)
       onChange(
         currentAssignments.map((a) =>
-          a.request_line_id === lineId ? { ...a, quantity_assigned: newQty } : a,
+          a.request_line_id === lineId ? { ...a, quantity_assigned: clamped } : a,
         ),
       )
     },

@@ -487,6 +487,47 @@ export async function notifyViajeReprogramado(
 }
 
 // =============================================================================
+// 7b. VIAJE EDITADO → ALL PMs of ALL affected projects
+// =============================================================================
+export async function notifyViajeEditado(
+  tripId: string,
+  changes: string[],
+): Promise<void> {
+  try {
+    console.log('[Notify] viaje_editado called', { tripId, changes })
+    const supabase = createServiceClient()
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id, scheduled_date')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] viaje_editado: trip not found'); return }
+
+    const requestIds = await getTripRequestIds(tripId)
+    const recipients = await getTripProjectPMs(tripId)
+
+    const template = templates.viajeEditado({
+      tripId: trip.trip_id ?? '',
+      scheduledDate: trip.scheduled_date,
+      changes,
+      requestIds: requestIds.join(', ') || '—',
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'viaje_reprogramado',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] viaje_editado FAILED:', err)
+  }
+}
+
+// =============================================================================
 // 8. VIAJE ASIGNADO A CONDUCTOR — ONLY the conductor
 // =============================================================================
 export async function notifyViajeAsignadoConductor(tripId: string): Promise<void> {
