@@ -642,21 +642,19 @@ export default function ProgramacionPage() {
                   const unitName = line.unit?.code ?? line.unit_text ?? ''
                   const isEquipo = line.line_type === 'Equipo'
                   return (
-                    <div key={a.id} className="flex items-center gap-3 text-sm">
+                    <div key={a.id} className="flex items-center gap-2 text-sm py-1">
                       {isEquipo ? (
                         <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
                       ) : (
                         <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
                       )}
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-gray-900 truncate" title={line.description}>
-                          {line.description}
-                        </span>
-                        <span className="text-xs text-gray-400 ml-2">{fromName} → {toName}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-gray-700 shrink-0 whitespace-nowrap">
+                      <span className="font-medium text-gray-900 truncate max-w-[250px]" title={line.description}>
+                        {line.description}
+                      </span>
+                      <span className="font-semibold text-gray-700 whitespace-nowrap">
                         {a.quantity_assigned} {unitName}
                       </span>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">{fromName} → {toName}</span>
                       {line.status !== 'Programada' && line.status !== 'En Transito' && (
                         <Badge label={line.status} variant="line" />
                       )}

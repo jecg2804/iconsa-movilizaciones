@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Loader2 } from 'lucide-react'
 
 export interface Column<T> {
@@ -84,15 +84,22 @@ function DataTable<T>({
     [],
   )
 
-  // Exponer control de expandir/colapsar todo al padre
+  // Refs estables para expandir/colapsar — evitan re-render loop
+  const expandAllRef = useRef(() => {})
+  const collapseAllRef = useRef(() => {})
+  expandAllRef.current = () => setExpandedKeys(new Set(data.map(keyExtractor)))
+  collapseAllRef.current = () => setExpandedKeys(new Set())
+
+  // Exponer control al padre UNA sola vez
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (onExpandControl) {
       onExpandControl({
-        expandAll: () => setExpandedKeys(new Set(data.map(keyExtractor))),
-        collapseAll: () => setExpandedKeys(new Set()),
+        expandAll: () => expandAllRef.current(),
+        collapseAll: () => collapseAllRef.current(),
       })
     }
-  }, [onExpandControl, data, keyExtractor])
+  }, [])
 
   // Sincronizar expandedKeys cuando data cambia y defaultExpandAll está activo
   useEffect(() => {
