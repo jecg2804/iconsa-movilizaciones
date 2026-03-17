@@ -20,6 +20,12 @@ import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 const LINE_TYPES = ['Todos', 'Equipo', 'Material'] as const
 type LineTypeFilter = (typeof LINE_TYPES)[number]
 
+// Filtro de fecha: single-day click del calendario O rango desde/hasta
+type DateFilter =
+  | { type: 'single'; date: string }
+  | { type: 'range'; from: string | null; to: string | null }
+  | null
+
 export default function ProgramacionPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -38,7 +44,7 @@ export default function ProgramacionPage() {
   const [tripStatusFilter, setTripStatusFilter] = useState<string | null>(null)
   const [tripDriverFilter, setTripDriverFilter] = useState<string | null>(null)
   const [tripSearch, setTripSearch] = useState('')
-  const [dateFilter, setDateFilter] = useState<string | null>(null)
+  const [dateFilter, setDateFilter] = useState<DateFilter>(null)
 
   // --- Filtros del backlog (independientes) ---
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
@@ -80,7 +86,8 @@ export default function ProgramacionPage() {
     })
   }, [backlog, backlogProjectFilter, typeFilter, backlogSearch])
 
-  const filteredTrips = useMemo(() => {
+  // Viajes filtrados SIN filtro de fecha — para el calendario (nunca se auto-filtra)
+  const tripsForCalendar = useMemo(() => {
     return trips.filter((trip) => {
       if (tripProjectFilter) {
         const matchesProject = trip.assignments.some(
@@ -90,7 +97,6 @@ export default function ProgramacionPage() {
       }
       if (tripStatusFilter && trip.status !== tripStatusFilter) return false
       if (tripDriverFilter && trip.driver_id !== tripDriverFilter) return false
-      if (dateFilter && trip.scheduled_date !== dateFilter) return false
       if (tripSearch) {
         const q = tripSearch.toLowerCase()
         const matchesId = trip.trip_id?.toLowerCase().includes(q) ?? false
@@ -100,7 +106,21 @@ export default function ProgramacionPage() {
       }
       return true
     })
-  }, [trips, tripProjectFilter, tripStatusFilter, tripDriverFilter, dateFilter, tripSearch])
+  }, [trips, tripProjectFilter, tripStatusFilter, tripDriverFilter, tripSearch])
+
+  // Viajes filtrados CON filtro de fecha — para la tabla
+  const filteredTrips = useMemo(() => {
+    if (!dateFilter) return tripsForCalendar
+    return tripsForCalendar.filter((trip) => {
+      if (dateFilter.type === 'single') {
+        return trip.scheduled_date === dateFilter.date
+      }
+      // range
+      if (dateFilter.from && trip.scheduled_date < dateFilter.from) return false
+      if (dateFilter.to && trip.scheduled_date > dateFilter.to) return false
+      return true
+    })
+  }, [tripsForCalendar, dateFilter])
 
   // Inicializar expandido al cargar datos
   useEffect(() => {
@@ -112,9 +132,9 @@ export default function ProgramacionPage() {
 
   const allTripsExpanded = tripExpandedKeys.size > 0
 
-  // --- MiniCalendar items (derivados de filteredTrips) ---
+  // --- MiniCalendar items (derivados de tripsForCalendar — nunca se auto-filtra) ---
   const calendarItems = useMemo<CalendarItem[]>(() => {
-    return filteredTrips.map((t) => {
+    return tripsForCalendar.map((t) => {
       const a = t.assignments?.[0]?.line
       let route: string | undefined
       if (a) {
@@ -133,7 +153,31 @@ export default function ProgramacionPage() {
         href: `/programacion/viaje/${t.id}`,
       }
     })
-  }, [filteredTrips])
+  }, [tripsForCalendar])
+
+  // --- Handlers de filtro de fecha ---
+  const handleCalendarClick = useCallback((date: string | null) => {
+    if (!date) { setDateFilter(null); return }
+    setDateFilter((prev) =>
+      prev?.type === 'single' && prev.date === date ? null : { type: 'single', date }
+    )
+  }, [])
+
+  const handleDateFromChange = useCallback((from: string | null) => {
+    setDateFilter((prev) => ({
+      type: 'range',
+      from,
+      to: prev?.type === 'range' ? prev.to : null,
+    }))
+  }, [])
+
+  const handleDateToChange = useCallback((to: string | null) => {
+    setDateFilter((prev) => ({
+      type: 'range',
+      from: prev?.type === 'range' ? prev.from : null,
+      to,
+    }))
+  }, [])
 
   // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
@@ -534,10 +578,29 @@ export default function ProgramacionPage() {
                 className={inputClass}
               />
             </div>
-            {(tripProjectFilter || tripStatusFilter || tripDriverFilter || tripSearch) && (
+            {/* Rango de fechas */}
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-iconsa-gray whitespace-nowrap">Desde</label>
+              <input
+                type="date"
+                title="Fecha desde"
+                value={dateFilter?.type === 'range' ? (dateFilter.from ?? '') : ''}
+                onChange={(e) => handleDateFromChange(e.target.value || null)}
+                className={selectClass}
+              />
+              <label className="text-xs text-iconsa-gray whitespace-nowrap">Hasta</label>
+              <input
+                type="date"
+                title="Fecha hasta"
+                value={dateFilter?.type === 'range' ? (dateFilter.to ?? '') : ''}
+                onChange={(e) => handleDateToChange(e.target.value || null)}
+                className={selectClass}
+              />
+            </div>
+            {(tripProjectFilter || tripStatusFilter || tripDriverFilter || tripSearch || dateFilter) && (
               <button
                 type="button"
-                onClick={() => { setTripProjectFilter(null); setTripStatusFilter(null); setTripDriverFilter(null); setTripSearch('') }}
+                onClick={() => { setTripProjectFilter(null); setTripStatusFilter(null); setTripDriverFilter(null); setTripSearch(''); setDateFilter(null) }}
                 className="text-xs text-iconsa-blue hover:underline"
               >
                 Limpiar
@@ -550,8 +613,8 @@ export default function ProgramacionPage() {
         <div className="px-4 pb-3">
           <MiniCalendar
             items={calendarItems}
-            selectedDate={dateFilter}
-            onSelectDate={setDateFilter}
+            selectedDate={dateFilter?.type === 'single' ? dateFilter.date : null}
+            onSelectDate={handleCalendarClick}
           />
         </div>
 
