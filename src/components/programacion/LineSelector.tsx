@@ -218,12 +218,19 @@ function LineSelector({
                     min={qtyMin}
                     max={availableQty > 0 ? availableQty : undefined}
                     step={qtyStep}
-                    onChange={(e) =>
-                      handleQtyChange(
-                        assignment.request_line_id,
-                        parseFloat(e.target.value) || 0,
-                      )
-                    }
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw === '' || raw === '-') return
+                      const parsed = parseFloat(raw)
+                      if (!Number.isFinite(parsed)) return
+                      handleQtyChange(assignment.request_line_id, parsed)
+                    }}
+                    onBlur={(e) => {
+                      const parsed = parseFloat(e.target.value)
+                      if (!Number.isFinite(parsed) || parsed < qtyMin) {
+                        handleQtyChange(assignment.request_line_id, qtyMin)
+                      }
+                    }}
                     className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
                   />
                   {unitCode && (

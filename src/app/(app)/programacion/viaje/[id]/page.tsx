@@ -97,13 +97,14 @@ interface TripEventRow {
 
 interface AssignmentRowProps {
   assignment: TripAssignment
+  originalQty: number
   canRemove: boolean
   canEdit: boolean
   onRemove: (assignmentId: string) => void
   onQtyChange?: (assignmentId: string, newQty: number) => void
 }
 
-function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
+function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
   const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
@@ -186,10 +187,10 @@ function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }
         {canEdit ? (
           (() => {
             const { min: qtyMin, step: qtyStep } = getQtyStep(unitCode || undefined)
-            // max = total - entregado - programado_en_otros_viajes
-            // qty_scheduled incluye ESTE viaje, así que sumamos quantity_assigned de vuelta
+            // max = total - entregado - programado_otros_viajes
+            // qty_scheduled incluye ESTE viaje → sumamos originalQty (congelado al cargar)
             const maxQty = line?.quantity
-              ? line.quantity - (line.qty_delivered ?? 0) - (line.qty_scheduled ?? 0) + assignment.quantity_assigned
+              ? Math.max(qtyMin, line.quantity - (line.qty_delivered ?? 0) - (line.qty_scheduled ?? 0) + originalQty)
               : undefined
             return (
               <div className="flex items-center gap-1 whitespace-nowrap">
@@ -199,7 +200,19 @@ function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }
                   min={qtyMin}
                   max={maxQty}
                   step={qtyStep}
-                  onChange={(e) => onQtyChange?.(assignment.id, parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === '' || raw === '-') return
+                    const parsed = parseFloat(raw)
+                    if (!Number.isFinite(parsed)) return
+                    onQtyChange?.(assignment.id, parsed)
+                  }}
+                  onBlur={(e) => {
+                    const parsed = parseFloat(e.target.value)
+                    if (!Number.isFinite(parsed) || parsed < qtyMin) {
+                      onQtyChange?.(assignment.id, qtyMin)
+                    }
+                  }}
                   title="Cantidad asignada"
                   className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
                 />
@@ -470,19 +483,20 @@ export default function ViajeDetailPage() {
     setExistingAssignments((prev) =>
       prev.map((a) => {
         if (a.id !== assignmentId) return a
-        // max = total - entregado - programado_otros_viajes
-        // qty_scheduled incluye ESTE viaje, así que sumamos quantity_assigned de vuelta
+        // originalQty congelado al cargar — no se mueve mientras el usuario teclea
+        const origQty = originalAssignments.get(a.id) ?? a.quantity_assigned
         const maxQty = a.line?.quantity
-          ? a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + a.quantity_assigned
+          ? a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + origQty
           : newQty
         const unitCode = a.line?.unit?.code ?? a.line?.unit_text
         const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
-        const clamped = Math.min(Math.max(qtyMin, newQty), maxQty)
+        const safeMax = Math.max(qtyMin, maxQty)
+        const clamped = Math.min(Math.max(qtyMin, newQty), safeMax)
         return { ...a, quantity_assigned: clamped }
       }),
     )
     setIsDirty(true)
-  }, [])
+  }, [originalAssignments])
 
   // --- Cambiar nuevas asignaciones (desde LineSelector) ---
   const handleNewAssignmentsChange = useCallback((updated: AssignmentInput[]) => {
@@ -547,6 +561,15 @@ export default function ViajeDetailPage() {
     // Validar remolque para cabezal
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
+    }
+    // Validar que ninguna cantidad exceda su max (safety net)
+    for (const a of existingAssignments) {
+      if (!a.line?.quantity) continue
+      const origQty = originalAssignments.get(a.id) ?? a.quantity_assigned
+      const maxQty = a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + origQty
+      const unitCode = a.line?.unit?.code ?? a.line?.unit_text
+      const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
+      if (a.quantity_assigned > maxQty || a.quantity_assigned < qtyMin) return
     }
     // Calcular asignaciones existentes con cantidad modificada
     const modified: ModifiedAssignment[] = existingAssignments
@@ -743,6 +766,7 @@ export default function ViajeDetailPage() {
               <AssignmentRow
                 key={assignment.id}
                 assignment={assignment}
+                originalQty={originalAssignments.get(assignment.id) ?? assignment.quantity_assigned}
                 canRemove={canRemoveAssignments}
                 canEdit={canEditFullTrip}
                 onRemove={handleRemoveExisting}
