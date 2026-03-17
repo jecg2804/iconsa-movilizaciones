@@ -38,6 +38,7 @@ export default function ProgramacionPage() {
   const [tripStatusFilter, setTripStatusFilter] = useState<string | null>(null)
   const [tripDriverFilter, setTripDriverFilter] = useState<string | null>(null)
   const [tripSearch, setTripSearch] = useState('')
+  const [dateFilter, setDateFilter] = useState<string | null>(null)
 
   // --- Filtros del backlog (independientes) ---
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
@@ -89,6 +90,7 @@ export default function ProgramacionPage() {
       }
       if (tripStatusFilter && trip.status !== tripStatusFilter) return false
       if (tripDriverFilter && trip.driver_id !== tripDriverFilter) return false
+      if (dateFilter && trip.scheduled_date !== dateFilter) return false
       if (tripSearch) {
         const q = tripSearch.toLowerCase()
         const matchesId = trip.trip_id?.toLowerCase().includes(q) ?? false
@@ -98,7 +100,7 @@ export default function ProgramacionPage() {
       }
       return true
     })
-  }, [trips, tripProjectFilter, tripStatusFilter, tripDriverFilter, tripSearch])
+  }, [trips, tripProjectFilter, tripStatusFilter, tripDriverFilter, dateFilter, tripSearch])
 
   // Inicializar expandido al cargar datos
   useEffect(() => {
@@ -548,8 +550,8 @@ export default function ProgramacionPage() {
         <div className="px-4 pb-3">
           <MiniCalendar
             items={calendarItems}
-            selectedDate={null}
-            onSelectDate={() => {}}
+            selectedDate={dateFilter}
+            onSelectDate={setDateFilter}
           />
         </div>
 
