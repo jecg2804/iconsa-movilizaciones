@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Loader2 } from 'lucide-react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react'
 
 export interface Column<T> {
   key: string
@@ -25,6 +25,27 @@ interface DataTableProps<T> {
   rowClassName?: (row: T) => string
   /** Contenido expandible debajo de cada fila. Si se provee, click en fila togglea expansión. */
   expandRender?: (row: T) => React.ReactNode
+  /** Controlled: keys expandidas (si se pasa, DataTable no maneja su propio state) */
+  expandedKeys?: Set<string>
+  /** Controlled: callback cuando cambian las keys expandidas */
+  onExpandedKeysChange?: (keys: Set<string>) => void
+
+  /** Modo de paginación. Default: 'none'.
+   *  'client' = DataTable pagina internamente
+   *  'server' = parent controla la data por página */
+  pagination?: 'none' | 'client' | 'server'
+  /** Filas por página. Default: 20 */
+  pageSize?: number
+  /** Opciones de page size para el selector. Default: [10, 20, 50] */
+  pageSizeOptions?: number[]
+  /** Total de registros (para calcular páginas). Solo server mode. */
+  totalCount?: number
+  /** Página actual (0-indexed). Solo server mode. */
+  currentPage?: number
+  /** Callback cuando cambia la página. Solo server mode. */
+  onPageChange?: (page: number) => void
+  /** Callback cuando cambia el page size. Solo server mode. */
+  onPageSizeChange?: (size: number) => void
 }
 
 type SortDirection = 'asc' | 'desc'
@@ -40,10 +61,33 @@ function DataTable<T>({
   mobileRender,
   rowClassName,
   expandRender,
+  expandedKeys: controlledExpandedKeys,
+  onExpandedKeysChange,
+  pagination = 'none',
+  pageSize = 20,
+  pageSizeOptions = [10, 20, 50],
+  totalCount,
+  currentPage,
+  onPageChange,
+  onPageSizeChange,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const [internalExpandedKeys, setInternalExpandedKeys] = useState<Set<string>>(new Set())
+
+  // --- Pagination internal state (client mode) ---
+  const [clientPage, setClientPage] = useState(0)
+  const [internalPageSize, setInternalPageSize] = useState(pageSize)
+
+  // Resetear página client cuando data cambia (filtros aplicados)
+  useEffect(() => {
+    setClientPage(0)
+  }, [data.length])
+
+  // Controlled vs uncontrolled expand state
+  const isControlled = controlledExpandedKeys !== undefined
+  const expandedKeys = isControlled ? controlledExpandedKeys : internalExpandedKeys
+  const setExpandedKeys = isControlled ? (onExpandedKeysChange ?? setInternalExpandedKeys) : setInternalExpandedKeys
 
   const handleSort = useCallback(
     (columnKey: string) => {
@@ -65,14 +109,12 @@ function DataTable<T>({
 
   const toggleExpand = useCallback(
     (key: string) => {
-      setExpandedKeys((prev) => {
-        const next = new Set(prev)
-        if (next.has(key)) next.delete(key)
-        else next.add(key)
-        return next
-      })
+      const next = new Set(expandedKeys)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      setExpandedKeys(next)
     },
-    [],
+    [expandedKeys, setExpandedKeys],
   )
 
   const sortedData = useMemo(() => {
@@ -109,6 +151,46 @@ function DataTable<T>({
     return sortDirection === 'desc' ? sorted.reverse() : sorted
   }, [data, sortKey, sortDirection, columns])
 
+  // --- Paginación ---
+  const paginatedData = useMemo(() => {
+    if (pagination === 'none') return sortedData
+    if (pagination === 'client') {
+      const start = clientPage * internalPageSize
+      return sortedData.slice(start, start + internalPageSize)
+    }
+    // server: data ya viene paginada del parent
+    return sortedData
+  }, [sortedData, pagination, clientPage, internalPageSize])
+
+  const total = pagination === 'server' ? (totalCount ?? data.length) : data.length
+  const activePage = pagination === 'server' ? (currentPage ?? 0) : clientPage
+  const activePageSize = pagination === 'server' ? pageSize : internalPageSize
+  const totalPages = Math.ceil(total / activePageSize)
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (pagination === 'server') {
+        onPageChange?.(newPage)
+      } else {
+        setClientPage(newPage)
+      }
+    },
+    [pagination, onPageChange],
+  )
+
+  const handlePageSizeChange = useCallback(
+    (newSize: number) => {
+      if (pagination === 'server') {
+        onPageSizeChange?.(newSize)
+        onPageChange?.(0)
+      } else {
+        setInternalPageSize(newSize)
+        setClientPage(0)
+      }
+    },
+    [pagination, onPageSizeChange, onPageChange],
+  )
+
   // Estado de carga
   if (loading) {
     return (
@@ -141,6 +223,53 @@ function DataTable<T>({
     )
   }
 
+  // --- Pagination UI component ---
+  const paginationUI = pagination !== 'none' && totalPages > 1 && (
+    <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm">
+      <span className="text-gray-500">
+        {activePage * activePageSize + 1}–{Math.min((activePage + 1) * activePageSize, total)} de {total}
+      </span>
+
+      <div className="flex items-center gap-2">
+        <span className="text-gray-500 text-xs hidden sm:inline">Filas:</span>
+        <select
+          title="Filas por página"
+          value={activePageSize}
+          onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+          className="rounded border border-gray-200 px-2 py-1 text-xs"
+        >
+          {pageSizeOptions.map((n) => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          title="Página anterior"
+          onClick={() => handlePageChange(activePage - 1)}
+          disabled={activePage === 0}
+          className="rounded px-2 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-gray-700 px-2">
+          {activePage + 1} / {totalPages}
+        </span>
+        <button
+          type="button"
+          title="Página siguiente"
+          onClick={() => handlePageChange(activePage + 1)}
+          disabled={activePage >= totalPages - 1}
+          className="rounded px-2 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+
   return (
     <div className={className}>
       {/* Vista desktop */}
@@ -167,7 +296,7 @@ function DataTable<T>({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sortedData.map((row) => {
+              {paginatedData.map((row) => {
                 const rowKey = keyExtractor(row)
                 const isExpanded = expandedKeys.has(rowKey)
                 const handleRowClick = expandRender
@@ -213,12 +342,13 @@ function DataTable<T>({
               })}
             </tbody>
           </table>
+          {paginationUI}
         </div>
       </div>
 
       {/* Vista mobile */}
       <div className="flex flex-col gap-3 md:hidden">
-        {sortedData.map((row) => {
+        {paginatedData.map((row) => {
           const key = keyExtractor(row)
           const isExpanded = expandedKeys.has(key)
           const handleMobileClick = expandRender
@@ -275,6 +405,8 @@ function DataTable<T>({
             </div>
           )
         })}
+        {/* Paginación mobile — debajo de las cards */}
+        {paginationUI}
       </div>
     </div>
   )

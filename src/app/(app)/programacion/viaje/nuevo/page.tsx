@@ -333,7 +333,7 @@ export default function NuevoViajePage() {
             variant="primary"
             onClick={handleSave}
             loading={saving}
-            disabled={saving}
+            disabled={saving || assignments.length === 0}
           >
             Guardar Viaje
           </Button>

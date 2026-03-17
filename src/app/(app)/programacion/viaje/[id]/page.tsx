@@ -16,16 +16,23 @@ import {
   type ModifiedAssignment,
 } from '@/hooks/useTrips'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
-import { notifyViajeReprogramado } from '@/lib/notifications/actions'
+import { notifyViajeEditado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
-import { LineSelector } from '@/components/programacion/LineSelector'
+import { LineSelector, getDateColor } from '@/components/programacion/LineSelector'
 import type { Attachment } from '@/lib/supabase/storage'
 import FileDisplay from '@/components/ui/FileDisplay'
 
 // --- Helpers ---
+
+/** Unidades que deben usar enteros (min=1, step=1) */
+const INTEGER_UNITS = new Set(['und', 'pzas', 'juegos', 'gal', 'ft', 'qq'])
+
+function getQtyStep(unitCode: string | undefined): { min: number; step: number } {
+  return INTEGER_UNITS.has(unitCode ?? '') ? { min: 1, step: 1 } : { min: 0.01, step: 0.01 }
+}
 
 /** Convierte un TripWithRelations al TripInput editable */
 function tripToInput(trip: TripWithRelations): TripInput {
@@ -90,13 +97,14 @@ interface TripEventRow {
 
 interface AssignmentRowProps {
   assignment: TripAssignment
+  originalQty: number
   canRemove: boolean
   canEdit: boolean
   onRemove: (assignmentId: string) => void
   onQtyChange?: (assignmentId: string, newQty: number) => void
 }
 
-function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
+function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
   const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
@@ -142,46 +150,80 @@ function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }
           >
             {requestDisplayId}
           </button>
-          {line?.request?.project?.code && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-600">
-              {line.request.project.code}
+          {line?.request?.project?.name && (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600"
+              title={line.request.project.code ?? undefined}>
+              {line.request.project.name}
             </span>
           )}
         </div>
 
-        {/* Ruta */}
+        {/* Ruta + fecha requerida + solicitante */}
         {line && (
-          <div className="flex items-center gap-1 text-xs text-iconsa-gray">
+          <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
             <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
             <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
+            {line.request.date_required && (
+              <>
+                <span className="text-gray-300 mx-0.5">·</span>
+                <span className={`font-medium ${getDateColor(line.request.date_required)}`}>
+                  {formatDate(line.request.date_required)}
+                </span>
+              </>
+            )}
+            {line.request.requester?.name && (
+              <>
+                <span className="text-gray-300 mx-0.5">·</span>
+                <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+              </>
+            )}
           </div>
-        )}
-
-        {/* Fecha requerida de la solicitud */}
-        {line?.request.date_required && (
-          <span className="text-xs text-iconsa-gray">
-            Requerida: {formatDate(line.request.date_required)}
-          </span>
         )}
       </div>
 
       {/* Cantidad + estado */}
       <div className="shrink-0 flex items-center gap-3">
         {canEdit ? (
-          <div className="flex items-center gap-1 whitespace-nowrap">
-            <input
-              type="number"
-              value={assignment.quantity_assigned}
-              min={0.01}
-              max={line?.quantity ? line.quantity - (assignment.qty_delivered ?? 0) : undefined}
-              step={0.01}
-              onChange={(e) => onQtyChange?.(assignment.id, parseFloat(e.target.value) || 0)}
-              title="Cantidad asignada"
-              className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
-            />
-            <span className="text-xs text-iconsa-gray">{unitCode}</span>
-          </div>
+          (() => {
+            const { min: qtyMin, step: qtyStep } = getQtyStep(unitCode || undefined)
+            // max = total - entregado - programado_otros_viajes
+            // qty_scheduled incluye ESTE viaje → sumamos originalQty (congelado al cargar)
+            const maxQty = line?.quantity
+              ? Math.max(qtyMin, line.quantity - (line.qty_delivered ?? 0) - (line.qty_scheduled ?? 0) + originalQty)
+              : undefined
+            return (
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <input
+                  type="number"
+                  value={assignment.quantity_assigned}
+                  min={qtyMin}
+                  max={maxQty}
+                  step={qtyStep}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === '' || raw === '-') return
+                    const parsed = parseFloat(raw)
+                    if (!Number.isFinite(parsed)) return
+                    onQtyChange?.(assignment.id, parsed)
+                  }}
+                  onFocus={(e) => e.target.select()}
+                  onBlur={(e) => {
+                    const parsed = parseFloat(e.target.value)
+                    if (!Number.isFinite(parsed) || parsed < qtyMin) {
+                      onQtyChange?.(assignment.id, qtyMin)
+                    }
+                  }}
+                  title="Cantidad asignada"
+                  className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+                />
+                <span className="text-xs text-iconsa-gray">{unitCode}</span>
+                {maxQty !== undefined && (
+                  <span className="text-xs text-gray-400 whitespace-nowrap">/ {maxQty}</span>
+                )}
+              </div>
+            )
+          })()
         ) : (
           <span className="text-sm text-gray-700 whitespace-nowrap">
             {formatQty(assignment.quantity_assigned)} {unitCode}
@@ -230,6 +272,7 @@ export default function ViajeDetailPage() {
   const {
     backlog,
     backlogLoading,
+    refetchBacklog,
     fetchTrip,
     updateTrip,
     cancelTrip,
@@ -386,6 +429,8 @@ export default function ViajeDetailPage() {
     // Reconstruir como BacklogLine para que aparezca inmediatamente en disponibles
     if (removed?.line) {
       const l = removed.line
+      // qty_scheduled real MENOS lo que este viaje tenía asignado
+      const adjustedQtyScheduled = Math.max(0, (l.qty_scheduled ?? 0) - removed.quantity_assigned)
       const bl: BacklogLine = {
         id: removed.request_line_id,
         request_id: l.request?.id ?? '',
@@ -402,10 +447,10 @@ export default function ViajeDetailPage() {
         unit_text: l.unit_text ?? null,
         cost_code_id: null,
         category: null,
-        status: 'Pendiente',
+        status: adjustedQtyScheduled > 0 ? 'Programada' : 'Pendiente',
         notes: l.notes ?? null,
-        qty_scheduled: 0,
-        qty_delivered: 0,
+        qty_scheduled: adjustedQtyScheduled,
+        qty_delivered: l.qty_delivered ?? 0,
         equipment: l.equipment ?? null,
         from_location: l.from_location ?? null,
         to_location: l.to_location ?? null,
@@ -414,7 +459,7 @@ export default function ViajeDetailPage() {
           id: l.request?.id ?? '',
           request_id: l.request?.request_id ?? '',
           project: l.request?.project ?? { id: '', code: '', name: '' },
-          requester: { id: '', name: '' },
+          requester: l.request?.requester ?? { id: '', name: '' },
           priority: null,
           date_required: l.request?.date_required ?? '',
           status: 'Enviada',
@@ -422,7 +467,16 @@ export default function ViajeDetailPage() {
           attachments: null,
         },
       }
-      setRemovedLines((prev) => [...prev, bl])
+      setRemovedLines((prev) => {
+        // Si ya existe en removedLines, reemplazar (evitar duplicados)
+        const idx = prev.findIndex((rl) => rl.id === bl.id)
+        if (idx >= 0) {
+          const copy = [...prev]
+          copy[idx] = bl
+          return copy
+        }
+        return [...prev, bl]
+      })
     }
 
     setIsDirty(true)
@@ -431,10 +485,22 @@ export default function ViajeDetailPage() {
   // --- Cambiar cantidad de asignacion existente ---
   const handleExistingQtyChange = useCallback((assignmentId: string, newQty: number) => {
     setExistingAssignments((prev) =>
-      prev.map((a) => (a.id === assignmentId ? { ...a, quantity_assigned: newQty } : a)),
+      prev.map((a) => {
+        if (a.id !== assignmentId) return a
+        // originalQty congelado al cargar — no se mueve mientras el usuario teclea
+        const origQty = originalAssignments.get(a.id) ?? a.quantity_assigned
+        const maxQty = a.line?.quantity
+          ? a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + origQty
+          : newQty
+        const unitCode = a.line?.unit?.code ?? a.line?.unit_text
+        const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
+        const safeMax = Math.max(qtyMin, maxQty)
+        const clamped = Math.min(Math.max(qtyMin, newQty), safeMax)
+        return { ...a, quantity_assigned: clamped }
+      }),
     )
     setIsDirty(true)
-  }, [])
+  }, [originalAssignments])
 
   // --- Cambiar nuevas asignaciones (desde LineSelector) ---
   const handleNewAssignmentsChange = useCallback((updated: AssignmentInput[]) => {
@@ -485,13 +551,13 @@ export default function ViajeDetailPage() {
   )
 
   // Backlog disponible = lineas no asignadas al viaje + lineas recién removidas del viaje
-  const availableBacklog = useMemo(
-    () => [
-      ...backlog.filter((l) => !existingLineIds.has(l.id)),
-      ...removedLines.filter((l) => !existingLineIds.has(l.id)),
-    ],
-    [backlog, existingLineIds, removedLines],
-  )
+  const availableBacklog = useMemo(() => {
+    const fromBacklog = backlog.filter((l) => !existingLineIds.has(l.id))
+    // removedLines tiene prioridad (qty_scheduled ajustada por la cantidad liberada)
+    const removedIds = new Set(removedLines.map((l) => l.id))
+    const deduped = fromBacklog.filter((l) => !removedIds.has(l.id))
+    return [...deduped, ...removedLines.filter((l) => !existingLineIds.has(l.id))]
+  }, [backlog, existingLineIds, removedLines])
 
   // --- Guardar cambios ---
   const handleSave = useCallback(async () => {
@@ -499,6 +565,15 @@ export default function ViajeDetailPage() {
     // Validar remolque para cabezal
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
+    }
+    // Validar que ninguna cantidad exceda su max (safety net)
+    for (const a of existingAssignments) {
+      if (!a.line?.quantity) continue
+      const origQty = originalAssignments.get(a.id) ?? a.quantity_assigned
+      const maxQty = a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + origQty
+      const unitCode = a.line?.unit?.code ?? a.line?.unit_text
+      const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
+      if (a.quantity_assigned > maxQty || a.quantity_assigned < qtyMin) return
     }
     // Calcular asignaciones existentes con cantidad modificada
     const modified: ModifiedAssignment[] = existingAssignments
@@ -516,11 +591,25 @@ export default function ViajeDetailPage() {
     const originalDate = trip.scheduled_date
     const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id, modified)
     if (success) {
-      // Notificar si se cambió la fecha
-      if (originalDate !== tripData.scheduled_date) {
-        notifyViajeReprogramado(trip.id, originalDate, tripData.scheduled_date).catch(console.error)
+      // Detectar cambios significativos para notificación
+      const changes: string[] = []
+      if (originalDate !== tripData.scheduled_date)
+        changes.push(`Fecha: ${originalDate} → ${tripData.scheduled_date}`)
+      if (removedAssignmentIds.length > 0)
+        changes.push(`${removedAssignmentIds.length} línea(s) removida(s)`)
+      if (newAssignments.length > 0)
+        changes.push(`${newAssignments.length} línea(s) agregada(s)`)
+      if (modified.length > 0)
+        changes.push('Cantidades ajustadas')
+      if (trip.vehicle_id !== tripData.vehicle_id)
+        changes.push('Vehículo cambiado')
+      if (trip.trailer_id !== tripData.trailer_id)
+        changes.push('Remolque cambiado')
+      if (changes.length > 0) {
+        notifyViajeEditado(trip.id, changes).catch(console.error)
       }
-      // Refrescar datos del viaje
+      // Refrescar backlog y datos del viaje
+      refetchBacklog()
       const updated = await fetchTrip(id)
       if (updated) {
         setTrip(updated)
@@ -533,7 +622,7 @@ export default function ViajeDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, existingAssignments, originalAssignments, updateTrip, fetchTrip, id, person?.id])
+  }, [trip, tripData, newAssignments, removedAssignmentIds, existingAssignments, originalAssignments, updateTrip, fetchTrip, refetchBacklog, id, person?.id])
 
   // --- Cancelar viaje ---
   const handleCancelTrip = useCallback(async () => {
@@ -681,6 +770,7 @@ export default function ViajeDetailPage() {
               <AssignmentRow
                 key={assignment.id}
                 assignment={assignment}
+                originalQty={originalAssignments.get(assignment.id) ?? assignment.quantity_assigned}
                 canRemove={canRemoveAssignments}
                 canEdit={canEditFullTrip}
                 onRemove={handleRemoveExisting}
@@ -791,11 +881,16 @@ export default function ViajeDetailPage() {
                 variant="primary"
                 onClick={handleSave}
                 loading={saving}
-                disabled={!isDirty || saving}
+                disabled={!isDirty || saving || (existingAssignments.length + newAssignments.length) === 0}
               >
                 Guardar Cambios
               </Button>
             </div>
+            {(existingAssignments.length + newAssignments.length) === 0 && (
+              <p className="text-sm text-amber-600 mt-2">
+                El viaje debe tener al menos una línea asignada.
+              </p>
+            )}
           </div>
         </div>
       )}

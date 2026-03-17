@@ -70,6 +70,8 @@ export interface TripAssignment {
     from_location: { id: string; name: string } | null
     to_location: { id: string; name: string } | null
     unit: { id: string; code: string } | null
+    qty_scheduled: number
+    qty_delivered: number
     from_text: string | null
     to_text: string | null
     unit_text: string | null
@@ -79,6 +81,7 @@ export interface TripAssignment {
       request_id: string | null
       project: { id: string; code: string; name: string } | null
       date_required: string | null
+      requester: { id: string; name: string } | null
     }
   } | null
 }
@@ -144,6 +147,9 @@ export interface TripsFilter {
   dateFrom?: string | null
   dateTo?: string | null
   conductorId?: string | null
+  search?: string | null
+  page: number
+  pageSize: number
 }
 
 // --- Constantes privadas ---
@@ -161,6 +167,9 @@ const DEFAULT_FILTER: TripsFilter = {
   dateFrom: null,
   dateTo: null,
   conductorId: null,
+  search: null,
+  page: 0,
+  pageSize: 20,
 }
 
 // --- Helpers privados ---
@@ -204,6 +213,8 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         quantity: (rawLine.quantity as number) ?? 0,
         status: (rawLine.status as string) ?? '',
         notes: (rawLine.notes as string | null) ?? null,
+        qty_scheduled: (rawLine.qty_scheduled as number) ?? 0,
+        qty_delivered: (rawLine.qty_delivered as number) ?? 0,
         from_location: fromLoc,
         to_location: toLoc,
         unit: unitRel,
@@ -217,8 +228,9 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
               request_id: (rawRequest['request_id'] as string | null) ?? null,
               date_required: (rawRequest['date_required'] as string | null) ?? null,
               project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+              requester: unwrapRelation(rawRequest['requester'] as { id: string; name: string } | null),
             }
-          : { id: '', request_id: null, date_required: null, project: null },
+          : { id: '', request_id: null, date_required: null, project: null, requester: null },
       }
     }
     return {
@@ -282,6 +294,8 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       quantity: rawLine.quantity as number,
       status: rawLine.status as string,
       notes: (rawLine.notes as string | null) ?? null,
+      qty_scheduled: (rawLine.qty_scheduled as number) ?? 0,
+      qty_delivered: (rawLine.qty_delivered as number) ?? 0,
       from_location: fromLoc,
       to_location: toLoc,
       unit,
@@ -295,8 +309,9 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
             request_id: (rawRequest['request_id'] as string | null) ?? null,
             date_required: (rawRequest['date_required'] as string | null) ?? null,
             project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+            requester: unwrapRelation(rawRequest['requester'] as { id: string; name: string } | null),
           }
-        : { id: '', request_id: null, date_required: null, project: null },
+        : { id: '', request_id: null, date_required: null, project: null, requester: null },
     }
   }
 
@@ -362,6 +377,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
   const [trips, setTrips] = useState<TripWithRelations[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [tripsTotalCount, setTripsTotalCount] = useState(0)
 
   // Filtros para la lista de viajes
   const [filters, setFiltersState] = useState<TripsFilter>({
@@ -536,6 +552,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               quantity,
               status,
               notes,
+              qty_scheduled,
+              qty_delivered,
               from_location:from_location_id(id, name),
               to_location:to_location_id(id, name),
               from_text,
@@ -547,11 +565,12 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
                 id,
                 request_id,
                 date_required,
-                project:project_id(id, code, name)
+                project:project_id(id, code, name),
+                requester:requester_id(id, name)
               )
             )
           )
-        `)
+        `, { count: 'exact' })
         .order('scheduled_date', { ascending: false })
 
       // Aplicar filtros dinámicamente
@@ -567,8 +586,16 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       if (filters.conductorId) {
         query = query.eq('driver_id', filters.conductorId)
       }
+      if (filters.search) {
+        query = query.ilike('trip_id', `%${filters.search}%`)
+      }
 
-      const { data, error } = await query
+      // Paginación server-side
+      const from = filters.page * filters.pageSize
+      const to = from + filters.pageSize - 1
+      query = query.range(from, to)
+
+      const { data, error, count } = await query
 
       if (error) {
         setListError(error.message)
@@ -579,6 +606,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         mapTripRow(row as unknown as Record<string, unknown>),
       )
 
+      setTripsTotalCount(count ?? 0)
       setTrips(mapped)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cargar viajes'
@@ -622,6 +650,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               quantity,
               status,
               notes,
+              qty_scheduled,
+              qty_delivered,
               from_text,
               to_text,
               unit_text,
@@ -633,7 +663,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
                 id,
                 request_id,
                 date_required,
-                project:project_id(id, code, name)
+                project:project_id(id, code, name),
+                requester:requester_id(id, name)
               )
             )
           )
@@ -1018,6 +1049,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
 
     // Lista de viajes
     trips,
+    tripsTotalCount,
     listLoading,
     listError,
     refetchTrips,

@@ -1,11 +1,18 @@
 'use client'
 
 import { useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Wrench, Package, ArrowRight, Plus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils/format'
 import type { BacklogLine, AssignmentInput } from '@/hooks/useTrips'
+
+/** Unidades que deben usar enteros (min=1, step=1) */
+const INTEGER_UNITS = new Set(['und', 'pzas', 'juegos', 'gal', 'ft', 'qq'])
+
+function getQtyStep(unitCode: string | undefined): { min: number; step: number } {
+  return INTEGER_UNITS.has(unitCode ?? '') ? { min: 1, step: 1 } : { min: 0.01, step: 0.01 }
+}
 
 interface LineSelectorProps {
   /** Lineas disponibles en el backlog (Pendiente) */
@@ -37,6 +44,72 @@ function resolveUnit(line: BacklogLine): string {
   return line.unit?.code ?? line.unit_text ?? ''
 }
 
+/** Color de fecha según urgencia: rojo = vencida, amber = esta semana, gris = normal */
+function getDateColor(dateStr: string | null): string {
+  if (!dateStr) return 'text-iconsa-gray'
+  const today = new Date().toISOString().split('T')[0]
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  if (dateStr < today) return 'text-red-600'
+  if (dateStr <= nextWeek) return 'text-amber-600'
+  return 'text-iconsa-gray'
+}
+
+/** Info compartida de una línea — usada en disponibles y seleccionadas */
+function LineInfo({ line }: { line: BacklogLine }) {
+  const router = useRouter()
+  const isEquipo = line.line_type === 'Equipo'
+  const fromName = resolveFrom(line)
+  const toName = resolveTo(line)
+  const requestDisplayId = line.request.request_id ?? line.request_id?.slice(0, 8) ?? line.id.slice(0, 8)
+  const dateColor = getDateColor(line.request.date_required)
+
+  return (
+    <div className="min-w-0 flex-1 space-y-1">
+      {/* Descripcion + ID + proyecto */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="sm:hidden shrink-0" title={line.line_type}>
+          {isEquipo ? (
+            <Wrench className="h-4 w-4 text-iconsa-blue" />
+          ) : (
+            <Package className="h-4 w-4 text-gold" />
+          )}
+        </span>
+        <span className="text-sm font-medium text-gray-900 truncate">
+          {line.description}
+        </span>
+        <button
+          type="button"
+          onClick={() => line.request?.id && router.push(`/solicitudes/${line.request.id}`)}
+          className="font-mono text-xs text-iconsa-blue hover:underline cursor-pointer shrink-0"
+        >
+          {requestDisplayId}
+        </button>
+        {line.request.project?.name && (
+          <span className="text-xs font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded shrink-0"
+            title={line.request.project.code ?? undefined}>
+            {line.request.project.name}
+          </span>
+        )}
+      </div>
+
+      {/* Ruta + fecha requerida + solicitante */}
+      <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
+        <span className="truncate max-w-30">{fromName}</span>
+        <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
+        <span className="truncate max-w-30">{toName}</span>
+        <span className="text-gray-300 mx-0.5">·</span>
+        <span className={`font-medium ${dateColor}`}>{formatDate(line.request.date_required)}</span>
+        {line.request.requester?.name && (
+          <>
+            <span className="text-gray-300 mx-0.5">·</span>
+            <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function LineSelector({
   backlogLines,
   currentAssignments,
@@ -53,9 +126,10 @@ function LineSelector({
   const handleAdd = useCallback(
     (line: BacklogLine) => {
       const availableQty = getAvailableQty(line)
+      if (availableQty <= 0) return // Nada disponible
       const newAssignment: AssignmentInput = {
         request_line_id: line.id,
-        quantity_assigned: availableQty > 0 ? availableQty : line.quantity,
+        quantity_assigned: availableQty,
       }
       onChange([...currentAssignments, newAssignment])
     },
@@ -73,9 +147,14 @@ function LineSelector({
   // --- Actualizar cantidad asignada ---
   const handleQtyChange = useCallback(
     (lineId: string, newQty: number) => {
+      const line = findLineById(lineId)
+      const maxQty = line ? getAvailableQty(line) : newQty
+      const unitCode = line ? resolveUnit(line) : ''
+      const qtyMin = INTEGER_UNITS.has(unitCode) ? 1 : 0.01
+      const clamped = Math.min(Math.max(qtyMin, newQty), maxQty > 0 ? maxQty : newQty)
       onChange(
         currentAssignments.map((a) =>
-          a.request_line_id === lineId ? { ...a, quantity_assigned: newQty } : a,
+          a.request_line_id === lineId ? { ...a, quantity_assigned: clamped } : a,
         ),
       )
     },
@@ -98,11 +177,7 @@ function LineSelector({
 
           {currentAssignments.map((assignment) => {
             const line = findLineById(assignment.request_line_id)
-            const isEquipo = line?.line_type === 'Equipo'
-            const fromName = line ? resolveFrom(line) : '—'
-            const toName = line ? resolveTo(line) : '—'
             const unitCode = line ? resolveUnit(line) : ''
-            const requestDisplayId = line?.request.request_id ?? assignment.request_line_id.slice(0, 8)
             const availableQty = line ? getAvailableQty(line) : assignment.quantity_assigned
 
             return (
@@ -110,46 +185,28 @@ function LineSelector({
                 key={assignment.request_line_id}
                 className="flex flex-col gap-2 rounded-lg border border-navy/20 bg-navy/5 p-3 sm:flex-row sm:items-start sm:gap-3"
               >
-                {/* Icono de tipo */}
+                {/* Icono de tipo (desktop) */}
                 <span className="shrink-0 hidden sm:block pt-0.5" title={line?.line_type}>
-                  {isEquipo ? (
+                  {line?.line_type === 'Equipo' ? (
                     <Wrench className="h-4 w-4 text-iconsa-blue" />
                   ) : (
                     <Package className="h-4 w-4 text-gold" />
                   )}
                 </span>
 
-                {/* Info de la linea */}
-                <div className="min-w-0 flex-1 space-y-1">
-                  {/* Descripcion + ID */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Icono de tipo visible solo en mobile (en desktop el bloque sm: lo muestra) */}
-                    <span className="sm:hidden shrink-0" title={line?.line_type ?? isEquipo ? 'Equipo' : 'Material'}>
-                      {isEquipo ? (
-                        <Wrench className="h-4 w-4 text-iconsa-blue" />
-                      ) : (
-                        <Package className="h-4 w-4 text-gold" />
-                      )}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {line?.description ?? 'Cargando...'}
-                    </span>
-                    <span className="font-mono text-xs text-iconsa-gray shrink-0">
-                      {requestDisplayId}
-                    </span>
+                {/* Info de la linea — compartida */}
+                {line ? (
+                  <LineInfo line={line} />
+                ) : (
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm text-gray-500">Cargando...</span>
                   </div>
-
-                  {/* Ruta */}
-                  {line && (
-                    <div className="flex items-center gap-1 text-xs text-iconsa-gray">
-                      <span className="truncate max-w-27.5">{fromName}</span>
-                      <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                      <span className="truncate max-w-27.5">{toName}</span>
-                    </div>
-                  )}
-                </div>
+                )}
 
                 {/* Input de cantidad asignada */}
+                {(() => {
+                  const { min: qtyMin, step: qtyStep } = getQtyStep(unitCode || undefined)
+                  return (
                 <div className="flex items-center gap-2 shrink-0">
                   <label className="text-xs text-iconsa-gray whitespace-nowrap">
                     Cant. asignada:
@@ -158,21 +215,31 @@ function LineSelector({
                     type="number"
                     title="Cantidad a asignar"
                     value={assignment.quantity_assigned}
-                    min={0.01}
+                    min={qtyMin}
                     max={availableQty > 0 ? availableQty : undefined}
-                    step={0.01}
-                    onChange={(e) =>
-                      handleQtyChange(
-                        assignment.request_line_id,
-                        parseFloat(e.target.value) || 0,
-                      )
-                    }
+                    step={qtyStep}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      if (raw === '' || raw === '-') return
+                      const parsed = parseFloat(raw)
+                      if (!Number.isFinite(parsed)) return
+                      handleQtyChange(assignment.request_line_id, parsed)
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    onBlur={(e) => {
+                      const parsed = parseFloat(e.target.value)
+                      if (!Number.isFinite(parsed) || parsed < qtyMin) {
+                        handleQtyChange(assignment.request_line_id, qtyMin)
+                      }
+                    }}
                     className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
                   />
                   {unitCode && (
                     <span className="text-xs text-gray-500">{unitCode}</span>
                   )}
                 </div>
+                  )
+                })()}
 
                 {/* Boton quitar */}
                 <button
@@ -218,24 +285,15 @@ function LineSelector({
         {!loading &&
           availableLines.map((line) => {
             const isEquipo = line.line_type === 'Equipo'
-            const fromName = resolveFrom(line)
-            const toName = resolveTo(line)
             const unitCode = resolveUnit(line)
             const availableQty = getAvailableQty(line)
-            const requestDisplayId = line.request.request_id ?? line.request_id.slice(0, 8)
-            const priority = line.request.priority ?? 'Normal'
 
             return (
               <div
                 key={line.id}
                 className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3 sm:flex-row sm:items-center sm:gap-3 hover:bg-gray-50/50 transition-colors"
               >
-                {/* Badge de prioridad */}
-                <div className="shrink-0">
-                  <Badge variant="priority" label={priority} />
-                </div>
-
-                {/* Icono de tipo */}
+                {/* Icono de tipo (desktop) */}
                 <span className="shrink-0 hidden sm:block" title={line.line_type}>
                   {isEquipo ? (
                     <Wrench className="h-4 w-4 text-iconsa-blue" />
@@ -244,69 +302,34 @@ function LineSelector({
                   )}
                 </span>
 
-                {/* Info de la linea */}
-                <div className="min-w-0 flex-1 space-y-1">
-                  {/* Descripcion + ID + proyecto */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="sm:hidden shrink-0" title={line.line_type}>
-                      {isEquipo ? (
-                        <Wrench className="h-4 w-4 text-iconsa-blue" />
-                      ) : (
-                        <Package className="h-4 w-4 text-gold" />
-                      )}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {line.description}
-                    </span>
-                    <span className="font-mono text-xs text-iconsa-gray shrink-0">
-                      {requestDisplayId}
-                    </span>
-                    {line.request.project?.code && (
-                      <span className="text-xs font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
-                        {line.request.project.code}
-                      </span>
-                    )}
-                  </div>
+                {/* Info de la linea — compartida */}
+                <LineInfo line={line} />
 
-                  {/* Ruta + fecha requerida + solicitante */}
-                  <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
-                    <span className="truncate max-w-30">{fromName}</span>
-                    <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                    <span className="truncate max-w-30">{toName}</span>
-                    <span className="text-gray-300 mx-0.5">·</span>
-                    <span className="font-medium">{formatDate(line.request.date_required)}</span>
-                    {line.request.requester?.name && (
-                      <>
-                        <span className="text-gray-300 mx-0.5">·</span>
-                        <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Notas de solicitud */}
-                  {line.request.notes && (
-                    <p className="text-xs italic text-gray-400 truncate" title={line.request.notes}>
-                      {line.request.notes}
-                    </p>
-                  )}
-                </div>
+                {/* Notas de solicitud */}
+                {line.request.notes && (
+                  <p className="text-xs italic text-gray-400 truncate shrink-0 max-w-40" title={line.request.notes}>
+                    {line.request.notes}
+                  </p>
+                )}
 
                 {/* Cantidad disponible */}
                 <span className="shrink-0 text-xs text-gray-500 whitespace-nowrap">
                   Disp: {availableQty} {unitCode}
                 </span>
 
-                {/* Boton agregar */}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleAdd(line)}
-                  className="shrink-0 gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Agregar
-                </Button>
+                {/* Boton agregar (oculto si no hay cantidad disponible) */}
+                {availableQty > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleAdd(line)}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Agregar
+                  </Button>
+                )}
               </div>
             )
           })}
@@ -315,5 +338,5 @@ function LineSelector({
   )
 }
 
-export { LineSelector }
+export { LineSelector, getDateColor, resolveFrom, resolveTo, resolveUnit }
 export type { LineSelectorProps }

@@ -9,6 +9,24 @@ import FileDisplay from '@/components/ui/FileDisplay'
 import type { TripInput } from '@/hooks/useTrips'
 import type { Attachment } from '@/lib/supabase/storage'
 
+/** Genera opciones de hora de 4:00 AM a 8:00 PM cada 5 min */
+function generateTimeOptions(): SelectOption[] {
+  const options: SelectOption[] = []
+  for (let h = 4; h <= 20; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      if (h === 20 && m > 0) break
+      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+      const ampm = h >= 12 ? 'PM' : 'AM'
+      const label = `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+      options.push({ value, label })
+    }
+  }
+  return options
+}
+
+const TIME_OPTIONS = generateTimeOptions()
+
 type TripFormMode = 'create' | 'edit' | 'readonly'
 
 interface TripFormProps {
@@ -149,10 +167,9 @@ function TripForm({
   )
 
   const handleTimeChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value
-      setScheduledTime(val)
-      propagate({ scheduled_time: val || null })
+    (val: string | null) => {
+      setScheduledTime(val ?? '')
+      propagate({ scheduled_time: val })
     },
     [propagate],
   )
@@ -313,13 +330,15 @@ function TripForm({
           disabled={fieldsDisabled}
         />
 
-        {/* Hora de Salida (opcional) */}
-        <Input
+        {/* Hora de Salida (opcional) — dropdown filtrable 12h */}
+        <Select
           label="Hora de Salida (opcional)"
-          type="time"
-          value={scheduledTime}
+          placeholder="Seleccionar hora..."
+          options={TIME_OPTIONS}
+          value={scheduledTime || null}
           onChange={handleTimeChange}
           disabled={fieldsDisabled}
+          searchable
         />
 
         {/* Conductor */}

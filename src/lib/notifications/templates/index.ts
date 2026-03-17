@@ -213,6 +213,33 @@ ${ctaButton('Ver Viaje →', `${APP_URL}/programacion/viaje/${data.referenceId}`
 }
 
 // =============================================================================
+// 7b. VIAJE EDITADO → PM(s) afectados (reemplaza viajeReprogramado para ediciones)
+// =============================================================================
+export function viajeEditado(data: {
+  tripId: string
+  scheduledDate: string
+  changes: string[]
+  requestIds: string
+  referenceId: string
+}): TemplateResult {
+  const changeList = data.changes.map(c => `• ${c}`).join('<br/>')
+  const body = `
+${alertBanner('El viaje ha sido modificado. Revise los cambios.', 'info')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Fecha programada', formatDate(data.scheduledDate)) +
+  dataRow('Cambios realizados', changeList) +
+  dataRow('Solicitudes afectadas', data.requestIds)
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/programacion/viaje/${data.referenceId}`)}`
+
+  return {
+    subject: `Viaje ${data.tripId} Modificado`,
+    html: emailLayout('Viaje Modificado', body),
+  }
+}
+
+// =============================================================================
 // 8. VIAJE ASIGNADO A CONDUCTOR
 // =============================================================================
 export function viajeAsignadoConductor(data: {

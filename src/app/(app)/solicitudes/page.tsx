@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Wrench, Package, ArrowRight, Paperclip } from 'lucide-react'
+import { Plus, Search, Wrench, Package, ArrowRight, Paperclip, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
@@ -27,19 +27,41 @@ export default function SolicitudesPage() {
     setFilters,
     listLoading,
     listError,
+    totalCount,
   } = useSolicitudes()
+
+  // --- Control de expandir/colapsar (controlled state) ---
+  const [solExpandedKeys, setSolExpandedKeys] = useState<Set<string>>(new Set())
+  const [expandInitialized, setExpandInitialized] = useState(false)
 
   // Búsqueda local (debounced)
   const [searchInput, setSearchInput] = useState('')
   useEffect(() => {
     const timer = setTimeout(() => {
-      setFilters({ search: searchInput })
+      setFilters({ search: searchInput, page: 0 })
     }, 400)
     return () => clearTimeout(timer)
   }, [searchInput, setFilters])
 
-  // Fecha seleccionada en MiniCalendar (filtro client-side)
-  const [dateFilter, setDateFilter] = useState<string | null>(null)
+  // Fecha seleccionada en MiniCalendar → se convierte a dateFrom/dateTo server-side
+  const calendarDate = (filters.dateFrom && filters.dateFrom === filters.dateTo) ? filters.dateFrom : null
+  const setCalendarDate = useCallback((date: string | null) => {
+    if (date) {
+      setFilters({ dateFrom: date, dateTo: date, page: 0 })
+    } else {
+      setFilters({ dateFrom: null, dateTo: null, page: 0 })
+    }
+  }, [setFilters])
+
+  // Inicializar expandido al cargar datos
+  useEffect(() => {
+    if (!expandInitialized && solicitudes.length > 0) {
+      setSolExpandedKeys(new Set(solicitudes.map((s) => s.id)))
+      setExpandInitialized(true)
+    }
+  }, [expandInitialized, solicitudes])
+
+  const allSolExpanded = solExpandedKeys.size > 0
 
   // Opciones de proyectos
   const projectOptions: SelectOption[] = useMemo(
@@ -52,12 +74,6 @@ export default function SolicitudesPage() {
     () => allProjects.find((p) => p.id === filters.projectId),
     [allProjects, filters.projectId],
   )
-
-  // Para la tabla: filtro por fecha calendario
-  const displayedSolicitudes = useMemo(() => {
-    if (!dateFilter) return solicitudes
-    return solicitudes.filter((s) => s.date_required === dateFilter)
-  }, [solicitudes, dateFilter])
 
   // calendarItems para MiniCalendar
   const calendarItems = useMemo<CalendarItem[]>(() => {
@@ -79,7 +95,7 @@ export default function SolicitudesPage() {
       chips.push({
         key: 'project',
         label: projectName.code,
-        onRemove: () => setFilters({ projectId: null }),
+        onRemove: () => setFilters({ projectId: null, page: 0 }),
       })
     }
     if (filters.statuses.length > 0) {
@@ -88,41 +104,42 @@ export default function SolicitudesPage() {
           key: `status-${s}`,
           label: s,
           onRemove: () =>
-            setFilters({ statuses: filters.statuses.filter((x) => x !== s) }),
+            setFilters({ statuses: filters.statuses.filter((x) => x !== s), page: 0 }),
         })
       }
     }
-    if (dateFilter) {
-      const d = new Date(dateFilter + 'T00:00:00')
+    if (calendarDate) {
+      const d = new Date(calendarDate + 'T00:00:00')
       chips.push({
         key: 'date',
         label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setDateFilter(null),
+        onRemove: () => setCalendarDate(null),
       })
-    }
-    if (filters.dateFrom) {
-      chips.push({
-        key: 'dateFrom',
-        label: `Desde ${formatDate(filters.dateFrom)}`,
-        onRemove: () => setFilters({ dateFrom: null }),
-      })
-    }
-    if (filters.dateTo) {
-      chips.push({
-        key: 'dateTo',
-        label: `Hasta ${formatDate(filters.dateTo)}`,
-        onRemove: () => setFilters({ dateTo: null }),
-      })
+    } else {
+      if (filters.dateFrom) {
+        chips.push({
+          key: 'dateFrom',
+          label: `Desde ${formatDate(filters.dateFrom)}`,
+          onRemove: () => setFilters({ dateFrom: null, page: 0 }),
+        })
+      }
+      if (filters.dateTo) {
+        chips.push({
+          key: 'dateTo',
+          label: `Hasta ${formatDate(filters.dateTo)}`,
+          onRemove: () => setFilters({ dateTo: null, page: 0 }),
+        })
+      }
     }
     if (filters.search) {
       chips.push({
         key: 'search',
         label: `"${filters.search}"`,
-        onRemove: () => { setFilters({ search: '' }); setSearchInput('') },
+        onRemove: () => { setFilters({ search: '', page: 0 }); setSearchInput('') },
       })
     }
     return chips
-  }, [filters, projectName, dateFilter, setFilters])
+  }, [filters, projectName, calendarDate, setCalendarDate, setFilters])
 
   const clearAllFilters = useCallback(() => {
     setFilters({
@@ -133,9 +150,9 @@ export default function SolicitudesPage() {
       dateTo: null,
       search: '',
       requesterId: null,
+      page: 0,
     })
     setSearchInput('')
-    setDateFilter(null)
   }, [setFilters])
 
   // Toggle helpers
@@ -143,9 +160,9 @@ export default function SolicitudesPage() {
     (status: string) => {
       const current = filters.statuses
       if (current.includes(status)) {
-        setFilters({ statuses: current.filter((s) => s !== status) })
+        setFilters({ statuses: current.filter((s) => s !== status), page: 0 })
       } else {
-        setFilters({ statuses: [...current, status] })
+        setFilters({ statuses: [...current, status], page: 0 })
       }
     },
     [filters.statuses, setFilters],
@@ -334,7 +351,21 @@ export default function SolicitudesPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-navy">Solicitudes de Movilización</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-navy">Solicitudes de Movilización</h1>
+          {solicitudes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSolExpandedKeys((prev) =>
+                prev.size > 0 ? new Set() : new Set(solicitudes.map((s) => s.id))
+              )}
+              className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              {allSolExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+              {allSolExpanded ? 'Colapsar' : 'Expandir'}
+            </button>
+          )}
+        </div>
         {canCreateSolicitud(role) && (
           <Button onClick={() => router.push('/solicitudes/nueva')} className="shrink-0">
             <Plus className="h-4 w-4" />
@@ -350,7 +381,7 @@ export default function SolicitudesPage() {
             placeholder="Proyecto"
             options={projectOptions}
             value={filters.projectId}
-            onChange={(val) => setFilters({ projectId: val })}
+            onChange={(val) => setFilters({ projectId: val, page: 0 })}
             disabled={projectsLoading}
           />
         </div>
@@ -370,7 +401,7 @@ export default function SolicitudesPage() {
             type="date"
             title="Fecha desde"
             value={filters.dateFrom ?? ''}
-            onChange={(e) => setFilters({ dateFrom: e.target.value || null })}
+            onChange={(e) => setFilters({ dateFrom: e.target.value || null, page: 0 })}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
           <span className="text-xs font-medium text-iconsa-gray whitespace-nowrap">Hasta</span>
@@ -378,7 +409,7 @@ export default function SolicitudesPage() {
             type="date"
             title="Fecha hasta"
             value={filters.dateTo ?? ''}
-            onChange={(e) => setFilters({ dateTo: e.target.value || null })}
+            onChange={(e) => setFilters({ dateTo: e.target.value || null, page: 0 })}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
         </div>
@@ -408,8 +439,8 @@ export default function SolicitudesPage() {
       {/* MiniCalendar */}
       <MiniCalendar
         items={calendarItems}
-        selectedDate={dateFilter}
-        onSelectDate={setDateFilter}
+        selectedDate={calendarDate}
+        onSelectDate={setCalendarDate}
       />
 
       {/* Error */}
@@ -422,11 +453,19 @@ export default function SolicitudesPage() {
       {/* Tabla */}
       <DataTable<SolicitudWithRelations>
         columns={columns}
-        data={displayedSolicitudes}
+        data={solicitudes}
         keyExtractor={(row) => row.id}
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"
         mobileRender={mobileRender}
+        pagination="server"
+        pageSize={filters.pageSize}
+        totalCount={totalCount}
+        currentPage={filters.page}
+        onPageChange={(page) => setFilters({ page })}
+        onPageSizeChange={(size) => setFilters({ pageSize: size, page: 0 })}
+        expandedKeys={solExpandedKeys}
+        onExpandedKeysChange={setSolExpandedKeys}
         expandRender={(row) => {
           const lines = row.lines ?? []
           if (lines.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas</p>
