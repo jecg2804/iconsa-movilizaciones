@@ -7,6 +7,13 @@ import { Button } from '@/components/ui/Button'
 import { formatDate } from '@/lib/utils/format'
 import type { BacklogLine, AssignmentInput } from '@/hooks/useTrips'
 
+/** Unidades que deben usar enteros (min=1, step=1) */
+const INTEGER_UNITS = new Set(['und', 'pzas', 'juegos', 'gal', 'ft', 'qq'])
+
+function getQtyStep(unitCode: string | undefined): { min: number; step: number } {
+  return INTEGER_UNITS.has(unitCode ?? '') ? { min: 1, step: 1 } : { min: 0.01, step: 0.01 }
+}
+
 interface LineSelectorProps {
   /** Lineas disponibles en el backlog (Pendiente) */
   backlogLines: BacklogLine[]
@@ -119,9 +126,10 @@ function LineSelector({
   const handleAdd = useCallback(
     (line: BacklogLine) => {
       const availableQty = getAvailableQty(line)
+      if (availableQty <= 0) return // Nada disponible
       const newAssignment: AssignmentInput = {
         request_line_id: line.id,
-        quantity_assigned: availableQty > 0 ? availableQty : line.quantity,
+        quantity_assigned: availableQty,
       }
       onChange([...currentAssignments, newAssignment])
     },
@@ -141,7 +149,9 @@ function LineSelector({
     (lineId: string, newQty: number) => {
       const line = findLineById(lineId)
       const maxQty = line ? getAvailableQty(line) : newQty
-      const clamped = Math.min(Math.max(0.01, newQty), maxQty > 0 ? maxQty : newQty)
+      const unitCode = line ? resolveUnit(line) : ''
+      const qtyMin = INTEGER_UNITS.has(unitCode) ? 1 : 0.01
+      const clamped = Math.min(Math.max(qtyMin, newQty), maxQty > 0 ? maxQty : newQty)
       onChange(
         currentAssignments.map((a) =>
           a.request_line_id === lineId ? { ...a, quantity_assigned: clamped } : a,
@@ -194,6 +204,9 @@ function LineSelector({
                 )}
 
                 {/* Input de cantidad asignada */}
+                {(() => {
+                  const { min: qtyMin, step: qtyStep } = getQtyStep(unitCode || undefined)
+                  return (
                 <div className="flex items-center gap-2 shrink-0">
                   <label className="text-xs text-iconsa-gray whitespace-nowrap">
                     Cant. asignada:
@@ -202,9 +215,9 @@ function LineSelector({
                     type="number"
                     title="Cantidad a asignar"
                     value={assignment.quantity_assigned}
-                    min={0.01}
+                    min={qtyMin}
                     max={availableQty > 0 ? availableQty : undefined}
-                    step={0.01}
+                    step={qtyStep}
                     onChange={(e) =>
                       handleQtyChange(
                         assignment.request_line_id,
@@ -217,6 +230,8 @@ function LineSelector({
                     <span className="text-xs text-gray-500">{unitCode}</span>
                   )}
                 </div>
+                  )
+                })()}
 
                 {/* Boton quitar */}
                 <button
@@ -294,17 +309,19 @@ function LineSelector({
                   Disp: {availableQty} {unitCode}
                 </span>
 
-                {/* Boton agregar */}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleAdd(line)}
-                  className="shrink-0 gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Agregar
-                </Button>
+                {/* Boton agregar (oculto si no hay cantidad disponible) */}
+                {availableQty > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleAdd(line)}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Agregar
+                  </Button>
+                )}
               </div>
             )
           })}

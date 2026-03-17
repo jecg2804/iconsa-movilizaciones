@@ -27,6 +27,13 @@ import FileDisplay from '@/components/ui/FileDisplay'
 
 // --- Helpers ---
 
+/** Unidades que deben usar enteros (min=1, step=1) */
+const INTEGER_UNITS = new Set(['und', 'pzas', 'juegos', 'gal', 'ft', 'qq'])
+
+function getQtyStep(unitCode: string | undefined): { min: number; step: number } {
+  return INTEGER_UNITS.has(unitCode ?? '') ? { min: 1, step: 1 } : { min: 0.01, step: 0.01 }
+}
+
 /** Convierte un TripWithRelations al TripInput editable */
 function tripToInput(trip: TripWithRelations): TripInput {
   return {
@@ -177,19 +184,29 @@ function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }
       {/* Cantidad + estado */}
       <div className="shrink-0 flex items-center gap-3">
         {canEdit ? (
-          <div className="flex items-center gap-1 whitespace-nowrap">
-            <input
-              type="number"
-              value={assignment.quantity_assigned}
-              min={0.01}
-              max={line?.quantity ? line.quantity - (assignment.qty_delivered ?? 0) : undefined}
-              step={0.01}
-              onChange={(e) => onQtyChange?.(assignment.id, parseFloat(e.target.value) || 0)}
-              title="Cantidad asignada"
-              className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
-            />
-            <span className="text-xs text-iconsa-gray">{unitCode}</span>
-          </div>
+          (() => {
+            const { min: qtyMin, step: qtyStep } = getQtyStep(unitCode || undefined)
+            // max = total - entregado - programado_en_otros_viajes
+            // qty_scheduled incluye ESTE viaje, así que sumamos quantity_assigned de vuelta
+            const maxQty = line?.quantity
+              ? line.quantity - (line.qty_delivered ?? 0) - (line.qty_scheduled ?? 0) + assignment.quantity_assigned
+              : undefined
+            return (
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <input
+                  type="number"
+                  value={assignment.quantity_assigned}
+                  min={qtyMin}
+                  max={maxQty}
+                  step={qtyStep}
+                  onChange={(e) => onQtyChange?.(assignment.id, parseFloat(e.target.value) || 0)}
+                  title="Cantidad asignada"
+                  className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+                />
+                <span className="text-xs text-iconsa-gray">{unitCode}</span>
+              </div>
+            )
+          })()
         ) : (
           <span className="text-sm text-gray-700 whitespace-nowrap">
             {formatQty(assignment.quantity_assigned)} {unitCode}
@@ -238,6 +255,7 @@ export default function ViajeDetailPage() {
   const {
     backlog,
     backlogLoading,
+    refetchBacklog,
     fetchTrip,
     updateTrip,
     cancelTrip,
@@ -452,11 +470,14 @@ export default function ViajeDetailPage() {
     setExistingAssignments((prev) =>
       prev.map((a) => {
         if (a.id !== assignmentId) return a
-        // Clamp: max = quantity total - lo ya entregado
+        // max = total - entregado - programado_otros_viajes
+        // qty_scheduled incluye ESTE viaje, así que sumamos quantity_assigned de vuelta
         const maxQty = a.line?.quantity
-          ? a.line.quantity - (a.line.qty_delivered ?? 0)
+          ? a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + a.quantity_assigned
           : newQty
-        const clamped = Math.min(Math.max(0.01, newQty), maxQty)
+        const unitCode = a.line?.unit?.code ?? a.line?.unit_text
+        const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
+        const clamped = Math.min(Math.max(qtyMin, newQty), maxQty)
         return { ...a, quantity_assigned: clamped }
       }),
     )
@@ -560,7 +581,8 @@ export default function ViajeDetailPage() {
       if (changes.length > 0) {
         notifyViajeEditado(trip.id, changes).catch(console.error)
       }
-      // Refrescar datos del viaje
+      // Refrescar backlog y datos del viaje
+      refetchBacklog()
       const updated = await fetchTrip(id)
       if (updated) {
         setTrip(updated)
@@ -573,7 +595,7 @@ export default function ViajeDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, existingAssignments, originalAssignments, updateTrip, fetchTrip, id, person?.id])
+  }, [trip, tripData, newAssignments, removedAssignmentIds, existingAssignments, originalAssignments, updateTrip, fetchTrip, refetchBacklog, id, person?.id])
 
   // --- Cancelar viaje ---
   const handleCancelTrip = useCallback(async () => {
