@@ -485,7 +485,7 @@ function TripForm({
             onChange={handleNotesChange}
             // Las notas son editables incluso en modo En Ruta
             disabled={isReadonly}
-            placeholder="Observaciones operativas del viaje (opcional)"
+            placeholder="Observaciones operativas de la movilización (opcional)"
             rows={3}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue disabled:bg-gray-50 disabled:text-gray-500"
           />

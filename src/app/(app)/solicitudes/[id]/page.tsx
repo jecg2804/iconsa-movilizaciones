@@ -664,11 +664,11 @@ export default function SolicitudDetailPage() {
         )}
       </div>
 
-      {/* Viajes Programados — visible cuando solicitud no está en Borrador */}
+      {/* Movilizaciones Programadas — visible cuando solicitud no está en Borrador */}
       {solicitud.status !== 'Borrador' && associatedTrips.length > 0 && (
         <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 text-base font-semibold text-gray-900">
-            Viajes Programados ({associatedTrips.length})
+            Movilizaciones Programadas ({associatedTrips.length})
           </h2>
           <div className="space-y-3">
             {associatedTrips.map((t) => (

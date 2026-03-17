@@ -518,9 +518,9 @@ export default function MisViajesDetailPage() {
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-iconsa-gray hover:text-navy transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Mis Viajes
+          Mis Movilizaciones
         </button>
-        <p className="text-sm text-iconsa-gray">Viaje no encontrado.</p>
+        <p className="text-sm text-iconsa-gray">Movilización no encontrada.</p>
       </div>
     )
   }
@@ -538,7 +538,7 @@ export default function MisViajesDetailPage() {
         className="inline-flex items-center gap-1.5 text-sm text-iconsa-gray hover:text-navy transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Mis Viajes
+        Mis Movilizaciones
       </button>
 
       {/* Cabecera del viaje */}

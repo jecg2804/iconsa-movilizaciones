@@ -245,7 +245,7 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
           type="button"
           onClick={() => onRemove(assignment.id)}
           className="shrink-0 rounded p-1.5 text-iconsa-gray hover:bg-red-50 hover:text-iconsa-red transition-colors"
-          title="Quitar linea del viaje"
+          title="Quitar linea de la movilización"
         >
           <X className="h-4 w-4" />
         </button>
@@ -658,7 +658,7 @@ export default function ViajeDetailPage() {
           Programacion
         </button>
         <div className="rounded-lg border border-gray-200 bg-white px-6 py-12 text-center">
-          <p className="text-iconsa-gray">Viaje no encontrado.</p>
+          <p className="text-iconsa-gray">Movilización no encontrada.</p>
         </div>
       </div>
     )
@@ -684,7 +684,7 @@ export default function ViajeDetailPage() {
           {trip.trip_id ? (
             <span className="font-mono">{trip.trip_id}</span>
           ) : (
-            'Detalle de Viaje'
+            'Detalle de Movilización'
           )}
         </h1>
         {/* Codigo de confirmacion prominente si existe */}
@@ -761,7 +761,7 @@ export default function ViajeDetailPage() {
         {existingAssignments.length === 0 && newAssignments.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center">
             <p className="text-sm text-iconsa-gray">
-              No hay lineas asignadas a este viaje.
+              No hay lineas asignadas a esta movilización.
             </p>
           </div>
         ) : (
@@ -864,7 +864,7 @@ export default function ViajeDetailPage() {
                 onClick={() => setShowCancelConfirm(true)}
                 disabled={saving}
               >
-                Cancelar Viaje
+                Cancelar Movilización
               </Button>
             )}
 
@@ -888,7 +888,7 @@ export default function ViajeDetailPage() {
             </div>
             {(existingAssignments.length + newAssignments.length) === 0 && (
               <p className="text-sm text-amber-600 mt-2">
-                El viaje debe tener al menos una línea asignada.
+                La movilización debe tener al menos una línea asignada.
               </p>
             )}
           </div>
@@ -913,10 +913,10 @@ export default function ViajeDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">
-              Cancelar Viaje
+              Cancelar Movilización
             </h3>
             <p className="mt-2 text-sm text-gray-600">
-              ¿Esta seguro de que desea cancelar este viaje? Todas las lineas
+              ¿Esta seguro de que desea cancelar esta movilización? Todas las lineas
               asignadas regresaran al backlog como pendientes. Esta accion no se
               puede deshacer.
             </p>
@@ -935,7 +935,7 @@ export default function ViajeDetailPage() {
                 onClick={handleCancelTrip}
                 loading={saving}
               >
-                Si, cancelar viaje
+                Si, cancelar movilización
               </Button>
             </div>
           </div>

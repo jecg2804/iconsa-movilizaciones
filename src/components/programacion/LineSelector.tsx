@@ -246,7 +246,7 @@ function LineSelector({
                   type="button"
                   onClick={() => handleRemove(assignment.request_line_id)}
                   className="shrink-0 self-start rounded p-1.5 text-iconsa-gray hover:bg-red-50 hover:text-iconsa-red transition-colors"
-                  title="Quitar linea del viaje"
+                  title="Quitar linea de la movilización"
                 >
                   <X className="h-4 w-4" />
                 </button>

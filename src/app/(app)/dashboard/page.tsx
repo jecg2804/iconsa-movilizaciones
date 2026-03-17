@@ -237,7 +237,7 @@ export default async function DashboardPage() {
           color="blue"
         />
         <KpiCard
-          label="Viajes Próximos"
+          label="Movilizaciones Próximas"
           value={viajesCount}
           sublabel="Hoy + próximos 3 días"
           icon={Truck}

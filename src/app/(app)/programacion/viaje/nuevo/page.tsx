@@ -228,7 +228,7 @@ export default function NuevoViajePage() {
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-xl font-bold text-gray-900">Acceso denegado</h1>
         <p className="text-sm text-iconsa-gray">
-          No tiene permisos para crear viajes.
+          No tiene permisos para crear movilizaciones.
         </p>
         <Button variant="secondary" onClick={() => router.push('/programacion')}>
           Volver a Programacion
@@ -264,7 +264,7 @@ export default function NuevoViajePage() {
       </div>
 
       {/* Titulo */}
-      <h1 className="text-2xl font-bold text-gray-900">Nuevo Viaje</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Nueva Movilización</h1>
 
       {/* Error global de guardado */}
       {saveError && (
@@ -302,7 +302,7 @@ export default function NuevoViajePage() {
       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900">
-            Lineas del Viaje
+            Lineas de la Movilización
           </h2>
           {assignments.length > 0 && (
             <span className="rounded-full bg-navy/10 px-2.5 py-0.5 text-xs font-medium text-navy">
@@ -335,7 +335,7 @@ export default function NuevoViajePage() {
             loading={saving}
             disabled={saving || assignments.length === 0}
           >
-            Guardar Viaje
+            Guardar Movilización
           </Button>
         </div>
       </div>
