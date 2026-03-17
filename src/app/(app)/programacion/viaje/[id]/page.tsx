@@ -21,7 +21,7 @@ import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
-import { LineSelector } from '@/components/programacion/LineSelector'
+import { LineSelector, getDateColor } from '@/components/programacion/LineSelector'
 import type { Attachment } from '@/lib/supabase/storage'
 import FileDisplay from '@/components/ui/FileDisplay'
 
@@ -149,20 +149,27 @@ function AssignmentRow({ assignment, canRemove, canEdit, onRemove, onQtyChange }
           )}
         </div>
 
-        {/* Ruta */}
+        {/* Ruta + fecha requerida + solicitante */}
         {line && (
-          <div className="flex items-center gap-1 text-xs text-iconsa-gray">
+          <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
             <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
             <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
+            {line.request.date_required && (
+              <>
+                <span className="text-gray-300 mx-0.5">·</span>
+                <span className={`font-medium ${getDateColor(line.request.date_required)}`}>
+                  {formatDate(line.request.date_required)}
+                </span>
+              </>
+            )}
+            {line.request.requester?.name && (
+              <>
+                <span className="text-gray-300 mx-0.5">·</span>
+                <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+              </>
+            )}
           </div>
-        )}
-
-        {/* Fecha requerida de la solicitud */}
-        {line?.request.date_required && (
-          <span className="text-xs text-iconsa-gray">
-            Requerida: {formatDate(line.request.date_required)}
-          </span>
         )}
       </div>
 
@@ -485,13 +492,13 @@ export default function ViajeDetailPage() {
   )
 
   // Backlog disponible = lineas no asignadas al viaje + lineas recién removidas del viaje
-  const availableBacklog = useMemo(
-    () => [
-      ...backlog.filter((l) => !existingLineIds.has(l.id)),
-      ...removedLines.filter((l) => !existingLineIds.has(l.id)),
-    ],
-    [backlog, existingLineIds, removedLines],
-  )
+  const availableBacklog = useMemo(() => {
+    const fromBacklog = backlog.filter((l) => !existingLineIds.has(l.id))
+    // removedLines tiene prioridad (qty_scheduled ajustada por la cantidad liberada)
+    const removedIds = new Set(removedLines.map((l) => l.id))
+    const deduped = fromBacklog.filter((l) => !removedIds.has(l.id))
+    return [...deduped, ...removedLines.filter((l) => !existingLineIds.has(l.id))]
+  }, [backlog, existingLineIds, removedLines])
 
   // --- Guardar cambios ---
   const handleSave = useCallback(async () => {
@@ -791,11 +798,16 @@ export default function ViajeDetailPage() {
                 variant="primary"
                 onClick={handleSave}
                 loading={saving}
-                disabled={!isDirty || saving}
+                disabled={!isDirty || saving || (existingAssignments.length + newAssignments.length) === 0}
               >
                 Guardar Cambios
               </Button>
             </div>
+            {(existingAssignments.length + newAssignments.length) === 0 && (
+              <p className="text-sm text-amber-600 mt-2">
+                El viaje debe tener al menos una línea asignada.
+              </p>
+            )}
           </div>
         </div>
       )}

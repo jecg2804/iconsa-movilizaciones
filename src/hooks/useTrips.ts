@@ -79,6 +79,7 @@ export interface TripAssignment {
       request_id: string | null
       project: { id: string; code: string; name: string } | null
       date_required: string | null
+      requester: { id: string; name: string } | null
     }
   } | null
 }
@@ -217,8 +218,9 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
               request_id: (rawRequest['request_id'] as string | null) ?? null,
               date_required: (rawRequest['date_required'] as string | null) ?? null,
               project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+              requester: unwrapRelation(rawRequest['requester'] as { id: string; name: string } | null),
             }
-          : { id: '', request_id: null, date_required: null, project: null },
+          : { id: '', request_id: null, date_required: null, project: null, requester: null },
       }
     }
     return {
@@ -295,8 +297,9 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
             request_id: (rawRequest['request_id'] as string | null) ?? null,
             date_required: (rawRequest['date_required'] as string | null) ?? null,
             project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+            requester: unwrapRelation(rawRequest['requester'] as { id: string; name: string } | null),
           }
-        : { id: '', request_id: null, date_required: null, project: null },
+        : { id: '', request_id: null, date_required: null, project: null, requester: null },
     }
   }
 
@@ -547,7 +550,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
                 id,
                 request_id,
                 date_required,
-                project:project_id(id, code, name)
+                project:project_id(id, code, name),
+                requester:requester_id(id, name)
               )
             )
           )
@@ -633,7 +637,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
                 id,
                 request_id,
                 date_required,
-                project:project_id(id, code, name)
+                project:project_id(id, code, name),
+                requester:requester_id(id, name)
               )
             )
           )
