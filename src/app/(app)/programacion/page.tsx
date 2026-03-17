@@ -408,11 +408,11 @@ export default function ProgramacionPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-navy">Programación de Viajes</h1>
+        <h1 className="text-2xl font-bold text-navy">Programación de Movilizaciones</h1>
         {puedeCrearViaje && (
           <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
             <Plus className="h-4 w-4" />
-            Crear Viaje
+            Crear Movilización
           </Button>
         )}
       </div>
@@ -558,7 +558,7 @@ export default function ProgramacionPage() {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Buscar viaje..."
+                placeholder="Buscar movilización..."
                 value={tripFilters.search ?? ''}
                 onChange={(e) => setTripFilters({ search: e.target.value || null, page: 0 })}
                 className={inputClass}
@@ -608,7 +608,7 @@ export default function ProgramacionPage() {
         <div className="px-1 pb-1">
           {listError && (
             <div className="mx-3 mb-3 rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
-              Error al cargar viajes: {listError}
+              Error al cargar movilizaciones: {listError}
             </div>
           )}
 
@@ -617,7 +617,7 @@ export default function ProgramacionPage() {
             data={filteredTrips}
             keyExtractor={(row) => row.id}
             loading={listLoading}
-            emptyMessage="No hay viajes para mostrar"
+            emptyMessage="No hay movilizaciones para mostrar"
             mobileRender={mobileRender}
             expandedKeys={tripExpandedKeys}
             onExpandedKeysChange={setTripExpandedKeys}
@@ -665,7 +665,7 @@ export default function ProgramacionPage() {
                     onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
                     className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
                   >
-                    Ver detalle del viaje
+                    Ver detalle de la movilización
                   </a>
                 </div>
               )
@@ -684,7 +684,7 @@ export default function ProgramacionPage() {
             </span>
             <Button size="sm" onClick={handleCrearViajeConLineas}>
               <Truck className="h-4 w-4" />
-              Crear Viaje
+              Crear Movilización
             </Button>
             <button
               type="button"

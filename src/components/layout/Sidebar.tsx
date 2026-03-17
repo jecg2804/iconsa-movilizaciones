@@ -21,7 +21,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Solicitudes', href: '/solicitudes', icon: FileText },
   { label: 'Programación', href: '/programacion', icon: Calendar },
-  { label: 'Mis Viajes', href: '/mis-viajes', icon: Truck },
+  { label: 'Mis Movilizaciones', href: '/mis-viajes', icon: Truck },
   { label: 'Admin', href: '/admin', icon: Settings },
 ]
 
