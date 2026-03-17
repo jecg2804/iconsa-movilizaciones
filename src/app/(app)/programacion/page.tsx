@@ -14,9 +14,7 @@ import { BacklogTable } from '@/components/programacion/BacklogTable'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Select, type SelectOption } from '@/components/ui/Select'
 import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
-import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 // Tipos de línea para el filtro del backlog
 const LINE_TYPES = ['Todos', 'Equipo', 'Material'] as const
@@ -35,18 +33,16 @@ export default function ProgramacionPage() {
     listError,
   } = useTrips()
 
-  // --- Filtros de viajes ---
-  const [projectFilter, setProjectFilter] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [driverFilter, setDriverFilter] = useState<string | null>(null)
-  const [dateFilter, setDateFilter] = useState<string | null>(null)
-  const [searchFilter, setSearchFilter] = useState('')
+  // --- Filtros de viajes (afectan calendario + tabla) ---
+  const [tripProjectFilter, setTripProjectFilter] = useState<string | null>(null)
+  const [tripStatusFilter, setTripStatusFilter] = useState<string | null>(null)
+  const [tripDriverFilter, setTripDriverFilter] = useState<string | null>(null)
+  const [tripSearch, setTripSearch] = useState('')
 
   // --- Filtros del backlog (independientes) ---
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
   const [backlogProjectFilter, setBacklogProjectFilter] = useState<string | null>(null)
   const [backlogSearch, setBacklogSearch] = useState('')
-  const [backlogUrgencyFilter, setBacklogUrgencyFilter] = useState<string | null>(null)
 
   // --- Control de expandir/colapsar viajes (controlled state) ---
   const [tripExpandedKeys, setTripExpandedKeys] = useState<Set<string>>(new Set())
@@ -67,31 +63,8 @@ export default function ProgramacionPage() {
   // Selección de líneas
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
 
-  // Opciones de dropdowns
-  const projectOptions: SelectOption[] = useMemo(
-    () => allProjects.map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` })),
-    [allProjects],
-  )
-  const conductorOptions: SelectOption[] = useMemo(
-    () => conductors.map((c) => ({ value: c.id, label: c.name })),
-    [conductors],
-  )
-
-  // Nombre helpers para chips
-  const projectName = useMemo(
-    () => allProjects.find((p) => p.id === projectFilter),
-    [allProjects, projectFilter],
-  )
-  const driverName = useMemo(
-    () => conductors.find((c) => c.id === driverFilter),
-    [conductors, driverFilter],
-  )
-
   // --- Filtrado ---
   const filteredBacklog = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0]
-    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
     return backlog.filter((line) => {
       if (backlogProjectFilter && line.request.project?.id !== backlogProjectFilter) return false
       if (typeFilter !== 'Todos' && line.line_type !== typeFilter) return false
@@ -102,25 +75,22 @@ export default function ProgramacionPage() {
         const matchesEquip = line.equipment?.spectrum_code?.toLowerCase().includes(q) ?? false
         if (!matchesId && !matchesDesc && !matchesEquip) return false
       }
-      if (backlogUrgencyFilter === 'Vencidas' && line.request.date_required >= today) return false
-      if (backlogUrgencyFilter === 'Esta semana' && line.request.date_required > nextWeek) return false
       return true
     })
-  }, [backlog, backlogProjectFilter, typeFilter, backlogSearch, backlogUrgencyFilter])
+  }, [backlog, backlogProjectFilter, typeFilter, backlogSearch])
 
   const filteredTrips = useMemo(() => {
     return trips.filter((trip) => {
-      if (projectFilter) {
+      if (tripProjectFilter) {
         const matchesProject = trip.assignments.some(
-          (a) => a.line?.request?.project?.id === projectFilter,
+          (a) => a.line?.request?.project?.id === tripProjectFilter,
         )
         if (!matchesProject) return false
       }
-      if (statusFilter && trip.status !== statusFilter) return false
-      if (driverFilter && trip.driver_id !== driverFilter) return false
-      if (dateFilter && trip.scheduled_date !== dateFilter) return false
-      if (searchFilter) {
-        const q = searchFilter.toLowerCase()
+      if (tripStatusFilter && trip.status !== tripStatusFilter) return false
+      if (tripDriverFilter && trip.driver_id !== tripDriverFilter) return false
+      if (tripSearch) {
+        const q = tripSearch.toLowerCase()
         const matchesId = trip.trip_id?.toLowerCase().includes(q) ?? false
         const matchesDriver = trip.driver?.name?.toLowerCase().includes(q) ?? false
         const matchesVehicle = trip.vehicle?.description?.toLowerCase().includes(q) ?? false
@@ -128,7 +98,7 @@ export default function ProgramacionPage() {
       }
       return true
     })
-  }, [trips, projectFilter, statusFilter, driverFilter, dateFilter, searchFilter])
+  }, [trips, tripProjectFilter, tripStatusFilter, tripDriverFilter, tripSearch])
 
   // Inicializar expandido al cargar datos
   useEffect(() => {
@@ -140,91 +110,28 @@ export default function ProgramacionPage() {
 
   const allTripsExpanded = tripExpandedKeys.size > 0
 
-  // --- MiniCalendar items (viajes como mini-cards, sin filtro de fecha) ---
+  // --- MiniCalendar items (derivados de filteredTrips) ---
   const calendarItems = useMemo<CalendarItem[]>(() => {
-    return trips
-      .filter((trip) => {
-        if (projectFilter) {
-          const match = trip.assignments.some(
-            (a) => a.line?.request?.project?.id === projectFilter,
-          )
-          if (!match) return false
-        }
-        if (statusFilter && trip.status !== statusFilter) return false
-        if (driverFilter && trip.driver_id !== driverFilter) return false
-        return true
-      })
-      .map((t) => {
-        // Ruta abreviada
-        const a = t.assignments?.[0]?.line
-        let route: string | undefined
-        if (a) {
-          const from = a.from_location?.name ?? a.from_text ?? ''
-          const to = a.to_location?.name ?? a.to_text ?? ''
-          if (from && to) route = `${from} → ${to}`
-        }
-        return {
-          id: t.id,
-          date: t.scheduled_date,
-          label: t.trip_id ?? '—',
-          status: t.status,
-          badgeVariant: 'trip' as const,
-          subtitle: `${t.driver?.name ?? 'Sin conductor'} · ${t.assignments.length} lín.`,
-          route,
-          href: `/programacion/viaje/${t.id}`,
-        }
-      })
-  }, [trips, projectFilter, statusFilter, driverFilter])
-
-  // --- Chips de filtros activos ---
-  const filterChips = useMemo<FilterChip[]>(() => {
-    const chips: FilterChip[] = []
-    if (projectFilter && projectName) {
-      chips.push({
-        key: 'project',
-        label: projectName.code,
-        onRemove: () => setProjectFilter(null),
-      })
-    }
-    if (statusFilter) {
-      chips.push({
-        key: 'status',
-        label: statusFilter,
-        onRemove: () => setStatusFilter(null),
-      })
-    }
-    if (driverFilter && driverName) {
-      chips.push({
-        key: 'driver',
-        label: driverName.name,
-        onRemove: () => setDriverFilter(null),
-      })
-    }
-    if (dateFilter) {
-      const d = new Date(dateFilter + 'T00:00:00')
-      chips.push({
-        key: 'date',
-        label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setDateFilter(null),
-      })
-    }
-    if (searchFilter) {
-      chips.push({
-        key: 'search',
-        label: `"${searchFilter}"`,
-        onRemove: () => setSearchFilter(''),
-      })
-    }
-    return chips
-  }, [projectFilter, projectName, statusFilter, driverFilter, driverName, dateFilter, searchFilter])
-
-  const clearAllFilters = useCallback(() => {
-    setProjectFilter(null)
-    setStatusFilter(null)
-    setDriverFilter(null)
-    setDateFilter(null)
-    setSearchFilter('')
-  }, [])
+    return filteredTrips.map((t) => {
+      const a = t.assignments?.[0]?.line
+      let route: string | undefined
+      if (a) {
+        const from = a.from_location?.name ?? a.from_text ?? ''
+        const to = a.to_location?.name ?? a.to_text ?? ''
+        if (from && to) route = `${from} → ${to}`
+      }
+      return {
+        id: t.id,
+        date: t.scheduled_date,
+        label: t.trip_id ?? '—',
+        status: t.status,
+        badgeVariant: 'trip' as const,
+        subtitle: `${t.driver?.name ?? 'Sin conductor'} · ${t.assignments.length} lín.`,
+        route,
+        href: `/programacion/viaje/${t.id}`,
+      }
+    })
+  }, [filteredTrips])
 
   // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
@@ -461,8 +368,12 @@ export default function ProgramacionPage() {
 
   const isLoading = authLoading
 
+  // Estilo compartido para selects nativos
+  const selectClass = 'rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 bg-white focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue'
+  const inputClass = 'w-full rounded-lg border border-gray-200 pl-8 pr-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue'
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-navy">Programación de Viajes</h1>
@@ -474,119 +385,75 @@ export default function ProgramacionPage() {
         )}
       </div>
 
-      {/* FilterBar unificado */}
-      <FilterBar chips={filterChips} onClearAll={clearAllFilters}>
-        <div className="w-full sm:w-52">
-          <Select
-            placeholder="Proyecto"
-            options={projectOptions}
-            value={projectFilter}
-            onChange={setProjectFilter}
-            disabled={projectsLoading || isLoading}
-          />
-        </div>
-        <div className="w-full sm:w-40">
-          <Select
-            placeholder="Estado"
-            options={TRIP_STATUSES.map((s) => ({ value: s, label: s }))}
-            value={statusFilter}
-            onChange={setStatusFilter}
-          />
-        </div>
-        <div className="w-full sm:w-44">
-          <Select
-            placeholder="Conductor"
-            options={conductorOptions}
-            value={driverFilter}
-            onChange={setDriverFilter}
-          />
-        </div>
-        <div className="relative w-full sm:w-44">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
-          />
-        </div>
-      </FilterBar>
-
-      {/* ─── Sección 1: Backlog ─── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">
-            Sin Programar
-            {!backlogLoading && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-                {filteredBacklog.length}
-              </span>
-            )}
-          </h2>
-          {/* Filtro tipo (específico del backlog) */}
-          <div className="flex items-center gap-1">
-            {LINE_TYPES.map((tipo) => (
-              <button
-                key={tipo}
-                type="button"
-                onClick={() => setTypeFilter(tipo)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  typeFilter === tipo
-                    ? 'bg-navy text-white'
-                    : 'bg-gray-100 text-iconsa-gray hover:bg-gray-200'
-                }`}
-              >
-                {tipo}
-              </button>
-            ))}
+      {/* ─── Sección 1: Sin Programar ─── */}
+      <section className="rounded-xl border border-gray-200 bg-white">
+        <div className="px-4 pt-4 pb-3 space-y-3">
+          {/* Header: título + count + toggle tipo */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Sin Programar</h2>
+              {!backlogLoading && (
+                <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-medium">
+                  {filteredBacklog.length}
+                </span>
+              )}
+            </div>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {LINE_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTypeFilter(t)}
+                  className={`px-3 py-1.5 font-medium transition-colors ${
+                    typeFilter === t
+                      ? 'bg-navy text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Filtros del backlog */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="w-full sm:w-44">
-            <Select
-              placeholder="Proyecto"
-              options={projectOptions}
-              value={backlogProjectFilter}
-              onChange={setBacklogProjectFilter}
+          {/* Filtros inline */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              title="Filtrar por proyecto"
+              value={backlogProjectFilter ?? ''}
+              onChange={(e) => setBacklogProjectFilter(e.target.value || null)}
+              className={selectClass}
               disabled={projectsLoading}
-            />
-          </div>
-          <div className="w-full sm:w-36">
-            <Select
-              placeholder="Urgencia"
-              options={[
-                { value: 'Vencidas', label: 'Vencidas' },
-                { value: 'Esta semana', label: 'Esta semana' },
-              ]}
-              value={backlogUrgencyFilter}
-              onChange={setBacklogUrgencyFilter}
-            />
-          </div>
-          <div className="relative w-full sm:w-44">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar en backlog..."
-              value={backlogSearch}
-              onChange={(e) => setBacklogSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
-            />
-          </div>
-          {(backlogProjectFilter || backlogUrgencyFilter || backlogSearch) && (
-            <button
-              type="button"
-              onClick={() => { setBacklogProjectFilter(null); setBacklogUrgencyFilter(null); setBacklogSearch('') }}
-              className="text-xs text-iconsa-blue hover:underline"
             >
-              Limpiar
-            </button>
-          )}
+              <option value="">Proyecto</option>
+              {allProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+              ))}
+            </select>
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar equipo, solicitud..."
+                value={backlogSearch}
+                onChange={(e) => setBacklogSearch(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            {(backlogProjectFilter || backlogSearch) && (
+              <button
+                type="button"
+                onClick={() => { setBacklogProjectFilter(null); setBacklogSearch('') }}
+                className="text-xs text-iconsa-blue hover:underline"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="rounded-xl ring-1 ring-gray-200 bg-white p-1">
+        {/* Tabla backlog */}
+        <div className="px-1 pb-1">
           <BacklogTable
             lines={filteredBacklog}
             loading={backlogLoading}
@@ -599,90 +466,155 @@ export default function ProgramacionPage() {
         </div>
       </section>
 
-      {/* MiniCalendar */}
-      <MiniCalendar
-        items={calendarItems}
-        selectedDate={dateFilter}
-        onSelectDate={setDateFilter}
-      />
+      {/* ─── Sección 2: Movilizaciones ─── */}
+      <section className="rounded-xl border border-gray-200 bg-white">
+        <div className="px-4 pt-4 pb-3 space-y-3">
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Movilizaciones</h2>
+            {filteredTrips.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setTripExpandedKeys((prev) =>
+                  prev.size > 0 ? new Set() : new Set(filteredTrips.map((t) => t.id))
+                )}
+                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                {allTripsExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+                {allTripsExpanded ? 'Colapsar' : 'Expandir'}
+              </button>
+            )}
+          </div>
 
-      {/* ─── Sección 2: Viajes Recientes ─── */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
-          {filteredTrips.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setTripExpandedKeys((prev) =>
-                prev.size > 0 ? new Set() : new Set(filteredTrips.map((t) => t.id))
-              )}
-              className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+          {/* Filtros inline */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              title="Filtrar por proyecto"
+              value={tripProjectFilter ?? ''}
+              onChange={(e) => setTripProjectFilter(e.target.value || null)}
+              className={selectClass}
+              disabled={projectsLoading}
             >
-              {allTripsExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
-              {allTripsExpanded ? 'Colapsar' : 'Expandir'}
-            </button>
-          )}
+              <option value="">Proyecto</option>
+              {allProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+              ))}
+            </select>
+            <select
+              title="Filtrar por estado"
+              value={tripStatusFilter ?? ''}
+              onChange={(e) => setTripStatusFilter(e.target.value || null)}
+              className={selectClass}
+            >
+              <option value="">Estado</option>
+              {TRIP_STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              title="Filtrar por conductor"
+              value={tripDriverFilter ?? ''}
+              onChange={(e) => setTripDriverFilter(e.target.value || null)}
+              className={selectClass}
+            >
+              <option value="">Conductor</option>
+              {conductors.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar viaje..."
+                value={tripSearch}
+                onChange={(e) => setTripSearch(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            {(tripProjectFilter || tripStatusFilter || tripDriverFilter || tripSearch) && (
+              <button
+                type="button"
+                onClick={() => { setTripProjectFilter(null); setTripStatusFilter(null); setTripDriverFilter(null); setTripSearch('') }}
+                className="text-xs text-iconsa-blue hover:underline"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
         </div>
 
-        {listError && (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
-            Error al cargar viajes: {listError}
-          </div>
-        )}
+        {/* Calendario */}
+        <div className="px-4 pb-3">
+          <MiniCalendar
+            items={calendarItems}
+            selectedDate={null}
+            onSelectDate={() => {}}
+          />
+        </div>
 
-        <DataTable<TripWithRelations>
-          columns={columns}
-          data={filteredTrips}
-          keyExtractor={(row) => row.id}
-          loading={listLoading}
-          emptyMessage="No hay viajes para mostrar"
-          mobileRender={mobileRender}
-          expandedKeys={tripExpandedKeys}
-          onExpandedKeysChange={setTripExpandedKeys}
-          expandRender={(row) => {
-            const assignments = row.assignments ?? []
-            if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
-            return (
-              <div className="space-y-1.5">
-                {assignments.map((a) => {
-                  const line = a.line
-                  if (!line) return null
-                  const fromName = line.from_location?.name ?? line.from_text ?? '—'
-                  const toName = line.to_location?.name ?? line.to_text ?? '—'
-                  const unitName = line.unit?.code ?? line.unit_text ?? ''
-                  const isEquipo = line.line_type === 'Equipo'
-                  return (
-                    <div key={a.id} className="flex items-center gap-2 text-sm py-1">
-                      {isEquipo ? (
-                        <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
-                      ) : (
-                        <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
-                      )}
-                      <span className="font-medium text-gray-900 truncate max-w-[250px]" title={line.description}>
-                        {line.description}
-                      </span>
-                      <span className="text-gray-300">·</span>
-                      <span className="font-semibold text-gray-700 whitespace-nowrap bg-gray-100 px-1.5 py-0.5 rounded text-xs">
-                        {a.quantity_assigned} {unitName}
-                      </span>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">{fromName} → {toName}</span>
-                      {line.status !== 'Programada' && line.status !== 'En Transito' && (
-                        <Badge label={line.status} variant="line" />
-                      )}
-                    </div>
-                  )
-                })}
-                <a
-                  href={`/programacion/viaje/${row.id}`}
-                  onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
-                  className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
-                >
-                  Ver detalle del viaje
-                </a>
-              </div>
-            )
-          }}
-        />
+        {/* Tabla de viajes */}
+        <div className="px-1 pb-1">
+          {listError && (
+            <div className="mx-3 mb-3 rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
+              Error al cargar viajes: {listError}
+            </div>
+          )}
+
+          <DataTable<TripWithRelations>
+            columns={columns}
+            data={filteredTrips}
+            keyExtractor={(row) => row.id}
+            loading={listLoading}
+            emptyMessage="No hay viajes para mostrar"
+            mobileRender={mobileRender}
+            expandedKeys={tripExpandedKeys}
+            onExpandedKeysChange={setTripExpandedKeys}
+            expandRender={(row) => {
+              const assignments = row.assignments ?? []
+              if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
+              return (
+                <div className="space-y-1.5">
+                  {assignments.map((a) => {
+                    const line = a.line
+                    if (!line) return null
+                    const fromName = line.from_location?.name ?? line.from_text ?? '—'
+                    const toName = line.to_location?.name ?? line.to_text ?? '—'
+                    const unitName = line.unit?.code ?? line.unit_text ?? ''
+                    const isEquipo = line.line_type === 'Equipo'
+                    return (
+                      <div key={a.id} className="flex items-center gap-2 text-sm py-1">
+                        {isEquipo ? (
+                          <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                        ) : (
+                          <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
+                        )}
+                        <span className="font-medium text-gray-900 truncate max-w-[250px]" title={line.description}>
+                          {line.description}
+                        </span>
+                        <span className="text-gray-300">·</span>
+                        <span className="font-semibold text-gray-700 whitespace-nowrap bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                          {a.quantity_assigned} {unitName}
+                        </span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">{fromName} → {toName}</span>
+                        {line.status !== 'Programada' && line.status !== 'En Transito' && (
+                          <Badge label={line.status} variant="line" />
+                        )}
+                      </div>
+                    )
+                  })}
+                  <a
+                    href={`/programacion/viaje/${row.id}`}
+                    onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
+                    className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
+                  >
+                    Ver detalle del viaje
+                  </a>
+                </div>
+              )
+            }}
+          />
+        </div>
       </section>
 
       {/* Barra flotante: crear viaje con líneas seleccionadas */}
