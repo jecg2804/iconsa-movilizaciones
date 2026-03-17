@@ -651,7 +651,8 @@ export default function ProgramacionPage() {
                       <span className="font-medium text-gray-900 truncate max-w-[250px]" title={line.description}>
                         {line.description}
                       </span>
-                      <span className="font-semibold text-gray-700 whitespace-nowrap">
+                      <span className="text-gray-300">·</span>
+                      <span className="font-semibold text-gray-700 whitespace-nowrap bg-gray-100 px-1.5 py-0.5 rounded text-xs">
                         {a.quantity_assigned} {unitName}
                       </span>
                       <span className="text-xs text-gray-400 whitespace-nowrap">{fromName} → {toName}</span>
