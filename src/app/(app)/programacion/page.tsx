@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight } from 'lucide-react'
+import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
@@ -48,9 +48,9 @@ export default function ProgramacionPage() {
   const [backlogSearch, setBacklogSearch] = useState('')
   const [backlogUrgencyFilter, setBacklogUrgencyFilter] = useState<string | null>(null)
 
-  // --- Control de expandir/colapsar viajes ---
-  const [tripExpandControl, setTripExpandControl] = useState<{ expandAll: () => void; collapseAll: () => void } | null>(null)
-  const [allTripsExpanded, setAllTripsExpanded] = useState(true)
+  // --- Control de expandir/colapsar viajes (controlled state) ---
+  const [tripExpandedKeys, setTripExpandedKeys] = useState<Set<string>>(new Set())
+  const [expandInitialized, setExpandInitialized] = useState(false)
 
   // Conductores para filtro
   const [conductors, setConductors] = useState<{ id: string; name: string }[]>([])
@@ -129,6 +129,16 @@ export default function ProgramacionPage() {
       return true
     })
   }, [trips, projectFilter, statusFilter, driverFilter, dateFilter, searchFilter])
+
+  // Inicializar expandido al cargar datos
+  useEffect(() => {
+    if (!expandInitialized && filteredTrips.length > 0) {
+      setTripExpandedKeys(new Set(filteredTrips.map((t) => t.id)))
+      setExpandInitialized(true)
+    }
+  }, [expandInitialized, filteredTrips])
+
+  const allTripsExpanded = tripExpandedKeys.size > 0
 
   // --- MiniCalendar items (viajes como mini-cards, sin filtro de fecha) ---
   const calendarItems = useMemo<CalendarItem[]>(() => {
@@ -598,18 +608,18 @@ export default function ProgramacionPage() {
 
       {/* ─── Sección 2: Viajes Recientes ─── */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
           {filteredTrips.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                if (allTripsExpanded) { tripExpandControl?.collapseAll(); setAllTripsExpanded(false) }
-                else { tripExpandControl?.expandAll(); setAllTripsExpanded(true) }
-              }}
-              className="text-xs text-iconsa-gray hover:text-iconsa-blue transition-colors"
+              onClick={() => setTripExpandedKeys((prev) =>
+                prev.size > 0 ? new Set() : new Set(filteredTrips.map((t) => t.id))
+              )}
+              className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
             >
-              {allTripsExpanded ? 'Colapsar todo' : 'Expandir todo'}
+              {allTripsExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+              {allTripsExpanded ? 'Colapsar' : 'Expandir'}
             </button>
           )}
         </div>
@@ -627,8 +637,8 @@ export default function ProgramacionPage() {
           loading={listLoading}
           emptyMessage="No hay viajes para mostrar"
           mobileRender={mobileRender}
-          defaultExpandAll
-          onExpandControl={setTripExpandControl}
+          expandedKeys={tripExpandedKeys}
+          onExpandedKeysChange={setTripExpandedKeys}
           expandRender={(row) => {
             const assignments = row.assignments ?? []
             if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
