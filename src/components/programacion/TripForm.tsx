@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Select, type SelectOption } from '@/components/ui/Select'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
@@ -9,23 +9,23 @@ import FileDisplay from '@/components/ui/FileDisplay'
 import type { TripInput } from '@/hooks/useTrips'
 import type { Attachment } from '@/lib/supabase/storage'
 
-/** Convierte hora 24h a componentes 12h */
-function to12h(time24: string): { hour: number; minute: string; ampm: 'AM' | 'PM' } {
-  const [h, m] = time24.split(':').map(Number)
-  return {
-    hour: h === 0 ? 12 : h > 12 ? h - 12 : h,
-    minute: String(m).padStart(2, '0'),
-    ampm: h >= 12 ? 'PM' : 'AM',
+/** Genera opciones de hora de 4:00 AM a 8:00 PM cada 5 min */
+function generateTimeOptions(): SelectOption[] {
+  const options: SelectOption[] = []
+  for (let h = 4; h <= 20; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      if (h === 20 && m > 0) break
+      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+      const ampm = h >= 12 ? 'PM' : 'AM'
+      const label = `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+      options.push({ value, label })
+    }
   }
+  return options
 }
 
-/** Convierte componentes 12h a hora 24h */
-function to24h(hour: number, minute: string, ampm: 'AM' | 'PM'): string {
-  let h = hour
-  if (ampm === 'PM' && h !== 12) h += 12
-  if (ampm === 'AM' && h === 12) h = 0
-  return `${String(h).padStart(2, '0')}:${minute}`
-}
+const TIME_OPTIONS = generateTimeOptions()
 
 type TripFormMode = 'create' | 'edit' | 'readonly'
 
@@ -166,26 +166,10 @@ function TripForm({
     [propagate],
   )
 
-  // Derivar componentes 12h del estado scheduledTime (24h)
-  const { hour12, minute15, ampm } = useMemo(() => {
-    if (!scheduledTime) return { hour12: '', minute15: '00', ampm: 'AM' as const }
-    const parsed = to12h(scheduledTime)
-    // Redondear minutos al intervalo de 15 más cercano
-    const m = parseInt(parsed.minute)
-    const rounded = String(Math.round(m / 15) * 15).padStart(2, '0')
-    return { hour12: String(parsed.hour), minute15: rounded === '60' ? '00' : rounded, ampm: parsed.ampm }
-  }, [scheduledTime])
-
-  const handleTimePartChange = useCallback(
-    (newHour: string, newMinute: string, newAmpm: 'AM' | 'PM') => {
-      if (!newHour) {
-        setScheduledTime('')
-        propagate({ scheduled_time: null })
-        return
-      }
-      const time24 = to24h(parseInt(newHour), newMinute, newAmpm)
-      setScheduledTime(time24)
-      propagate({ scheduled_time: time24 })
+  const handleTimeChange = useCallback(
+    (val: string | null) => {
+      setScheduledTime(val ?? '')
+      propagate({ scheduled_time: val })
     },
     [propagate],
   )
@@ -346,58 +330,16 @@ function TripForm({
           disabled={fieldsDisabled}
         />
 
-        {/* Hora de Salida (opcional) — picker 12h */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Hora de Salida (opcional)
-          </label>
-          <div className="flex items-center gap-1">
-            <select
-              title="Hora"
-              value={hour12}
-              onChange={(e) => handleTimePartChange(e.target.value, minute15, ampm)}
-              disabled={fieldsDisabled}
-              className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue disabled:bg-gray-50 disabled:text-gray-500"
-            >
-              <option value="">--</option>
-              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => (
-                <option key={h} value={h}>{h}</option>
-              ))}
-            </select>
-            <span className="text-gray-500 font-medium">:</span>
-            <select
-              title="Minutos"
-              value={minute15}
-              onChange={(e) => handleTimePartChange(hour12, e.target.value, ampm)}
-              disabled={fieldsDisabled || !hour12}
-              className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue disabled:bg-gray-50 disabled:text-gray-500"
-            >
-              {['00', '15', '30', '45'].map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <select
-              title="AM/PM"
-              value={ampm}
-              onChange={(e) => handleTimePartChange(hour12, minute15, e.target.value as 'AM' | 'PM')}
-              disabled={fieldsDisabled || !hour12}
-              className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue disabled:bg-gray-50 disabled:text-gray-500"
-            >
-              <option value="AM">AM</option>
-              <option value="PM">PM</option>
-            </select>
-            {scheduledTime && !fieldsDisabled && (
-              <button
-                type="button"
-                onClick={() => { setScheduledTime(''); propagate({ scheduled_time: null }) }}
-                className="text-xs text-iconsa-gray hover:text-iconsa-red ml-1 transition-colors"
-                title="Limpiar hora"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
+        {/* Hora de Salida (opcional) — dropdown filtrable 12h */}
+        <Select
+          label="Hora de Salida (opcional)"
+          placeholder="Seleccionar hora..."
+          options={TIME_OPTIONS}
+          value={scheduledTime || null}
+          onChange={handleTimeChange}
+          disabled={fieldsDisabled}
+          searchable
+        />
 
         {/* Conductor */}
         <Select
