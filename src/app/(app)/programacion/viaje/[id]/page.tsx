@@ -207,6 +207,7 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
                     if (!Number.isFinite(parsed)) return
                     onQtyChange?.(assignment.id, parsed)
                   }}
+                  onFocus={(e) => e.target.select()}
                   onBlur={(e) => {
                     const parsed = parseFloat(e.target.value)
                     if (!Number.isFinite(parsed) || parsed < qtyMin) {
@@ -217,6 +218,9 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
                   className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
                 />
                 <span className="text-xs text-iconsa-gray">{unitCode}</span>
+                {maxQty !== undefined && (
+                  <span className="text-xs text-gray-400 whitespace-nowrap">/ {maxQty}</span>
+                )}
               </div>
             )
           })()

@@ -225,6 +225,7 @@ function LineSelector({
                       if (!Number.isFinite(parsed)) return
                       handleQtyChange(assignment.request_line_id, parsed)
                     }}
+                    onFocus={(e) => e.target.select()}
                     onBlur={(e) => {
                       const parsed = parseFloat(e.target.value)
                       if (!Number.isFinite(parsed) || parsed < qtyMin) {

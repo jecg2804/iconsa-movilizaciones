@@ -48,6 +48,10 @@ export default function ProgramacionPage() {
   const [backlogSearch, setBacklogSearch] = useState('')
   const [backlogUrgencyFilter, setBacklogUrgencyFilter] = useState<string | null>(null)
 
+  // --- Control de expandir/colapsar viajes ---
+  const [tripExpandControl, setTripExpandControl] = useState<{ expandAll: () => void; collapseAll: () => void } | null>(null)
+  const [allTripsExpanded, setAllTripsExpanded] = useState(true)
+
   // Conductores para filtro
   const [conductors, setConductors] = useState<{ id: string; name: string }[]>([])
   useEffect(() => {
@@ -594,7 +598,21 @@ export default function ProgramacionPage() {
 
       {/* ─── Sección 2: Viajes Recientes ─── */}
       <section className="space-y-3">
-        <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
+          {filteredTrips.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (allTripsExpanded) { tripExpandControl?.collapseAll(); setAllTripsExpanded(false) }
+                else { tripExpandControl?.expandAll(); setAllTripsExpanded(true) }
+              }}
+              className="text-xs text-iconsa-gray hover:text-iconsa-blue transition-colors"
+            >
+              {allTripsExpanded ? 'Colapsar todo' : 'Expandir todo'}
+            </button>
+          )}
+        </div>
 
         {listError && (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
@@ -609,6 +627,8 @@ export default function ProgramacionPage() {
           loading={listLoading}
           emptyMessage="No hay viajes para mostrar"
           mobileRender={mobileRender}
+          defaultExpandAll
+          onExpandControl={setTripExpandControl}
           expandRender={(row) => {
             const assignments = row.assignments ?? []
             if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
@@ -622,26 +642,23 @@ export default function ProgramacionPage() {
                   const unitName = line.unit?.code ?? line.unit_text ?? ''
                   const isEquipo = line.line_type === 'Equipo'
                   return (
-                    <div key={a.id} className="flex items-center gap-2 text-sm">
+                    <div key={a.id} className="flex items-center gap-3 text-sm">
                       {isEquipo ? (
                         <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
                       ) : (
                         <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
                       )}
-                      <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
-                        {line.description}
-                      </span>
-                      <span className="flex items-center gap-1 text-iconsa-gray">
-                        <span className="max-w-[100px] truncate">{fromName}</span>
-                        <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                        <span className="max-w-[100px] truncate">{toName}</span>
-                      </span>
-                      <span className="shrink-0 text-gray-600">{a.quantity_assigned} {unitName}</span>
-                      <Badge label={line.status} variant="line" />
-                      {line.notes && (
-                        <span className="max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
-                          {line.notes}
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-900 truncate" title={line.description}>
+                          {line.description}
                         </span>
+                        <span className="text-xs text-gray-400 ml-2">{fromName} → {toName}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-700 shrink-0 whitespace-nowrap">
+                        {a.quantity_assigned} {unitName}
+                      </span>
+                      {line.status !== 'Programada' && line.status !== 'En Transito' && (
+                        <Badge label={line.status} variant="line" />
                       )}
                     </div>
                   )

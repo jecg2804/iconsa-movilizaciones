@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, Loader2 } from 'lucide-react'
 
 export interface Column<T> {
@@ -25,6 +25,10 @@ interface DataTableProps<T> {
   rowClassName?: (row: T) => string
   /** Contenido expandible debajo de cada fila. Si se provee, click en fila togglea expansión. */
   expandRender?: (row: T) => React.ReactNode
+  /** Iniciar con todas las filas expandidas */
+  defaultExpandAll?: boolean
+  /** Callback para exponer control de expandir/colapsar todo */
+  onExpandControl?: (control: { expandAll: () => void; collapseAll: () => void }) => void
 }
 
 type SortDirection = 'asc' | 'desc'
@@ -40,10 +44,15 @@ function DataTable<T>({
   mobileRender,
   rowClassName,
   expandRender,
+  defaultExpandAll = false,
+  onExpandControl,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => {
+    if (defaultExpandAll) return new Set(data.map(keyExtractor))
+    return new Set()
+  })
 
   const handleSort = useCallback(
     (columnKey: string) => {
@@ -74,6 +83,23 @@ function DataTable<T>({
     },
     [],
   )
+
+  // Exponer control de expandir/colapsar todo al padre
+  useEffect(() => {
+    if (onExpandControl) {
+      onExpandControl({
+        expandAll: () => setExpandedKeys(new Set(data.map(keyExtractor))),
+        collapseAll: () => setExpandedKeys(new Set()),
+      })
+    }
+  }, [onExpandControl, data, keyExtractor])
+
+  // Sincronizar expandedKeys cuando data cambia y defaultExpandAll está activo
+  useEffect(() => {
+    if (defaultExpandAll) {
+      setExpandedKeys(new Set(data.map(keyExtractor)))
+    }
+  }, [defaultExpandAll, data, keyExtractor])
 
   const sortedData = useMemo(() => {
     if (!sortKey) return data
