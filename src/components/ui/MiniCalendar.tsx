@@ -72,6 +72,7 @@ function MiniCalendar({
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
         <button
           type="button"
+          title="Semana anterior"
           onClick={() => setWeekStart((p) => addDays(p, -7))}
           className="rounded p-1 text-gray-500 hover:bg-gray-100"
         >
@@ -93,6 +94,7 @@ function MiniCalendar({
         </div>
         <button
           type="button"
+          title="Semana siguiente"
           onClick={() => setWeekStart((p) => addDays(p, 7))}
           className="rounded p-1 text-gray-500 hover:bg-gray-100"
         >

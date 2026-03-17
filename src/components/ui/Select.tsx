@@ -181,6 +181,7 @@ function Select({
           {value !== null && !disabled && (
             <span
               role="button"
+              title="Limpiar selección"
               tabIndex={-1}
               onClick={handleClear}
               onKeyDown={(e) => {
@@ -221,12 +222,12 @@ function Select({
               {emptyMessage}
             </div>
           ) : (
-            <ul role="listbox" ref={listRef}>
+            <ul role="listbox" aria-label={label ?? placeholder} ref={listRef}>
               {filteredOptions.map((option, idx) => (
                 <li
                   key={option.value}
                   role="option"
-                  aria-selected={option.value === value}
+                  aria-selected={option.value === value ? true : undefined}
                   onClick={() => handleSelect(option.value)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   className={`
