@@ -106,6 +106,8 @@ export interface SolicitudesFilter {
   dateTo: string | null
   search: string
   requesterId: string | null
+  page: number
+  pageSize: number
 }
 
 // --- Helpers privados ---
@@ -118,6 +120,8 @@ const DEFAULT_FILTER: SolicitudesFilter = {
   dateTo: null,
   search: '',
   requesterId: null,
+  page: 0,
+  pageSize: 20,
 }
 
 const SEQUENCE_CONFLICT_ERROR =
@@ -267,6 +271,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   })
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [totalCount, setTotalCount] = useState(0)
 
   // Estado de mutaciones
   const [saving, setSaving] = useState(false)
@@ -290,7 +295,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
           lines:sm_request_lines(id, status, line_type, description, quantity, notes, from_text, to_text, unit_text, from_location:locations!sm_request_lines_from_location_id_fkey(name), to_location:locations!sm_request_lines_to_location_id_fkey(name), unit:units(code))
-        `)
+        `, { count: 'exact' })
         .order('date_required', { ascending: true })
 
       // Aplicar filtros dinamicamente
@@ -314,7 +319,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         query = query.eq('requester_id', filters.requesterId)
       }
 
-      const { data, error } = await query
+      // Paginación server-side
+      const from = filters.page * filters.pageSize
+      const to = from + filters.pageSize - 1
+      query = query.range(from, to)
+
+      const { data, error, count } = await query
 
       if (error) {
         setListError(error.message)
@@ -352,6 +362,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         }
       })
 
+      setTotalCount(count ?? 0)
       setSolicitudes(mapped)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cargar solicitudes'
@@ -786,6 +797,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   return {
     // Lista
     solicitudes,
+    totalCount,
     filters,
     setFilters,
     listLoading,

@@ -35,15 +35,16 @@ export default function ProgramacionPage() {
     backlog,
     backlogLoading,
     trips,
+    tripsTotalCount,
     listLoading,
     listError,
+    filters: tripFilters,
+    setFilters: setTripFilters,
   } = useTrips()
 
-  // --- Filtros de viajes (afectan calendario + tabla) ---
+  // Filtro de proyecto se mantiene client-side (requiere filtrar por assignments anidados)
   const [tripProjectFilter, setTripProjectFilter] = useState<string | null>(null)
-  const [tripStatusFilter, setTripStatusFilter] = useState<string | null>(null)
-  const [tripDriverFilter, setTripDriverFilter] = useState<string | null>(null)
-  const [tripSearch, setTripSearch] = useState('')
+  // Estado local de fecha para el calendario (single-day click)
   const [dateFilter, setDateFilter] = useState<DateFilter>(null)
 
   // --- Filtros del backlog (independientes) ---
@@ -86,41 +87,16 @@ export default function ProgramacionPage() {
     })
   }, [backlog, backlogProjectFilter, typeFilter, backlogSearch])
 
-  // Viajes filtrados SIN filtro de fecha — para el calendario (nunca se auto-filtra)
-  const tripsForCalendar = useMemo(() => {
-    return trips.filter((trip) => {
-      if (tripProjectFilter) {
-        const matchesProject = trip.assignments.some(
-          (a) => a.line?.request?.project?.id === tripProjectFilter,
-        )
-        if (!matchesProject) return false
-      }
-      if (tripStatusFilter && trip.status !== tripStatusFilter) return false
-      if (tripDriverFilter && trip.driver_id !== tripDriverFilter) return false
-      if (tripSearch) {
-        const q = tripSearch.toLowerCase()
-        const matchesId = trip.trip_id?.toLowerCase().includes(q) ?? false
-        const matchesDriver = trip.driver?.name?.toLowerCase().includes(q) ?? false
-        const matchesVehicle = trip.vehicle?.description?.toLowerCase().includes(q) ?? false
-        if (!matchesId && !matchesDriver && !matchesVehicle) return false
-      }
-      return true
-    })
-  }, [trips, tripProjectFilter, tripStatusFilter, tripDriverFilter, tripSearch])
-
-  // Viajes filtrados CON filtro de fecha — para la tabla
+  // Viajes filtrados por proyecto (client-side, ya que el hook no soporta filtro por proyecto anidado)
+  // Los demás filtros (status, dateFrom, dateTo, conductor, search) son server-side via el hook
   const filteredTrips = useMemo(() => {
-    if (!dateFilter) return tripsForCalendar
-    return tripsForCalendar.filter((trip) => {
-      if (dateFilter.type === 'single') {
-        return trip.scheduled_date === dateFilter.date
-      }
-      // range
-      if (dateFilter.from && trip.scheduled_date < dateFilter.from) return false
-      if (dateFilter.to && trip.scheduled_date > dateFilter.to) return false
-      return true
+    if (!tripProjectFilter) return trips
+    return trips.filter((trip) => {
+      return trip.assignments.some(
+        (a) => a.line?.request?.project?.id === tripProjectFilter,
+      )
     })
-  }, [tripsForCalendar, dateFilter])
+  }, [trips, tripProjectFilter])
 
   // Inicializar expandido al cargar datos
   useEffect(() => {
@@ -132,9 +108,9 @@ export default function ProgramacionPage() {
 
   const allTripsExpanded = tripExpandedKeys.size > 0
 
-  // --- MiniCalendar items (derivados de tripsForCalendar — nunca se auto-filtra) ---
+  // --- MiniCalendar items (derivados de los viajes actuales) ---
   const calendarItems = useMemo<CalendarItem[]>(() => {
-    return tripsForCalendar.map((t) => {
+    return filteredTrips.map((t) => {
       const a = t.assignments?.[0]?.line
       let route: string | undefined
       if (a) {
@@ -153,31 +129,41 @@ export default function ProgramacionPage() {
         href: `/programacion/viaje/${t.id}`,
       }
     })
-  }, [tripsForCalendar])
+  }, [filteredTrips])
 
   // --- Handlers de filtro de fecha ---
   const handleCalendarClick = useCallback((date: string | null) => {
-    if (!date) { setDateFilter(null); return }
-    setDateFilter((prev) =>
-      prev?.type === 'single' && prev.date === date ? null : { type: 'single', date }
-    )
-  }, [])
+    if (!date) {
+      setDateFilter(null)
+      setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
+      return
+    }
+    setDateFilter((prev) => {
+      if (prev?.type === 'single' && prev.date === date) {
+        // Deselect
+        setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
+        return null
+      }
+      setTripFilters({ dateFrom: date, dateTo: date, page: 0 })
+      return { type: 'single', date }
+    })
+  }, [setTripFilters])
 
   const handleDateFromChange = useCallback((from: string | null) => {
-    setDateFilter((prev) => ({
-      type: 'range',
-      from,
-      to: prev?.type === 'range' ? prev.to : null,
-    }))
-  }, [])
+    setDateFilter((prev) => {
+      const to = prev?.type === 'range' ? prev.to : null
+      setTripFilters({ dateFrom: from, dateTo: to, page: 0 })
+      return { type: 'range', from, to }
+    })
+  }, [setTripFilters])
 
   const handleDateToChange = useCallback((to: string | null) => {
-    setDateFilter((prev) => ({
-      type: 'range',
-      from: prev?.type === 'range' ? prev.from : null,
-      to,
-    }))
-  }, [])
+    setDateFilter((prev) => {
+      const from = prev?.type === 'range' ? prev.from : null
+      setTripFilters({ dateFrom: from, dateTo: to, page: 0 })
+      return { type: 'range', from, to }
+    })
+  }, [setTripFilters])
 
   // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
@@ -548,8 +534,8 @@ export default function ProgramacionPage() {
             </select>
             <select
               title="Filtrar por estado"
-              value={tripStatusFilter ?? ''}
-              onChange={(e) => setTripStatusFilter(e.target.value || null)}
+              value={tripFilters.status ?? ''}
+              onChange={(e) => setTripFilters({ status: e.target.value || null, page: 0 })}
               className={selectClass}
             >
               <option value="">Estado</option>
@@ -559,8 +545,8 @@ export default function ProgramacionPage() {
             </select>
             <select
               title="Filtrar por conductor"
-              value={tripDriverFilter ?? ''}
-              onChange={(e) => setTripDriverFilter(e.target.value || null)}
+              value={tripFilters.conductorId ?? ''}
+              onChange={(e) => setTripFilters({ conductorId: e.target.value || null, page: 0 })}
               className={selectClass}
             >
               <option value="">Conductor</option>
@@ -573,8 +559,8 @@ export default function ProgramacionPage() {
               <input
                 type="text"
                 placeholder="Buscar viaje..."
-                value={tripSearch}
-                onChange={(e) => setTripSearch(e.target.value)}
+                value={tripFilters.search ?? ''}
+                onChange={(e) => setTripFilters({ search: e.target.value || null, page: 0 })}
                 className={inputClass}
               />
             </div>
@@ -597,10 +583,10 @@ export default function ProgramacionPage() {
                 className={selectClass}
               />
             </div>
-            {(tripProjectFilter || tripStatusFilter || tripDriverFilter || tripSearch || dateFilter) && (
+            {(tripProjectFilter || tripFilters.status || tripFilters.conductorId || tripFilters.search || dateFilter) && (
               <button
                 type="button"
-                onClick={() => { setTripProjectFilter(null); setTripStatusFilter(null); setTripDriverFilter(null); setTripSearch(''); setDateFilter(null) }}
+                onClick={() => { setTripProjectFilter(null); setTripFilters({ status: null, conductorId: null, search: null, dateFrom: null, dateTo: null, page: 0 }); setDateFilter(null) }}
                 className="text-xs text-iconsa-blue hover:underline"
               >
                 Limpiar
@@ -635,6 +621,12 @@ export default function ProgramacionPage() {
             mobileRender={mobileRender}
             expandedKeys={tripExpandedKeys}
             onExpandedKeysChange={setTripExpandedKeys}
+            pagination="server"
+            pageSize={tripFilters.pageSize}
+            totalCount={tripsTotalCount}
+            currentPage={tripFilters.page}
+            onPageChange={(page) => setTripFilters({ page })}
+            onPageSizeChange={(size) => setTripFilters({ pageSize: size, page: 0 })}
             expandRender={(row) => {
               const assignments = row.assignments ?? []
               if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>

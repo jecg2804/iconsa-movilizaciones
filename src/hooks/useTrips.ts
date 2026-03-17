@@ -147,6 +147,9 @@ export interface TripsFilter {
   dateFrom?: string | null
   dateTo?: string | null
   conductorId?: string | null
+  search?: string | null
+  page: number
+  pageSize: number
 }
 
 // --- Constantes privadas ---
@@ -164,6 +167,9 @@ const DEFAULT_FILTER: TripsFilter = {
   dateFrom: null,
   dateTo: null,
   conductorId: null,
+  search: null,
+  page: 0,
+  pageSize: 20,
 }
 
 // --- Helpers privados ---
@@ -371,6 +377,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
   const [trips, setTrips] = useState<TripWithRelations[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [tripsTotalCount, setTripsTotalCount] = useState(0)
 
   // Filtros para la lista de viajes
   const [filters, setFiltersState] = useState<TripsFilter>({
@@ -563,7 +570,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               )
             )
           )
-        `)
+        `, { count: 'exact' })
         .order('scheduled_date', { ascending: false })
 
       // Aplicar filtros dinámicamente
@@ -579,8 +586,16 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       if (filters.conductorId) {
         query = query.eq('driver_id', filters.conductorId)
       }
+      if (filters.search) {
+        query = query.ilike('trip_id', `%${filters.search}%`)
+      }
 
-      const { data, error } = await query
+      // Paginación server-side
+      const from = filters.page * filters.pageSize
+      const to = from + filters.pageSize - 1
+      query = query.range(from, to)
+
+      const { data, error, count } = await query
 
       if (error) {
         setListError(error.message)
@@ -591,6 +606,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         mapTripRow(row as unknown as Record<string, unknown>),
       )
 
+      setTripsTotalCount(count ?? 0)
       setTrips(mapped)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cargar viajes'
@@ -1033,6 +1049,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
 
     // Lista de viajes
     trips,
+    tripsTotalCount,
     listLoading,
     listError,
     refetchTrips,

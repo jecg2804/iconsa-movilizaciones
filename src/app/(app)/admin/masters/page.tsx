@@ -381,7 +381,7 @@ export default function AdminMastersPage() {
       )},
     ]
 
-    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} />
+    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} pagination="client" />
   }
 
   // --- PERSONAS ---
@@ -427,7 +427,7 @@ export default function AdminMastersPage() {
 
     return (
       <>
-        <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} />
+        <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} pagination="client" />
         {/* Panel de proyectos asignados */}
         {showPersonProjects && (
           <PersonProjectsPanel
@@ -469,7 +469,7 @@ export default function AdminMastersPage() {
       )},
     ]
 
-    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} />
+    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} pagination="client" />
   }
 
   // --- UBICACIONES ---
@@ -500,7 +500,7 @@ export default function AdminMastersPage() {
       )},
     ]
 
-    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} />
+    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} pagination="client" />
   }
 
   // --- TARIFAS ---
@@ -531,7 +531,7 @@ export default function AdminMastersPage() {
       )},
     ]
 
-    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} />
+    return <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} pagination="client" />
   }
 
   // --- EXTRAS ---
@@ -576,7 +576,7 @@ export default function AdminMastersPage() {
             onChange={setExtrasProjectFilter}
           />
         </div>
-        <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} />
+        <DataTable columns={columns} data={filtered} keyExtractor={(r) => r.id} loading={loadingData} pagination="client" />
       </>
     )
   }
