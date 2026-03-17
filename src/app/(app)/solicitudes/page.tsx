@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Wrench, Package, ArrowRight, Paperclip } from 'lucide-react'
+import { Plus, Search, Wrench, Package, ArrowRight, Paperclip, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
@@ -30,6 +30,10 @@ export default function SolicitudesPage() {
     totalCount,
   } = useSolicitudes()
 
+  // --- Control de expandir/colapsar (controlled state) ---
+  const [solExpandedKeys, setSolExpandedKeys] = useState<Set<string>>(new Set())
+  const [expandInitialized, setExpandInitialized] = useState(false)
+
   // Búsqueda local (debounced)
   const [searchInput, setSearchInput] = useState('')
   useEffect(() => {
@@ -48,6 +52,16 @@ export default function SolicitudesPage() {
       setFilters({ dateFrom: null, dateTo: null, page: 0 })
     }
   }, [setFilters])
+
+  // Inicializar expandido al cargar datos
+  useEffect(() => {
+    if (!expandInitialized && solicitudes.length > 0) {
+      setSolExpandedKeys(new Set(solicitudes.map((s) => s.id)))
+      setExpandInitialized(true)
+    }
+  }, [expandInitialized, solicitudes])
+
+  const allSolExpanded = solExpandedKeys.size > 0
 
   // Opciones de proyectos
   const projectOptions: SelectOption[] = useMemo(
@@ -337,7 +351,21 @@ export default function SolicitudesPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-navy">Solicitudes de Movilización</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-navy">Solicitudes de Movilización</h1>
+          {solicitudes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSolExpandedKeys((prev) =>
+                prev.size > 0 ? new Set() : new Set(solicitudes.map((s) => s.id))
+              )}
+              className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              {allSolExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+              {allSolExpanded ? 'Colapsar' : 'Expandir'}
+            </button>
+          )}
+        </div>
         {canCreateSolicitud(role) && (
           <Button onClick={() => router.push('/solicitudes/nueva')} className="shrink-0">
             <Plus className="h-4 w-4" />
@@ -436,6 +464,8 @@ export default function SolicitudesPage() {
         currentPage={filters.page}
         onPageChange={(page) => setFilters({ page })}
         onPageSizeChange={(size) => setFilters({ pageSize: size, page: 0 })}
+        expandedKeys={solExpandedKeys}
+        onExpandedKeysChange={setSolExpandedKeys}
         expandRender={(row) => {
           const lines = row.lines ?? []
           if (lines.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas</p>
