@@ -1,3 +1,8 @@
+---
+name: seed-data
+description: Patrón seed data respetando triggers. FK deletion order. Gotchas initial_priority y cascade.
+---
+
 # Skill: Seed Data Pattern
 
 Patrón para insertar datos de prueba que respeten la lógica de triggers.

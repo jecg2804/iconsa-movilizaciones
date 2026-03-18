@@ -1,3 +1,8 @@
+---
+name: partial-delivery
+description: Patrón entregas parciales. qty_delivered acumula, status Parcial a nivel línea, backlog muestra disponible.
+---
+
 # Skill: Partial Delivery Pattern
 
 Patrón para entregas parciales de líneas de solicitud.

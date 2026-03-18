@@ -4,6 +4,49 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-18 — Chat: Restructuración de docs del repo
+
+- CLAUDE.md editado: quitado NestJS/Metabase, 18→44 tablas, Quick Reference, source-of-truth → Supabase MCP, estados corregidos (Parcial solo línea, En Transito sin acento), workflow simplificado
+- FEATURE_SPEC.md (v4): schema section actualizada a 44 tablas
+- ICONSA_Feature_Specification_v3.md → renombrado FEATURE_SPEC_v3_FOUNDATIONAL.md + header deprecación
+- .mcp.json: quitado Sequential Thinking (innecesario), quedan Supabase + Context7
+- .claude/rules/: cost-management y no-modify-specs actualizados (quitado BUILD_PLAN/PROJECT_STATUS refs)
+- .claude/skills/: 7 skills con YAML frontmatter. Nuevo: technical-decisions/SKILL.md (extraído de SPEC.md)
+- self-update.md: refs actualizadas (PROJECT_STATUS → SYNC_LOG, BUILD_PLAN → FEATURE_SPEC)
+- Docs/archive/: BUILD_PLAN, PROJECT_STATUS, MVP_Sprint_Brief, ROADMAP, demo_v8.jsx, supabase_schema_verified.sql
+- Eliminados: ref/ completo, Docs/ref/ duplicado, .new files, SPRINT_TODAY, suggestions.md
+
+## 2026-03-18 — Chat: Auth fix + Notifications fix
+
+- auth.users: todos los campos string NULL → '' para 16 usuarios (email_change, recovery_token, confirmation_token, etc.)
+- people.notifications_enabled: true para todos los usuarios con email y rol activo
+- Charris ahora recibe TODAS las notificaciones (pendiente commit de código — prompt generado para Claude Code)
+
+## 2026-03-17 — Chat: DB expansion 22 → 44 tablas
+
+- 22 tablas nuevas (inspecciones, work orders, fuel, PO, warehouse, campaigns, vendors)
+- Equipment expandida: 12 columnas + auto-tag IC-0001→IC-0377 + trigger
+- Equipment categories seeded (10 rows)
+- Aplicado a producción Y branch staging
+
+## 2026-03-17 — Chat/Code: UX + Qty management + Paginación
+
+- Qty management 3 capas (frontend clamp + save validation + DB trigger enforce_qty_integrity)
+- Filtros por sección (backlog independiente de viajes)
+- Calendario click-to-filter + date range (Desde/Hasta)
+- Paginación server-side (solicitudes) + client-side (viajes, admin)
+- Time picker 12h, collapsibles default open, line cards con qty pill
+- Supabase branch persistente vonwkciosksqspyljzfy creada
+
+## 2026-03-15 — Chat: Attachments + Notifications + RLS
+
+- File attachments: Storage bucket `attachments` con 4 RLS policies
+- Email notifications: 12 templates via Resend (server actions, fire-and-forget)
+- RLS: generate_request_id y generate_trip_id → SECURITY DEFINER
+- Correos reales actualizados para 14 usuarios
+- Env vars en Vercel: RESEND_API_KEY, SUPABASE_SERVICE_ROLE_KEY
+- Vercel production fix: NEXT_PUBLIC env vars agregadas
+
 ## 2026-03-12 — Code: Entregas parciales + Bugs 20-27
 
 ### BD (Chat en Supabase)

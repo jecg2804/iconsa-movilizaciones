@@ -1,3 +1,8 @@
+---
+name: crud-page
+description: Patrón para crear páginas CRUD con DataTable, formularios, y hooks de Supabase.
+---
+
 # Skill: Crear página CRUD
 
 Cuando se necesite crear una nueva página con formulario y lista, seguir este patrón:

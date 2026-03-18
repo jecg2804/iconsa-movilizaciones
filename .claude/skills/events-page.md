@@ -1,4 +1,9 @@
-# Skill: Página de Eventos / Mis Viajes (Fase 4)
+---
+name: events-page
+description: Patrón para Mis Viajes / Eventos. Secuencia Salida→Entrega→Retorno, código confirmación, cascada.
+---
+
+# Skill: Página de Eventos / Mis Viajes
 
 Fase 4 implementa la pantalla de ejecución donde conductores, Charris, y almacenistas
 registran eventos de viajes en tiempo real.

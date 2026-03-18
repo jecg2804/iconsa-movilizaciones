@@ -9,7 +9,7 @@
 
 | # | Item | Detalle |
 |---|------|---------|
-| U1 | **Reestructurar docs del repo** | CLAUDE.md dice 18 tablas (son 44). BUILD_PLAN/SPRINT_TODAY usan sistema de fases abandonado. PROJECT_STATUS congelado al 11 marzo. BUGS.md dice "ninguno conocido." Docs/ref/ tiene drafts nunca finalizados. Claude Code opera sin documentación actualizada. **Chat nuevo dedicado.** |
+| U1 | ~~**Reestructurar docs del repo**~~ | ✅ Completado Mar 18. CLAUDE.md fijo, skills con frontmatter, refs actualizadas, archivos obsoletos archivados. |
 | U2 | **User guide** | Scribe (Chrome ext) para screenshots anotados paso a paso. 4 flujos: crear solicitud, programar viaje, ver mis viajes, admin. PDF por rol. |
 | U3 | **Feedback intake** | Google Form por rol/pantalla ya diseñado. Implementar. |
 
@@ -129,7 +129,7 @@ Login, CRUD solicitudes con líneas, backlog con prioridad visual, crear/editar 
 | Vercel producción | `rein-eisenwerk.com` (team great-manns-projects) |
 | Repo privado | ICONSA-Solutions/movimientOS |
 | Branch activo | jaime/dev → PR a main para deploy |
-| MCPs (Claude Code) | Context7, Sequential Thinking, Supabase (read-only) |
+| MCPs (Claude Code) | Context7, Supabase (read-only) |
 
-### Docs del repo (OUTDATED — ver U1)
-CLAUDE.md, Docs/, ref/, .claude/ — todos congelados al 11-12 marzo. Requieren reestructuración completa antes de seguir construyendo features.
+### Docs del repo (✅ Reestructurado Mar 18)
+CLAUDE.md actualizado (44 tablas, stack correcto, estados corregidos). 7 skills con frontmatter. Rules actualizados. FEATURE_SPEC.md v4 como spec primario. Archivos obsoletos en Docs/archive/.
