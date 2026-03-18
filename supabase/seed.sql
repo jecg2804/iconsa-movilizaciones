@@ -4,7 +4,7 @@ SET session_replication_role = replica;
 -- PostgreSQL database dump
 --
 
--- \restrict Ens2lThq1rnAfbxxvwfdmobXKxinBkmxzMDqOOofWqv2pKFJFwfgeal28NvDbIH
+-- \restrict q4cqUjF1g5OKZiUx0a9auj5c4dZpQbQ3eHfZgl4PQ9KjmpC7w0sFUm7aNnRcJZX
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -57,9 +57,9 @@ INSERT INTO "auth"."users" ("instance_id", "id", "aud", "role", "email", "encryp
 	('00000000-0000-0000-0000-000000000000', 'c57c7553-75bd-44c4-be07-28e0079f9aaa', 'authenticated', 'authenticated', 'vgonzalez@iconsanet.com', '$2a$06$PDUS4FGW1UIeLgvdWLAZEexca18LcZ5SwFbKqVtVNWMIVKNbowNrm', '2026-03-15 22:25:09.964716+00', NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '{"provider": "email", "providers": ["email"]}', '{"email": "vgonzalez@iconsanet.com"}', false, '2026-03-15 22:25:09.964716+00', '2026-03-15 22:25:09.964716+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', '72933835-13a2-4026-95d0-ac320e32e182', 'authenticated', 'authenticated', 'conductor@iconsa.test', '$2a$10$iSvf7dy.yIctD8J7fiUxQO8RMeAIpaulSoxYjOuXLY6XObWJXI/SW', '2026-03-04 22:36:30.960377+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-15 23:10:27.90162+00', '{"provider": "email", "providers": ["email"]}', '{"email_verified": true}', NULL, '2026-03-04 22:36:30.957105+00', '2026-03-15 23:10:27.909471+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', 'f545a620-0518-437c-a006-17da5d7f2d22', 'authenticated', 'authenticated', 'ccaballero@iconsanet.com', '$2a$06$9iMEnYCVHsj2JyYOIuctDe5in8gxbcdJ.NZCk06GjJKvCX3qzSlA6', '2026-03-04 22:36:13.984252+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-12 16:40:31.875356+00', '{"provider": "email", "providers": ["email"]}', '{"email": "ccaballero@iconsanet.com", "email_verified": true}', NULL, '2026-03-04 22:36:13.974979+00', '2026-03-15 22:27:31.35882+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
-	('00000000-0000-0000-0000-000000000000', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', 'authenticated', 'authenticated', 'jjacome@iconsanet.com', '$2a$06$7kZtZau/tUL5MKUI22/QEeKx7GQszUk2avE8kOXp8r8vXN81FuliS', '2026-03-04 22:35:05.942211+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-16 16:39:50.175998+00', '{"provider": "email", "providers": ["email"]}', '{"email": "jjacome@iconsanet.com", "email_verified": true}', NULL, '2026-03-04 22:35:05.889518+00', '2026-03-16 16:39:50.186997+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', 'authenticated', 'authenticated', 'ccharris@iconsanet.com', '$2a$06$aOxNE/X4dr67wmcZ4O.7Y.kUO435YegGGd27mr1c7hQanlyqTraoy', '2026-03-04 22:34:18.714953+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-16 19:41:34.15724+00', '{"provider": "email", "providers": ["email"]}', '{"email": "ccharris@iconsanet.com", "email_verified": true}', NULL, '2026-03-04 22:34:18.668485+00', '2026-03-16 19:41:34.17242+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
-	('00000000-0000-0000-0000-000000000000', '7b707095-8390-4332-8ac3-0c43bb6cedc7', 'authenticated', 'authenticated', 'jcucalon@iconsanet.com', '$2a$06$BmZk3dONny/gfrCgutA6/ert5lVyx9zjYhEbRmPkyU2vyFHnVAnAG', '2026-03-04 22:37:21.834967+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-16 16:37:08.006447+00', '{"provider": "email", "providers": ["email"]}', '{"email": "jcucalon@iconsanet.com", "email_verified": true}', NULL, '2026-03-04 22:37:21.830932+00', '2026-03-16 16:37:08.046647+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false);
+	('00000000-0000-0000-0000-000000000000', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', 'authenticated', 'authenticated', 'jjacome@iconsanet.com', '$2a$06$7kZtZau/tUL5MKUI22/QEeKx7GQszUk2avE8kOXp8r8vXN81FuliS', '2026-03-04 22:35:05.942211+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-16 16:39:50.175998+00', '{"provider": "email", "providers": ["email"]}', '{"email": "jjacome@iconsanet.com", "email_verified": true}', NULL, '2026-03-04 22:35:05.889518+00', '2026-03-17 00:19:41.072582+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
+	('00000000-0000-0000-0000-000000000000', '7b707095-8390-4332-8ac3-0c43bb6cedc7', 'authenticated', 'authenticated', 'jcucalon@iconsanet.com', '$2a$06$BmZk3dONny/gfrCgutA6/ert5lVyx9zjYhEbRmPkyU2vyFHnVAnAG', '2026-03-04 22:37:21.834967+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-03-17 13:31:26.868039+00', '{"provider": "email", "providers": ["email"]}', '{"email": "jcucalon@iconsanet.com", "email_verified": true}', NULL, '2026-03-04 22:37:21.830932+00', '2026-03-17 13:31:26.880693+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false);
 
 
 --
@@ -102,8 +102,9 @@ INSERT INTO "auth"."identities" ("provider_id", "user_id", "identity_data", "pro
 --
 
 INSERT INTO "auth"."sessions" ("id", "user_id", "created_at", "updated_at", "factor_id", "aal", "not_after", "refreshed_at", "user_agent", "ip", "tag", "oauth_client_id", "refresh_token_hmac_key", "refresh_token_counter", "scopes") VALUES
-	('c4819264-a376-4225-ab82-9b25244efe8d', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '2026-03-16 16:39:50.176095+00', '2026-03-16 16:39:50.176095+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '200.46.122.178', NULL, NULL, NULL, NULL, NULL),
-	('a1d0beb0-ff2e-4db7-ab05-c8285b700f53', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', '2026-03-16 19:41:34.157354+00', '2026-03-16 19:41:34.157354+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '138.84.46.115', NULL, NULL, NULL, NULL, NULL);
+	('a1d0beb0-ff2e-4db7-ab05-c8285b700f53', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', '2026-03-16 19:41:34.157354+00', '2026-03-16 19:41:34.157354+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '138.84.46.115', NULL, NULL, NULL, NULL, NULL),
+	('c4819264-a376-4225-ab82-9b25244efe8d', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '2026-03-16 16:39:50.176095+00', '2026-03-17 00:19:41.929098+00', NULL, 'aal1', NULL, '2026-03-17 00:19:41.929008', 'node', '100.54.89.2', NULL, NULL, NULL, NULL, NULL),
+	('35e9bb56-6be8-4fd6-8c55-cacaf2accd72', '7b707095-8390-4332-8ac3-0c43bb6cedc7', '2026-03-17 13:31:26.868125+00', '2026-03-17 13:31:26.868125+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '200.46.122.178', NULL, NULL, NULL, NULL, NULL);
 
 
 --
@@ -112,7 +113,8 @@ INSERT INTO "auth"."sessions" ("id", "user_id", "created_at", "updated_at", "fac
 
 INSERT INTO "auth"."mfa_amr_claims" ("session_id", "created_at", "updated_at", "authentication_method", "id") VALUES
 	('c4819264-a376-4225-ab82-9b25244efe8d', '2026-03-16 16:39:50.18857+00', '2026-03-16 16:39:50.18857+00', 'password', 'cd314af8-7fb6-4879-8c3a-7218edd3ad2c'),
-	('a1d0beb0-ff2e-4db7-ab05-c8285b700f53', '2026-03-16 19:41:34.173144+00', '2026-03-16 19:41:34.173144+00', 'password', 'b133060b-b5d2-4ac8-a8d0-917b6e513af5');
+	('a1d0beb0-ff2e-4db7-ab05-c8285b700f53', '2026-03-16 19:41:34.173144+00', '2026-03-16 19:41:34.173144+00', 'password', 'b133060b-b5d2-4ac8-a8d0-917b6e513af5'),
+	('35e9bb56-6be8-4fd6-8c55-cacaf2accd72', '2026-03-17 13:31:26.883375+00', '2026-03-17 13:31:26.883375+00', 'password', '941b1d6a-aeb6-4c0b-9de7-8fd90e1a91d6');
 
 
 --
@@ -156,8 +158,10 @@ INSERT INTO "auth"."mfa_amr_claims" ("session_id", "created_at", "updated_at", "
 --
 
 INSERT INTO "auth"."refresh_tokens" ("instance_id", "id", "token", "user_id", "revoked", "created_at", "updated_at", "parent", "session_id") VALUES
-	('00000000-0000-0000-0000-000000000000', 158, 'gywbdij34p7o', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', false, '2026-03-16 16:39:50.181421+00', '2026-03-16 16:39:50.181421+00', NULL, 'c4819264-a376-4225-ab82-9b25244efe8d'),
-	('00000000-0000-0000-0000-000000000000', 159, 'lyccdbesuxng', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', false, '2026-03-16 19:41:34.168227+00', '2026-03-16 19:41:34.168227+00', NULL, 'a1d0beb0-ff2e-4db7-ab05-c8285b700f53');
+	('00000000-0000-0000-0000-000000000000', 159, 'lyccdbesuxng', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', false, '2026-03-16 19:41:34.168227+00', '2026-03-16 19:41:34.168227+00', NULL, 'a1d0beb0-ff2e-4db7-ab05-c8285b700f53'),
+	('00000000-0000-0000-0000-000000000000', 158, 'gywbdij34p7o', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', true, '2026-03-16 16:39:50.181421+00', '2026-03-17 00:19:41.069153+00', NULL, 'c4819264-a376-4225-ab82-9b25244efe8d'),
+	('00000000-0000-0000-0000-000000000000', 160, 'ctuqlqxzh7in', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', false, '2026-03-17 00:19:41.070968+00', '2026-03-17 00:19:41.070968+00', 'gywbdij34p7o', 'c4819264-a376-4225-ab82-9b25244efe8d'),
+	('00000000-0000-0000-0000-000000000000', 161, 'yaes3bs266lk', '7b707095-8390-4332-8ac3-0c43bb6cedc7', false, '2026-03-17 13:31:26.872783+00', '2026-03-17 13:31:26.872783+00', NULL, '35e9bb56-6be8-4fd6-8c55-cacaf2accd72');
 
 
 --
@@ -1831,7 +1835,8 @@ INSERT INTO "storage"."objects" ("id", "bucket_id", "name", "owner", "created_at
 	('98e241d7-598c-4ad9-9030-6bf4badc239e', 'attachments', 'events/7872f511-6690-4847-b466-d861047394b1/1773625507048-YDH_Kinger.png', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', '2026-03-16 01:45:10.388165+00', '2026-03-16 01:45:10.388165+00', '2026-03-16 01:45:10.388165+00', '{"eTag": "\"d68896140ec309b0b847cc82da32a116\"", "size": 189063, "mimetype": "image/png", "cacheControl": "max-age=3600", "lastModified": "2026-03-16T01:45:11.000Z", "contentLength": 189063, "httpStatusCode": 200}', '2abe4051-060c-4d22-ac5b-ab97c50b3154', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', '{}'),
 	('84e97e80-8e4f-4687-a3c6-1b9b9f03214f', 'attachments', 'events/7872f511-6690-4847-b466-d861047394b1/1773625515109-YDH_Kinger.png', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', '2026-03-16 01:45:17.556861+00', '2026-03-16 01:45:17.556861+00', '2026-03-16 01:45:17.556861+00', '{"eTag": "\"d68896140ec309b0b847cc82da32a116\"", "size": 189063, "mimetype": "image/png", "cacheControl": "max-age=3600", "lastModified": "2026-03-16T01:45:18.000Z", "contentLength": 189063, "httpStatusCode": 200}', 'a0075fd8-f047-4b11-b82a-2b68be17200e', 'a5b1f64c-e71e-4858-8f54-9082ebd6cbaa', '{}'),
 	('3f6f4609-b829-45b4-b782-61bd04646093', 'attachments', 'events/9de10d9a-38a7-47c4-a4b2-08acebc5ed1d/1773627348967-17736273416551409801897274464231.jpg', '7b707095-8390-4332-8ac3-0c43bb6cedc7', '2026-03-16 02:15:51.12155+00', '2026-03-16 02:15:51.12155+00', '2026-03-16 02:15:51.12155+00', '{"eTag": "\"ced10fafa151fc3537d2717dc4a68838\"", "size": 911691, "mimetype": "image/jpeg", "cacheControl": "max-age=3600", "lastModified": "2026-03-16T02:15:52.000Z", "contentLength": 911691, "httpStatusCode": 200}', 'd269f371-2c36-4e08-bc7f-eb195d94742c', '7b707095-8390-4332-8ac3-0c43bb6cedc7', '{}'),
-	('021bae7c-9e3e-47ec-b45d-e2461c68d6ce', 'attachments', 'requests/22b2da93-6038-430f-b15a-f47a4aabdecd/1773666926965-26670_ILUMITEC_-_22-208_.pdf', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '2026-03-16 13:15:29.672072+00', '2026-03-16 13:15:29.672072+00', '2026-03-16 13:15:29.672072+00', '{"eTag": "\"34a5839c3b409c4e877b9fb3a3c8106c\"", "size": 103799, "mimetype": "application/pdf", "cacheControl": "max-age=3600", "lastModified": "2026-03-16T13:15:30.000Z", "contentLength": 103799, "httpStatusCode": 200}', '9332da00-0634-470f-b9f6-d0ed31f52dac', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '{}');
+	('021bae7c-9e3e-47ec-b45d-e2461c68d6ce', 'attachments', 'requests/22b2da93-6038-430f-b15a-f47a4aabdecd/1773666926965-26670_ILUMITEC_-_22-208_.pdf', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '2026-03-16 13:15:29.672072+00', '2026-03-16 13:15:29.672072+00', '2026-03-16 13:15:29.672072+00', '{"eTag": "\"34a5839c3b409c4e877b9fb3a3c8106c\"", "size": 103799, "mimetype": "application/pdf", "cacheControl": "max-age=3600", "lastModified": "2026-03-16T13:15:30.000Z", "contentLength": 103799, "httpStatusCode": 200}', '9332da00-0634-470f-b9f6-d0ed31f52dac', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '{}'),
+	('36020797-ccce-4526-8686-17785f5eccdb', 'attachments', 'requests/aad53cd1-5da0-431d-b51f-123e0933d09e/1773706803434-26670_ILUMITEC_-_22-208_.pdf', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '2026-03-17 00:20:08.043686+00', '2026-03-17 00:20:08.043686+00', '2026-03-17 00:20:08.043686+00', '{"eTag": "\"34a5839c3b409c4e877b9fb3a3c8106c\"", "size": 103799, "mimetype": "application/pdf", "cacheControl": "max-age=3600", "lastModified": "2026-03-17T00:20:08.000Z", "contentLength": 103799, "httpStatusCode": 200}', '3fa52809-739a-450c-9ff2-51856fd9665f', '1dc2cfa3-c1a5-40bf-8e01-0dc996c63c03', '{}');
 
 
 --
@@ -1862,7 +1867,7 @@ INSERT INTO "storage"."objects" ("id", "bucket_id", "name", "owner", "created_at
 -- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: auth; Owner: supabase_auth_admin
 --
 
-SELECT pg_catalog.setval('"auth"."refresh_tokens_id_seq"', 159, true);
+SELECT pg_catalog.setval('"auth"."refresh_tokens_id_seq"', 161, true);
 
 
 --
@@ -1876,6 +1881,6 @@ SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 -- PostgreSQL database dump complete
 --
 
--- \unrestrict Ens2lThq1rnAfbxxvwfdmobXKxinBkmxzMDqOOofWqv2pKFJFwfgeal28NvDbIH
+-- \unrestrict q4cqUjF1g5OKZiUx0a9auj5c4dZpQbQ3eHfZgl4PQ9KjmpC7w0sFUm7aNnRcJZX
 
 RESET ALL;
