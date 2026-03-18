@@ -1,14 +1,19 @@
 # MovimientOS
 
-Sistema digital de movilizaciones para ICONSA, constructora pesada en Panamá.
-Digitaliza el procedimiento IC-LOG-PO-06: solicitudes → programación → ejecución → dashboard.
+Sistema de operaciones para ICONSA (constructora pesada, Panamá). Digitaliza procedimientos del taller de Chilibre, empezando por movilizaciones (IC-LOG-PO-06): solicitudes → programación → ejecución.
+
+## Quick Reference
+
+- **44 tablas** en public schema (usar Supabase MCP para detalles)
+- **Stack:** Next.js 16 (App Router) + Supabase + Tailwind CSS → Vercel (`rein-eisenwerk.com`)
+- **Auth:** Supabase Auth con RLS en todas las tablas
+- **Patrón clave:** Operaciones a nivel de LÍNEA (logística programa LÍNEAS, no solicitudes)
+- **Skills:** Ver `.claude/skills/` para CRUD, eventos, queries, entregas parciales, seed data, decisiones técnicas
 
 ## Stack
 
-- **Frontend:** Next.js (App Router) + TypeScript + Tailwind CSS → Vercel
-- **Backend:** NestJS (TypeScript) → Railway/Fly.io (se integra en Fase 6)
-- **DB:** Supabase PostgreSQL + Auth + RLS + Storage
-- **Reporting:** Metabase (post-MVP)
+- **Frontend:** Next.js 16 (App Router) + TypeScript + Tailwind CSS → Vercel
+- **DB:** Supabase PostgreSQL + Auth + RLS + Storage (project `bzeoszympkkicwlfdtcn`, 44 tablas)
 
 ## Commands
 
@@ -22,17 +27,20 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 ## Key Directories
 
 ```
-.claude/                          # ⚠️ EN LA RAÍZ DEL REPO, NO en tu directorio de usuario
+.claude/
 ├── rules/                        # Reglas que Claude Code debe seguir siempre
 │   ├── commit-after-step.md
 │   ├── cost-management.md
-│   └── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza, Tier 3: Code sugiere)
-├── skills/                       # Patrones de implementación por tipo de tarea
+│   ├── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza)
+│   └── supabase-readonly.md
+├── skills/                       # Patrones de implementación (cargan on-demand)
 │   ├── crud-page.md
 │   ├── events-page.md
 │   ├── supabase-queries.md
-│   └── self-update.md            # Cómo mantener docs sincronizados
-└── suggestions.md                # Claude Code escribe aquí sugerencias a Tier 1
+│   ├── self-update.md
+│   ├── partial-delivery/SKILL.md
+│   ├── seed-data/SKILL.md
+│   └── technical-decisions/SKILL.md  # Funciones, triggers, cascada, RLS
 src/
 ├── app/
 │   ├── (auth)/login/           # Login (Supabase Auth)
@@ -57,19 +65,17 @@ src/
 └── middleware.ts               # Auth redirect + role guard
 ```
 
-## Reference Docs (leer antes de implementar)
+## Reference Docs
 
 | Documento | Cuándo leerlo |
 |-----------|---------------|
-| @Docs/BUILD_PLAN.md | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
-| @Docs/ICONSA_MVP_Sprint_Brief.md | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
-| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados (v3.3). |
-| @Docs/PROJECT_STATUS.md | Schema actual de BD (18 tablas), estado de cada componente, decisiones. |
-| @Docs/supabase_schema_verified.sql | SQL del schema — referencia para humanos. Claude Code: consultar Supabase directamente via MCP. |
-| @Docs/SYNC_LOG.md | **Leer al inicio de cada sesión.** Escribir después de cada paso y cuando encuentres discrepancias o necesites cambio de BD. |
-| @Docs/BUGS.md | Documentar bugs encontrados y resueltos. |
+| @Docs/FEATURE_SPEC.md | **Reglas de negocio, pantallas, campos, validaciones, estados.** Spec v4 (fuente de verdad para lógica de negocio). |
+| @Docs/FEATURE_SPEC_v3_FOUNDATIONAL.md | Contexto profundo: el spec original de 1249 líneas. Schema outdated pero reglas de negocio ~90% vigentes. |
+| @Docs/SYNC_LOG.md | **Leer al inicio de cada sesión.** Cambios recientes de Chat/James que te afectan. |
+| @Docs/BUGS.md | Bugs encontrados y resueltos. |
+| Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 44 tablas con COMMENT ON TABLE/COLUMN. |
 
-**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.3 para reglas de negocio.
+**IMPORTANTE:** Para schema, siempre consultar Supabase MCP (no docs estáticos). Para reglas de negocio, FEATURE_SPEC.md es la fuente de verdad. Ver `.claude/rules/` para reglas de commit, supabase, y modificación de specs.
 
 ## Coding Conventions
 
@@ -90,8 +96,8 @@ src/
 - Todas las tablas tienen `created_at` y `updated_at` con trigger automático.
 - RLS habilitado en todas las tablas.
 - Tabla `equipment` es UNIFICADA (equipos + vehículos). Vehículos = `type_code IN ('VHL','VHP')`. Remolques = `spectrum_code LIKE 'REM%'`.
-- **18 tablas definidas y verificadas.** No crear tablas nuevas sin discusión con James (vía Chat).
-- **user_app_roles** existe como fundación multi-app RBAC pero el código MVP usa `people.app_role`. No migrar a user_app_roles todavía.
+- **44 tablas** en public schema. Consultar Supabase MCP para detalles de cada tabla.
+- **user_app_roles** existe como fundación multi-app RBAC pero el código MVP usa `people.app_role`. No migrar todavía.
 - **cost_codes** filtrar por `project_id`. **cost_categories** filtrar via `cost_code_categories` por `cost_code_id` seleccionado.
 
 ### Archivos
@@ -145,50 +151,43 @@ Gray:   #5A6272  (secondary text)
 ## Estados y Cascada
 
 ```
-Solicitud: Borrador → Enviada → En Proceso → Completada / Parcial / Cancelada
-Línea:     Pendiente → Programada → En Tránsito → Entregada / Parcial / Cancelada
+Solicitud: Borrador → Enviada → En Proceso → Completada / Cancelada
+Línea:     Pendiente → Programada → En Transito → Entregada / Parcial / Cancelada
 Viaje:     Programado → En Ruta → Completado / Cancelado
 ```
 
+**'Parcial' existe SOLO a nivel de LÍNEA.** Nunca a nivel de solicitud.
+**'En Transito' SIN acento** es canónico — mismatches fallan silenciosamente.
 Cascada (`cascade_request_status()`): cuando cambia una línea, re-evalúa la solicitud padre.
-Ver Feature Spec sección 8.4 para reglas exactas.
 
 ## Workflow para Claude Code
 
 **ANTES de cada sesión:**
-1. `/model sonnet` — Sonnet es el default. Solo usar `/model opus` para arquitectura compleja.
-2. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
-3. Lee `@Docs/SYNC_LOG.md` para ver cambios recientes de Chat/James que te afectan.
-4. Lee `@Docs/PROJECT_STATUS.md` sección "PENDIENTE PARA CLAUDE CODE" para ver tareas priorizadas.
+1. Lee `CLAUDE.md` y `@Docs/SYNC_LOG.md` para ver cambios recientes.
+2. Verifica columnas y relaciones consultando Supabase via MCP (read-only).
 
 **DURANTE la sesión:**
-5. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-6. Verifica columnas y relaciones consultando Supabase via MCP (read-only).
-7. Implementa. Corre `npm run build` para verificar que compila sin errores.
-8. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
+3. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
+4. Implementa. Corre `npm run build` para verificar que compila sin errores.
+5. `/compact` al llegar a 50% de contexto.
+6. Usar `use context7` en prompts cuando necesites docs actualizados de librerías.
 
 **DESPUÉS de cada paso completado:**
-9. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
-10. Formato commit: `feat: paso X.Y — descripción` o `fix: bug #X — descripción`.
-11. Actualizar `Docs/PROJECT_STATUS.md` con estado del paso completado.
-12. Escribir en `Docs/SYNC_LOG.md`: qué se implementó, discrepancias encontradas.
-13. Si encontraste un bug, documentarlo en `Docs/BUGS.md`.
-14. Continuar al siguiente paso sin esperar aprobación.
-15. `/clear` entre fases no relacionadas.
+7. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
+8. Formato commit: `feat:`, `fix:`, `docs:`, `refactor:` — mensaje descriptivo.
+9. Escribir en `Docs/SYNC_LOG.md`: qué se implementó, discrepancias encontradas.
+10. Si encontraste un bug, documentarlo en `Docs/BUGS.md`.
+11. Continuar al siguiente paso sin esperar aprobación.
 
 **CUANDO NECESITES UN CAMBIO DE BD:**
 - NO modificar Supabase. Escribir en `Docs/SYNC_LOG.md`:
   "Code: SOLICITUD BD — {descripción}. Razón: {por qué}."
 - James lo verá y delegará a Chat para ejecutar.
-- Chat escribirá confirmación en SYNC_LOG.md.
-- Verificar leyendo Supabase via MCP y continuar.
 
 **NUNCA:**
-- No hacer commits ni push a `main`. Solo `jaime/dev` o `andy/dev`.
-- No modificar Feature Spec ni BUILD_PLAN (Tier 1). Si hay discrepancia → `.claude/suggestions.md`.
-- No ESCRIBIR en Supabase. Solo LEER via MCP. Cambios de BD → SYNC_LOG.md → James → Chat.
-- No correr `npx supabase gen types`. James genera database.ts manualmente.
-- No crear tablas nuevas. Cambios de BD se discuten con James.
+- No hacer commits ni push a `main`. Solo `jaime/dev`.
+- No modificar Feature Spec ni CLAUDE.md (solo Chat los modifica).
+- No ESCRIBIR en Supabase. Solo LEER via MCP.
 
 ## Tres actores — quién hace qué
 
@@ -196,7 +195,7 @@ Ver Feature Spec sección 8.4 para reglas exactas.
 
 **James (humano):** Decisiones finales, input de negocio, coordinación con equipo ICONSA, aprobación de cambios. Push a git solo desde `jaime/dev`.
 
-**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, LEER Supabase via MCP (read-only, NO escribir), actualizar PROJECT_STATUS/SYNC_LOG/BUGS, hacer commit+push automático a jaime/dev, sugerir cambios a specs en `.claude/suggestions.md`.
+**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, LEER Supabase via MCP (read-only, NO escribir), actualizar SYNC_LOG/BUGS, hacer commit+push automático a jaime/dev.
 
 **Regla de oro:** Si algo involucra cambiar BD o lógica de negocio no documentada → STOP, escribe en SYNC_LOG.md, y dile a James que consulte con Chat. Si es solo implementación de código basada en lo que ya está en docs → HAZLO.
 

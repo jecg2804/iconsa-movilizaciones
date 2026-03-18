@@ -321,7 +321,7 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
 }
 
 // =============================================================================
-// 4. SOLICITUD COMPLETADA → ALL project PMs (no Charris)
+// 4. SOLICITUD COMPLETADA → ALL project PMs
 // =============================================================================
 export async function notifySolicitudCompletada(requestId: string): Promise<void> {
   try {
@@ -350,7 +350,7 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
 }
 
 // =============================================================================
-// 5. LÍNEAS PROGRAMADAS → ALL project PMs (no Charris)
+// 5. LÍNEAS PROGRAMADAS → ALL project PMs
 // =============================================================================
 export async function notifyLineasProgramadas(tripId: string, requestId: string): Promise<void> {
   try {
@@ -528,7 +528,7 @@ export async function notifyViajeEditado(
 }
 
 // =============================================================================
-// 8. VIAJE ASIGNADO A CONDUCTOR — ONLY the conductor
+// 8. VIAJE ASIGNADO A CONDUCTOR → ONLY conductor
 // =============================================================================
 export async function notifyViajeAsignadoConductor(tripId: string): Promise<void> {
   try {
@@ -580,7 +580,7 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
 }
 
 // =============================================================================
-// 9. ENTREGA CONFIRMADA → ALL PMs of the request's project
+// 9. ENTREGA CONFIRMADA → Charris + ALL PMs of the request's project
 // =============================================================================
 export async function notifyEntregaConfirmada(requestLineId: string): Promise<void> {
   try {
@@ -609,7 +609,9 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
       .single()
 
     const isPartial = (line.qty_delivered ?? 0) < line.quantity
-    const recipients = await getProjectPMs(req.project_id)
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getProjectPMs(req.project_id)
+    const recipients = dedup(charris, pms)
 
     const template = templates.entregaConfirmada({
       requestId: req.request_id ?? '',
@@ -635,7 +637,7 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
 }
 
 // =============================================================================
-// 10. SALIDA REGISTRADA → ALL PMs of ALL affected projects
+// 10. SALIDA REGISTRADA → Charris + ALL PMs of ALL affected projects
 // =============================================================================
 export async function notifySalidaRegistrada(tripId: string): Promise<void> {
   try {
@@ -677,7 +679,9 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getTripProjectPMs(tripId)
+    const recipients = dedup(charris, pms)
 
     const now = new Date()
     const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })

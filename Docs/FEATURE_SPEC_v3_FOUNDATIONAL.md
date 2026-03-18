@@ -1,3 +1,8 @@
+> **⚠️ DOCUMENTO FUNDACIONAL HISTÓRICO** — Spec original de 1249 líneas (v3.3, 8 marzo)
+> que habilitó construir 90% de MovimientOS. La sección de schema dice 18 tablas (ahora son 44).
+> Las reglas de negocio en secciones de pantallas/flujos/validaciones siguen ~90% vigentes.
+> Para schema actual: usar Supabase MCP. Para terminología actual: ver `Docs/FEATURE_SPEC.md`.
+
 # ICONSA — Feature Specification Document
 ## Sistema Digital de Movilizaciones (IC-LOG-PO-06)
 

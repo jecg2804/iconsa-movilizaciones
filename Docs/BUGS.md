@@ -32,20 +32,28 @@ Claude Code puede actualizar este archivo directamente.
 | 25 | Entrega no acumulaba qty_delivered (siempre sobrescribía) | 2026-03-12 | 38854f6 |
 | 26 | Entrega siempre marcaba Entregada sin verificar cantidad vs total | 2026-03-12 | 38854f6 |
 | 27 | 'En Tránsito' con acento no coincidía con BD | 2026-03-12 | ad43ec0 |
+| 28 | Qty input en trip edit permitía valores > máximo (loop infinito) | 2026-03-17 | 0e08502 |
+| 29 | Qty negativos y decimales en unidades enteras | 2026-03-17 | 0e08502 |
+| 30 | Viaje se podía guardar con 0 líneas | 2026-03-17 | ccd9902 |
+| 31 | Línea duplicada al remover de viaje existente | 2026-03-17 | a665f58 |
+| 32 | Proyecto mostraba código en vez de nombre | 2026-03-17 | a665f58 |
+| 33 | DataTable expand/collapse loop infinito (Maximum update depth) | 2026-03-17 | 1b7e080 |
+| 34 | Calendar dateFilter eliminado en rediseño de filtros | 2026-03-17 | — |
+| 35 | Calendar se auto-filtraba (desaparecían cards) | 2026-03-17 | — |
+| 36 | Vercel producción: "Falta configuración de Supabase" | 2026-03-17 | — (env vars) |
+| 37 | auth.users email_change NULL impedía login de 10 usuarios | 2026-03-18 | — (fix BD) |
+| 38 | auth.users recovery_token NULL impedía login después de fix 37 | 2026-03-18 | — (fix BD) |
+| 39 | notifications_enabled false para 10 PMs — notificaciones no llegaban | 2026-03-18 | — (fix BD) |
 
 ## Abiertos
 
 | # | Bug | Reportado | Prioridad |
 |---|-----|-----------|-----------|
-| — | Ninguno conocido | — | — |
+| — | Charris no recibe todas las notificaciones de movilización (solo retorno/solicitud) | 2026-03-18 | Alta — prompt generado |
 
 ## Mejoras pendientes (no son bugs)
 
-| Mejora | Prioridad | Estado |
-|--------|-----------|--------|
-| Backlog con más contexto visual | Baja | Por discutir |
-| Columna "FECHA" ambigua en viajes recientes | Baja | Por discutir |
-| Asignar 10 ingenieros a person_projects | Media | Lunes con info oficina |
-| Admin Masters CRUD | Media | Fase 6 |
-| RLS policies reales (no USING(true)) | Alta | Pre-producción |
-| Notificaciones email | Media | Fase 6 |
+| Mejora | Estado |
+|--------|--------|
+| Tabla viajes: quitar columna REMOLQUE (casi siempre vacía) | Pendiente |
+| Tabla viajes: TARIFA solo mostrar precio, código como tooltip | Pendiente |

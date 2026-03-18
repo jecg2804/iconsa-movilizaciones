@@ -1,4 +1,9 @@
-# Skill: Página de Eventos / Mis Viajes (Fase 4)
+---
+name: events-page
+description: Patrón para Mis Viajes / Eventos. Secuencia Salida→Entrega→Retorno, código confirmación, cascada.
+---
+
+# Skill: Página de Eventos / Mis Viajes
 
 Fase 4 implementa la pantalla de ejecución donde conductores, Charris, y almacenistas
 registran eventos de viajes en tiempo real.
@@ -17,7 +22,7 @@ src/app/(app)/mis-viajes/[id]/page.tsx      — Detalle + registro de eventos
 
 ## Secuencia de eventos (Feature Spec 5.3.2)
 ```
-1. SALIDA (obligatorio) → Viaje: En Ruta, Líneas: En Tránsito
+1. SALIDA (obligatorio) → Viaje: En Ruta, Líneas: En Transito
 2. LLEGADA (opcional) → Informativo, actualiza timeline
 3. ENTREGA (obligatorio) → Código MUST be correct + receptor dropdown. Líneas: Entregada
 4. RETORNO (opcional) → Viaje: Completado. Calcula duración.
