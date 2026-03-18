@@ -27,17 +27,20 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 ## Key Directories
 
 ```
-.claude/                          # ⚠️ EN LA RAÍZ DEL REPO, NO en tu directorio de usuario
+.claude/
 ├── rules/                        # Reglas que Claude Code debe seguir siempre
 │   ├── commit-after-step.md
 │   ├── cost-management.md
-│   └── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza, Tier 3: Code sugiere)
-├── skills/                       # Patrones de implementación por tipo de tarea
+│   ├── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza)
+│   └── supabase-readonly.md
+├── skills/                       # Patrones de implementación (cargan on-demand)
 │   ├── crud-page.md
 │   ├── events-page.md
 │   ├── supabase-queries.md
-│   └── self-update.md            # Cómo mantener docs sincronizados
-└── suggestions.md                # Claude Code escribe aquí sugerencias a Tier 1
+│   ├── self-update.md
+│   ├── partial-delivery/SKILL.md
+│   ├── seed-data/SKILL.md
+│   └── technical-decisions/SKILL.md  # Funciones, triggers, cascada, RLS
 src/
 ├── app/
 │   ├── (auth)/login/           # Login (Supabase Auth)
