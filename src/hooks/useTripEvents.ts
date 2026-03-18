@@ -57,8 +57,13 @@ export function useTripEvents(tripId: string) {
         })
 
         if (eventError) {
-          setRegisterError(eventError.message)
-          return false
+          // Si el insert ya existía (respuesta perdida en intento anterior), tratar como éxito
+          if (eventError.code === '23505') {
+            console.warn('[TripEvents] Duplicate key detected — treating as idempotent success')
+          } else {
+            setRegisterError(eventError.message)
+            return false
+          }
         }
 
         // 2. Transiciones de estado según tipo de evento
