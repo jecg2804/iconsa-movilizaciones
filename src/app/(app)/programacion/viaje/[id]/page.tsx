@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, X, KeyRound } from 'lu
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useVehicles } from '@/hooks/useVehicles'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import {
   useTrips,
   type TripInput,
@@ -261,6 +262,7 @@ export default function ViajeDetailPage() {
   const id = params.id as string
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const guard = useSubmitGuard()
 
   // Auth y permisos
   const { person, role, loading: authLoading } = useAuth()
@@ -560,7 +562,7 @@ export default function ViajeDetailPage() {
   }, [backlog, existingLineIds, removedLines])
 
   // --- Guardar cambios ---
-  const handleSave = useCallback(async () => {
+  const handleSave = guard(async () => {
     if (!trip) return
     // Validar remolque para cabezal
     if (isCabezal && !tripData.trailer_id) {
@@ -622,16 +624,16 @@ export default function ViajeDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, existingAssignments, originalAssignments, updateTrip, fetchTrip, refetchBacklog, id, person?.id])
+  })
 
   // --- Cancelar viaje ---
-  const handleCancelTrip = useCallback(async () => {
+  const handleCancelTrip = guard(async () => {
     if (!trip) return
     const success = await cancelTrip(trip.id)
     if (success) {
       router.push('/programacion')
     }
-  }, [trip, cancelTrip, router])
+  })
 
   // --- Estado de carga global ---
   const isLoading =

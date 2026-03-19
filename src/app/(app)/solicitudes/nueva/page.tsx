@@ -9,6 +9,7 @@ import { useProjects } from '@/hooks/useProjects'
 import { useEquipment } from '@/hooks/useEquipment'
 import { useLocations } from '@/hooks/useLocations'
 import { useSolicitudes, type SolicitudInput, type LineInput } from '@/hooks/useSolicitudes'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import { canCreateSolicitud } from '@/lib/utils/roles'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
@@ -82,6 +83,7 @@ export default function NuevaSolicitudPage() {
 
   // Hook de solicitudes (para saveSolicitud)
   const { saveSolicitud, saving, saveError } = useSolicitudes()
+  const guard = useSubmitGuard()
 
   // --- Fetch personas activas (solicitante) + aprobadores (pm) en paralelo ---
   useEffect(() => {
@@ -276,22 +278,22 @@ export default function NuevaSolicitudPage() {
   }, [header.project_id, header.requester_id, header.date_required, lines.length])
 
   // --- Guardar borrador ---
-  const handleSaveDraft = useCallback(async () => {
+  const handleSaveDraft = guard(async () => {
     if (!validateForDraft()) return
     const result = await saveSolicitud(header, lines, [], 'Borrador', person?.id)
     if (result) {
       router.push('/solicitudes')
     }
-  }, [validateForDraft, saveSolicitud, header, lines, router, person])
+  })
 
   // --- Enviar solicitud ---
-  const handleSend = useCallback(async () => {
+  const handleSend = guard(async () => {
     if (!validateForSend()) return
     const result = await saveSolicitud(header, lines, [], 'Enviada', person?.id)
     if (result) {
       router.push('/solicitudes')
     }
-  }, [validateForSend, saveSolicitud, header, lines, router, person])
+  })
 
   // --- Estado de carga global ---
   const isLoading = authLoading || projectsLoading || equipmentLoading || locationsLoading || peopleLoading || unitsLoading

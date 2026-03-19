@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select, type SelectOption } from '@/components/ui/Select'
@@ -157,6 +158,7 @@ export default function AdminMastersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<Record<string, unknown> | null>(null)
   const [saving, setSaving] = useState(false)
+  const guard = useSubmitGuard()
 
   // --- Personas: proyectos asignados ---
   const [personProjects, setPersonProjects] = useState<PersonProject[]>([])
@@ -301,7 +303,7 @@ export default function AdminMastersPage() {
   }, [supabase, fetchData])
 
   // --- Guardar (crear o editar) ---
-  const handleSave = useCallback(async (formData: Record<string, unknown>) => {
+  const handleSave = guard(async (formData: Record<string, unknown>) => {
     setSaving(true)
     const isNew = !formData.id
     const table = activeTab === 'proyectos' ? 'projects'
@@ -324,7 +326,7 @@ export default function AdminMastersPage() {
     setSaving(false)
     closeModal()
     fetchData()
-  }, [activeTab, supabase, closeModal, fetchData])
+  })
 
   // --- Agregar/quitar proyecto a persona ---
   const addPersonProject = useCallback(async (personId: string, projectId: string) => {

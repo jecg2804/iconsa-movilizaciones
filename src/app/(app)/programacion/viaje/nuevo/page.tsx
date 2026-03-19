@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useVehicles } from '@/hooks/useVehicles'
 import { useTrips, type TripInput, type AssignmentInput } from '@/hooks/useTrips'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import { formatCurrency } from '@/lib/utils/format'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
@@ -31,6 +32,7 @@ interface RateRow {
 
 export default function NuevoViajePage() {
   const router = useRouter()
+  const guard = useSubmitGuard()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
 
@@ -209,13 +211,13 @@ export default function NuevoViajePage() {
   }, [tripData, assignments, isCabezal])
 
   // --- Guardar viaje ---
-  const handleSave = useCallback(async () => {
+  const handleSave = guard(async () => {
     if (!validate()) return
     const result = await saveTrip(tripData, assignments, person?.id)
     if (result) {
       router.push('/programacion')
     }
-  }, [validate, saveTrip, tripData, assignments, router, person?.id])
+  })
 
   // --- Estado de carga global ---
   const isLoading =
