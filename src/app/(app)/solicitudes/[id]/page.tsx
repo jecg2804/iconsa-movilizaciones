@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useEquipment } from '@/hooks/useEquipment'
 import { useLocations } from '@/hooks/useLocations'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import {
   useSolicitudes,
   type SolicitudInput,
@@ -74,6 +75,7 @@ export default function SolicitudDetailPage() {
   const id = params.id as string
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const guard = useSubmitGuard()
 
   // Auth y datos maestros
   const { person, role, userProjectIds, loading: authLoading } = useAuth()
@@ -403,7 +405,7 @@ export default function SolicitudDetailPage() {
   )
 
   // --- Guardar cambios ---
-  const handleSave = useCallback(async () => {
+  const handleSave = guard(async () => {
     if (!solicitud) return
     const success = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
     if (success) {
@@ -415,10 +417,10 @@ export default function SolicitudDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id, person?.id])
+  })
 
   // --- Enviar solicitud (Borrador → Enviada) ---
-  const handleSend = useCallback(async () => {
+  const handleSend = guard(async () => {
     if (!solicitud) return
     setSendError(null)
 
@@ -454,10 +456,10 @@ export default function SolicitudDetailPage() {
       setDeletedLineIds([])
       setIsDirty(false)
     }
-  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id, supabase])
+  })
 
   // --- Cancelar solicitud ---
-  const handleCancel = useCallback(async () => {
+  const handleCancel = guard(async () => {
     if (!solicitud) return
     const success = await cancelSolicitud(solicitud.id, person?.id)
     if (success) {
@@ -468,7 +470,7 @@ export default function SolicitudDetailPage() {
         setShowCancelConfirm(false)
       }
     }
-  }, [solicitud, cancelSolicitud, fetchSolicitud, id, person?.id])
+  })
 
   // --- Resolver nombres para LineRow ---
   const getLineDisplayNames = useCallback(

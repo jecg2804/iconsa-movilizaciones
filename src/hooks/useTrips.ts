@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
@@ -388,6 +388,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
   // Estado de mutaciones
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const busyRef = useRef(false)
 
   // --- Actualizar filtros parcialmente ---
   const setFilters = useCallback((updates: Partial<TripsFilter>) => {
@@ -726,6 +727,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       assignments: AssignmentInput[],
       personId?: string,
     ): Promise<{ id: string; tripId: string | null } | null> => {
+      if (busyRef.current) return null
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -823,6 +826,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           tripId: refreshed?.trip_id ?? null,
         }
       } catch (err) {
+        busyRef.current = false
         const message = err instanceof Error ? err.message : 'Error inesperado al guardar viaje'
         setSaveError(message)
         return null
@@ -843,6 +847,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       personId?: string,
       modifiedAssignments?: ModifiedAssignment[],
     ): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -969,6 +975,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -978,6 +985,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
   // --- Cancelar viaje ---
   const cancelTrip = useCallback(
     async (id: string): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -1035,6 +1044,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },

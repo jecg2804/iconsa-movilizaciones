@@ -16,6 +16,11 @@ import { Select, type SelectOption } from '@/components/ui/Select'
 import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
+type DateFilter =
+  | { type: 'single'; date: string }
+  | { type: 'range'; from: string | null; to: string | null }
+  | null
+
 export default function SolicitudesPage() {
   const router = useRouter()
   const { role, loading: authLoading } = useAuth()
@@ -43,15 +48,16 @@ export default function SolicitudesPage() {
     return () => clearTimeout(timer)
   }, [searchInput, setFilters])
 
-  // Fecha seleccionada en MiniCalendar → se convierte a dateFrom/dateTo server-side
-  const calendarDate = (filters.dateFrom && filters.dateFrom === filters.dateTo) ? filters.dateFrom : null
+  // Fecha: filtro client-side para no vaciar el calendario al seleccionar un día
+  const [dateFilter, setDateFilter] = useState<DateFilter>(null)
+  const calendarDate = dateFilter?.type === 'single' ? dateFilter.date : null
   const setCalendarDate = useCallback((date: string | null) => {
-    if (date) {
-      setFilters({ dateFrom: date, dateTo: date, page: 0 })
-    } else {
-      setFilters({ dateFrom: null, dateTo: null, page: 0 })
-    }
-  }, [setFilters])
+    if (!date) { setDateFilter(null); return }
+    setDateFilter((prev) => {
+      if (prev?.type === 'single' && prev.date === date) return null
+      return { type: 'single', date }
+    })
+  }, [])
 
   // Inicializar expandido al cargar datos
   useEffect(() => {
@@ -88,6 +94,18 @@ export default function SolicitudesPage() {
     }))
   }, [solicitudes])
 
+  // Solicitudes filtradas por fecha (client-side) — la tabla usa esto, el calendario usa solicitudes sin filtro
+  const displayedSolicitudes = useMemo(() => {
+    if (!dateFilter) return solicitudes
+    if (dateFilter.type === 'single') {
+      return solicitudes.filter((s) => s.date_required === dateFilter.date)
+    }
+    let result = solicitudes
+    if (dateFilter.from) result = result.filter((s) => s.date_required >= dateFilter.from!)
+    if (dateFilter.to) result = result.filter((s) => s.date_required <= dateFilter.to!)
+    return result
+  }, [solicitudes, dateFilter])
+
   // --- Chips de filtros activos ---
   const filterChips = useMemo<FilterChip[]>(() => {
     const chips: FilterChip[] = []
@@ -108,26 +126,26 @@ export default function SolicitudesPage() {
         })
       }
     }
-    if (calendarDate) {
-      const d = new Date(calendarDate + 'T00:00:00')
+    if (dateFilter?.type === 'single') {
+      const d = new Date(dateFilter.date + 'T00:00:00')
       chips.push({
         key: 'date',
         label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setCalendarDate(null),
+        onRemove: () => setDateFilter(null),
       })
-    } else {
-      if (filters.dateFrom) {
+    } else if (dateFilter?.type === 'range') {
+      if (dateFilter.from) {
         chips.push({
           key: 'dateFrom',
-          label: `Desde ${formatDate(filters.dateFrom)}`,
-          onRemove: () => setFilters({ dateFrom: null, page: 0 }),
+          label: `Desde ${formatDate(dateFilter.from)}`,
+          onRemove: () => setDateFilter((prev) => prev?.type === 'range' ? { ...prev, from: null } : null),
         })
       }
-      if (filters.dateTo) {
+      if (dateFilter.to) {
         chips.push({
           key: 'dateTo',
-          label: `Hasta ${formatDate(filters.dateTo)}`,
-          onRemove: () => setFilters({ dateTo: null, page: 0 }),
+          label: `Hasta ${formatDate(dateFilter.to)}`,
+          onRemove: () => setDateFilter((prev) => prev?.type === 'range' ? { ...prev, to: null } : null),
         })
       }
     }
@@ -139,15 +157,14 @@ export default function SolicitudesPage() {
       })
     }
     return chips
-  }, [filters, projectName, calendarDate, setCalendarDate, setFilters])
+  }, [filters, projectName, dateFilter, setFilters])
 
   const clearAllFilters = useCallback(() => {
+    setDateFilter(null)
     setFilters({
       projectId: null,
       statuses: [],
       priorities: [],
-      dateFrom: null,
-      dateTo: null,
       search: '',
       requesterId: null,
       page: 0,
@@ -400,16 +417,22 @@ export default function SolicitudesPage() {
           <input
             type="date"
             title="Fecha desde"
-            value={filters.dateFrom ?? ''}
-            onChange={(e) => setFilters({ dateFrom: e.target.value || null, page: 0 })}
+            value={(dateFilter?.type === 'range' ? dateFilter.from : null) ?? ''}
+            onChange={(e) => {
+              const from = e.target.value || null
+              setDateFilter((prev) => ({ type: 'range', from, to: prev?.type === 'range' ? prev.to : null }))
+            }}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
           <span className="text-xs font-medium text-iconsa-gray whitespace-nowrap">Hasta</span>
           <input
             type="date"
             title="Fecha hasta"
-            value={filters.dateTo ?? ''}
-            onChange={(e) => setFilters({ dateTo: e.target.value || null, page: 0 })}
+            value={(dateFilter?.type === 'range' ? dateFilter.to : null) ?? ''}
+            onChange={(e) => {
+              const to = e.target.value || null
+              setDateFilter((prev) => ({ type: 'range', from: prev?.type === 'range' ? prev.from : null, to }))
+            }}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
         </div>
@@ -453,7 +476,7 @@ export default function SolicitudesPage() {
       {/* Tabla */}
       <DataTable<SolicitudWithRelations>
         columns={columns}
-        data={solicitudes}
+        data={displayedSolicitudes}
         keyExtractor={(row) => row.id}
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"

@@ -13,6 +13,7 @@ interface CodeConfirmationProps {
   receiverOptions: SelectOption[]
   onConfirm: (codeUsed: string, receivedById: string | null, receivedByName: string) => void
   onCancel: () => void
+  loading?: boolean
 }
 
 export function CodeConfirmation({
@@ -20,6 +21,7 @@ export function CodeConfirmation({
   receiverOptions,
   onConfirm,
   onCancel,
+  loading,
 }: CodeConfirmationProps) {
   const [code, setCode] = useState('')
   const [receiver, setReceiver] = useState<SelectWithFallbackValue>({ id: null, text: null })
@@ -105,10 +107,10 @@ export function CodeConfirmation({
 
       {/* Acciones */}
       <div className="flex gap-2">
-        <Button variant="primary" onClick={handleConfirm} disabled={!canConfirm}>
+        <Button variant="primary" onClick={handleConfirm} disabled={!canConfirm} loading={loading}>
           Confirmar Entrega
         </Button>
-        <Button variant="ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel} disabled={loading}>
           Cancelar
         </Button>
       </div>

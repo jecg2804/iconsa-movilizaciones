@@ -148,6 +148,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
         deliveredQuantities: { ...deliveredQtys.current },
         attachments,
       })
+      eventIdRef.current = crypto.randomUUID()
     },
     [eventType, location, notes, attachments, onConfirm],
   )
@@ -161,6 +162,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
       notes: notes.trim() || null,
       attachments,
     })
+    eventIdRef.current = crypto.randomUUID()
   }, [eventType, location, notes, attachments, onConfirm])
 
   return (
@@ -243,6 +245,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
               receiverOptions={receiverOptions}
               onConfirm={handleConfirmCode}
               onCancel={onClose}
+              loading={loading}
             />
           </div>
         ) : (
