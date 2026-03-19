@@ -826,11 +826,11 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           tripId: refreshed?.trip_id ?? null,
         }
       } catch (err) {
+        busyRef.current = false
         const message = err instanceof Error ? err.message : 'Error inesperado al guardar viaje'
         setSaveError(message)
         return null
       } finally {
-        busyRef.current = false
         setSaving(false)
       }
     },

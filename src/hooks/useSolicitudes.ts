@@ -578,11 +578,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           requestId: refreshed?.request_id ?? '',
         }
       } catch (err) {
+        busyRef.current = false
         const message = err instanceof Error ? err.message : 'Error inesperado al guardar'
         setSaveError(message)
         return null
       } finally {
-        busyRef.current = false
         setSaving(false)
       }
     },
