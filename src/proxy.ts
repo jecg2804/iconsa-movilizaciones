@@ -41,20 +41,33 @@ export async function proxy(request: NextRequest) {
       },
     })
 
+    // Rutas públicas (no requieren auth)
+    const publicRoutes = ['/login', '/forgot-password', '/auth/confirm']
+    if (publicRoutes.some((route) => pathname.startsWith(route))) {
+      return supabaseResponse
+    }
+
     // IMPORTANTE: No usar getSession() — getUser() valida contra el servidor de Auth
     const {
       data: { user },
     } = await supabase.auth.getUser()
 
-    // Si no hay sesión y no está en /login, redirigir a /login
-    if (!user && pathname !== '/login') {
+    // Sin sesión → login
+    if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
 
+    // Con sesión pero must_change_password → forzar cambio
+    if (user.user_metadata?.must_change_password === true && pathname !== '/change-password') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/change-password'
+      return NextResponse.redirect(url)
+    }
+
     // Si hay sesión y está en /login o raíz, redirigir a /dashboard
-    if (user && (pathname === '/login' || pathname === '/')) {
+    if (pathname === '/login' || pathname === '/') {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
