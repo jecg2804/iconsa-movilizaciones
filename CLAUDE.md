@@ -162,29 +162,28 @@ Cascada (`cascade_request_status()`): cuando cambia una línea, re-evalúa la so
 
 ## Workflow para Claude Code
 
-**ANTES de cada sesión:**
-1. Lee `CLAUDE.md` y `@Docs/SYNC_LOG.md` para ver cambios recientes.
-2. Verifica columnas y relaciones consultando Supabase via MCP (read-only).
+### Commands disponibles
+- `/project:implement-task Docs/TASKS/nombre.md` — Lee un task file y lo implementa paso a paso
+- `/project:fix-bug "descripción del problema"` — Diagnostica y arregla un bug
+- `/project:review "solicitudes"` — Revisa código contra FEATURE_SPEC
 
-**DURANTE la sesión:**
-3. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-4. Implementa. Corre `npm run build` para verificar que compila sin errores.
-5. `/compact` al llegar a 50% de contexto.
-6. Usar `use context7` en prompts cuando necesites docs actualizados de librerías.
+### Subagent disponible
+- `code-reviewer` — Revisión read-only de código antes de commit. Invocarlo: "usa el code-reviewer subagent para revisar mis cambios"
 
-**DESPUÉS de cada paso completado:**
-7. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
-8. Formato commit: `feat:`, `fix:`, `docs:`, `refactor:` — mensaje descriptivo.
-9. Escribir en `Docs/SYNC_LOG.md`: qué se implementó, discrepancias encontradas.
-10. Si encontraste un bug, documentarlo en `Docs/BUGS.md`.
-11. Continuar al siguiente paso sin esperar aprobación.
+### Flujo por tarea
+1. Lee `Docs/SYNC_LOG.md` para contexto reciente
+2. Lee el task file o entiende el bug
+3. Verifica schema via Supabase MCP si es necesario
+4. Implementa. `npm run build` después de cada paso.
+5. Commit después de cada paso: `feat:`, `fix:`, `docs:` — mensaje descriptivo
+6. `/clear` entre tareas no relacionadas. `/compact` al 50% de contexto.
+7. Actualizar `Docs/SYNC_LOG.md` al terminar
 
-**CUANDO NECESITES UN CAMBIO DE BD:**
-- NO modificar Supabase. Escribir en `Docs/SYNC_LOG.md`:
-  "Code: SOLICITUD BD — {descripción}. Razón: {por qué}."
+### CUANDO NECESITES UN CAMBIO DE BD
+- STOP. Escribir en `Docs/SYNC_LOG.md`: "Code: SOLICITUD BD — {descripción}. Razón: {por qué}."
 - James lo verá y delegará a Chat para ejecutar.
 
-**NUNCA:**
+### NUNCA
 - No hacer commits ni push a `main`. Solo `jaime/dev`.
 - No modificar Feature Spec ni CLAUDE.md (solo Chat los modifica).
 - No ESCRIBIR en Supabase. Solo LEER via MCP.
