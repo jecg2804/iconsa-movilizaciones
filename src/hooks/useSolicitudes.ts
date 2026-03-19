@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
@@ -276,6 +276,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   // Estado de mutaciones
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const busyRef = useRef(false)
 
   // --- Actualizar filtros parcialmente ---
   const setFilters = useCallback((updates: Partial<SolicitudesFilter>) => {
@@ -491,6 +492,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       status: 'Borrador' | 'Enviada',
       personId?: string,
     ): Promise<{ id: string; requestId: string } | null> => {
+      if (busyRef.current) return null
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -579,6 +582,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         setSaveError(message)
         return null
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -594,6 +598,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       deletedLineIds: string[],
       personId?: string,
     ): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -718,6 +724,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -727,6 +734,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   // --- Cancelar solicitud ---
   const cancelSolicitud = useCallback(
     async (id: string, personId?: string): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -788,6 +797,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },

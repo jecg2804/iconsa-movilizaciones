@@ -87,16 +87,25 @@ export default function ProgramacionPage() {
     })
   }, [backlog, backlogProjectFilter, typeFilter, backlogSearch])
 
-  // Viajes filtrados por proyecto (client-side, ya que el hook no soporta filtro por proyecto anidado)
-  // Los demás filtros (status, dateFrom, dateTo, conductor, search) son server-side via el hook
+  // Viajes filtrados por proyecto y fecha (client-side)
+  // Status, conductor, search son server-side via el hook
   const filteredTrips = useMemo(() => {
-    if (!tripProjectFilter) return trips
-    return trips.filter((trip) => {
-      return trip.assignments.some(
-        (a) => a.line?.request?.project?.id === tripProjectFilter,
+    let result = trips
+    if (tripProjectFilter) {
+      result = result.filter((trip) =>
+        trip.assignments.some((a) => a.line?.request?.project?.id === tripProjectFilter)
       )
-    })
-  }, [trips, tripProjectFilter])
+    }
+    if (dateFilter) {
+      if (dateFilter.type === 'single') {
+        result = result.filter((t) => t.scheduled_date === dateFilter.date)
+      } else if (dateFilter.type === 'range') {
+        if (dateFilter.from) result = result.filter((t) => t.scheduled_date >= dateFilter.from!)
+        if (dateFilter.to) result = result.filter((t) => t.scheduled_date <= dateFilter.to!)
+      }
+    }
+    return result
+  }, [trips, tripProjectFilter, dateFilter])
 
   // Inicializar expandido al cargar datos
   useEffect(() => {
@@ -108,9 +117,12 @@ export default function ProgramacionPage() {
 
   const allTripsExpanded = tripExpandedKeys.size > 0
 
-  // --- MiniCalendar items (derivados de los viajes actuales) ---
+  // --- MiniCalendar items (sin filtro de fecha para que el calendario siempre muestre todos los días) ---
   const calendarItems = useMemo<CalendarItem[]>(() => {
-    return filteredTrips.map((t) => {
+    const source = tripProjectFilter
+      ? trips.filter((trip) => trip.assignments.some((a) => a.line?.request?.project?.id === tripProjectFilter))
+      : trips
+    return source.map((t) => {
       const a = t.assignments?.[0]?.line
       let route: string | undefined
       if (a) {
@@ -129,41 +141,30 @@ export default function ProgramacionPage() {
         href: `/programacion/viaje/${t.id}`,
       }
     })
-  }, [filteredTrips])
+  }, [trips, tripProjectFilter])
 
-  // --- Handlers de filtro de fecha ---
+  // --- Handlers de filtro de fecha (client-side — no afecta server query ni calendario) ---
   const handleCalendarClick = useCallback((date: string | null) => {
-    if (!date) {
-      setDateFilter(null)
-      setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
-      return
-    }
+    if (!date) { setDateFilter(null); return }
     setDateFilter((prev) => {
-      if (prev?.type === 'single' && prev.date === date) {
-        // Deselect
-        setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
-        return null
-      }
-      setTripFilters({ dateFrom: date, dateTo: date, page: 0 })
+      if (prev?.type === 'single' && prev.date === date) return null
       return { type: 'single', date }
     })
-  }, [setTripFilters])
+  }, [])
 
   const handleDateFromChange = useCallback((from: string | null) => {
     setDateFilter((prev) => {
       const to = prev?.type === 'range' ? prev.to : null
-      setTripFilters({ dateFrom: from, dateTo: to, page: 0 })
       return { type: 'range', from, to }
     })
-  }, [setTripFilters])
+  }, [])
 
   const handleDateToChange = useCallback((to: string | null) => {
     setDateFilter((prev) => {
       const from = prev?.type === 'range' ? prev.from : null
-      setTripFilters({ dateFrom: from, dateTo: to, page: 0 })
       return { type: 'range', from, to }
     })
-  }, [setTripFilters])
+  }, [])
 
   // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
