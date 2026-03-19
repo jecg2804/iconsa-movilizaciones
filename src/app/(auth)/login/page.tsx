@@ -91,6 +91,12 @@ export default function LoginPage() {
           >
             Iniciar Sesión
           </Button>
+
+          <div className="mt-4 text-center">
+            <a href="/forgot-password" className="text-sm text-navy hover:underline">
+              ¿Olvidaste tu contraseña?
+            </a>
+          </div>
         </form>
       </div>
     </div>
