@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
+import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight, ChevronsDownUp, ChevronsUpDown, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
@@ -406,15 +406,26 @@ export default function ProgramacionPage() {
   const inputClass = 'w-full rounded-lg border border-gray-200 pl-8 pr-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue'
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className={`space-y-6 ${puedeCrearViaje && visibleSelectedCount > 0 ? 'pb-20' : ''}`}>
+      {/* Header — contextual: muestra selección o botón crear */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-navy">Programación de Movilizaciones</h1>
         {puedeCrearViaje && (
-          <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
-            <Plus className="h-4 w-4" />
-            Crear Movilización
-          </Button>
+          visibleSelectedCount > 0 ? (
+            <div className="flex items-center gap-2">
+              <button type="button" title="Deseleccionar todo" onClick={() => setSelectedLineIds(new Set())} className="rounded-full p-1 text-iconsa-gray hover:bg-gray-100 transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-medium text-navy">
+                {visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea seleccionada' : 'líneas seleccionadas'}
+              </span>
+            </div>
+          ) : (
+            <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
+              <Plus className="h-4 w-4" />
+              Crear Movilización
+            </Button>
+          )
         )}
       </div>
 
@@ -675,26 +686,17 @@ export default function ProgramacionPage() {
         </div>
       </section>
 
-      {/* Barra flotante: crear viaje con líneas seleccionadas */}
+      {/* Barra sticky: crear movilización con líneas seleccionadas */}
       {puedeCrearViaje && visibleSelectedCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:bottom-4 sm:left-auto sm:right-6 sm:w-auto sm:rounded-xl sm:border sm:shadow-xl">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-700">
-              <span className="font-semibold text-navy">{visibleSelectedCount}</span>{' '}
-              {visibleSelectedCount === 1 ? 'línea seleccionada' : 'líneas seleccionadas'}
-            </span>
-            <Button size="sm" onClick={handleCrearViajeConLineas}>
-              <Truck className="h-4 w-4" />
-              Crear Movilización
-            </Button>
-            <button
-              type="button"
-              onClick={() => setSelectedLineIds(new Set())}
-              className="text-xs text-iconsa-gray hover:text-gray-900 transition-colors"
-            >
-              Cancelar
-            </button>
-          </div>
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-navy shadow-lg">
+          <button
+            type="button"
+            onClick={handleCrearViajeConLineas}
+            className="flex h-14 w-full items-center justify-center gap-2 text-white font-medium"
+          >
+            <Truck className="h-5 w-5" />
+            Crear Movilización ({visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea' : 'líneas'})
+          </button>
         </div>
       )}
     </div>
