@@ -406,26 +406,28 @@ export default function ProgramacionPage() {
   const inputClass = 'w-full rounded-lg border border-gray-200 pl-8 pr-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue'
 
   return (
-    <div className={`space-y-6 ${puedeCrearViaje && visibleSelectedCount > 0 ? 'pb-20' : ''}`}>
-      {/* Header — contextual: muestra selección o botón crear */}
+    <div className="space-y-6">
+      {/* Header — un solo botón contextual */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-navy">Programación de Movilizaciones</h1>
         {puedeCrearViaje && (
-          visibleSelectedCount > 0 ? (
-            <div className="flex items-center gap-2">
-              <button type="button" title="Deseleccionar todo" onClick={() => setSelectedLineIds(new Set())} className="rounded-full p-1 text-iconsa-gray hover:bg-gray-100 transition-colors">
+          <div className="flex items-center gap-2">
+            {visibleSelectedCount > 0 && (
+              <button type="button" title="Deseleccionar todo" onClick={() => setSelectedLineIds(new Set())} className="rounded-full p-1.5 text-iconsa-gray hover:bg-gray-100 transition-colors">
                 <X className="h-4 w-4" />
               </button>
-              <span className="text-sm font-medium text-navy">
-                {visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea seleccionada' : 'líneas seleccionadas'}
-              </span>
-            </div>
-          ) : (
-            <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
-              <Plus className="h-4 w-4" />
-              Crear Movilización
+            )}
+            <Button
+              onClick={visibleSelectedCount > 0 ? handleCrearViajeConLineas : () => router.push('/programacion/viaje/nuevo')}
+              className="shrink-0"
+            >
+              {visibleSelectedCount > 0 ? (
+                <><Truck className="h-4 w-4" /> Crear Movilización ({visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea' : 'líneas'})</>
+              ) : (
+                <><Plus className="h-4 w-4" /> Nueva Movilización</>
+              )}
             </Button>
-          )
+          </div>
         )}
       </div>
 
@@ -686,19 +688,6 @@ export default function ProgramacionPage() {
         </div>
       </section>
 
-      {/* Barra sticky: crear movilización con líneas seleccionadas */}
-      {puedeCrearViaje && visibleSelectedCount > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-40 bg-navy shadow-lg">
-          <button
-            type="button"
-            onClick={handleCrearViajeConLineas}
-            className="flex h-14 w-full items-center justify-center gap-2 text-white font-medium"
-          >
-            <Truck className="h-5 w-5" />
-            Crear Movilización ({visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea' : 'líneas'})
-          </button>
-        </div>
-      )}
     </div>
   )
 }
