@@ -8,6 +8,7 @@ import {
   notifySolicitudEnviada,
   notifySolicitudEditada,
   notifySolicitudCancelada,
+  notifySolicitudUrgenteNueva,
 } from '@/lib/notifications/actions'
 
 // --- Tipos exportados ---
@@ -571,6 +572,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         // Notificar si se envió directamente (status = Enviada)
         if (status === 'Enviada') {
           notifySolicitudEnviada(newId).catch(console.error)
+          notifySolicitudUrgenteNueva(newId).catch(console.error)
         }
 
         return {

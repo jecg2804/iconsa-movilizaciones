@@ -9,6 +9,7 @@ import {
   MapPin,
   DollarSign,
   Layers,
+  Bell,
   Plus,
   Pencil,
   Power,
@@ -93,11 +94,20 @@ interface Extra {
   is_active: boolean
 }
 
+interface NotifPerson {
+  id: string
+  name: string
+  email: string | null
+  app_role: string | null
+  notifications_enabled: boolean
+  notification_preferences: Record<string, boolean> | null
+}
+
 // ============================================================
 // Tabs
 // ============================================================
 
-type TabKey = 'proyectos' | 'personas' | 'equipos' | 'ubicaciones' | 'tarifas' | 'extras'
+type TabKey = 'proyectos' | 'personas' | 'equipos' | 'ubicaciones' | 'tarifas' | 'extras' | 'notificaciones'
 
 const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'proyectos', label: 'Proyectos', icon: Building2 },
@@ -106,7 +116,25 @@ const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?
   { key: 'ubicaciones', label: 'Ubicaciones', icon: MapPin },
   { key: 'tarifas', label: 'Tarifas', icon: DollarSign },
   { key: 'extras', label: 'Extras', icon: Layers },
+  { key: 'notificaciones', label: 'Notificaciones', icon: Bell },
 ]
+
+// Event types para preferencias de notificación
+const NOTIF_EVENT_KEYS = [
+  { key: 'solicitud_enviada', label: 'Enviada' },
+  { key: 'solicitud_editada', label: 'Editada' },
+  { key: 'solicitud_cancelada', label: 'Cancelada' },
+  { key: 'solicitud_completada', label: 'Completada' },
+  { key: 'lineas_programadas', label: 'Programada' },
+  { key: 'viaje_cancelado', label: 'Viaje Can.' },
+  { key: 'viaje_reprogramado', label: 'Viaje Rep.' },
+  { key: 'viaje_asignado_conductor', label: 'Conductor' },
+  { key: 'entrega_confirmada', label: 'Entrega' },
+  { key: 'salida_registrada', label: 'Salida' },
+  { key: 'sugerencia_fallback', label: 'Sugerencia' },
+  { key: 'solicitud_urgente_nueva', label: 'Urgente' },
+  { key: 'alerta_diaria_urgentes', label: 'Diaria' },
+] as const
 
 const STATUS_OPTIONS: SelectOption[] = [
   { value: 'Activo', label: 'Activo' },
@@ -151,6 +179,7 @@ export default function AdminMastersPage() {
   const [locationsList, setLocationsList] = useState<Location[]>([])
   const [rates, setRates] = useState<Rate[]>([])
   const [extras, setExtras] = useState<Extra[]>([])
+  const [notifPeople, setNotifPeople] = useState<NotifPerson[]>([])
   const [allProjects, setAllProjects] = useState<SelectOption[]>([])
   const [loadingData, setLoadingData] = useState(false)
 
@@ -242,6 +271,16 @@ export default function AdminMastersPage() {
         }
         const { data } = await query
         setExtras((data as unknown as Extra[] | null) ?? [])
+        break
+      }
+      case 'notificaciones': {
+        const { data } = await supabase
+          .from('people')
+          .select('id, name, email, app_role, notifications_enabled, notification_preferences')
+          .eq('status', 'Activo')
+          .not('email', 'is', null)
+          .order('name')
+        setNotifPeople((data ?? []) as unknown as NotifPerson[])
         break
       }
     }
@@ -354,6 +393,7 @@ export default function AdminMastersPage() {
       case 'ubicaciones': return <UbicacionesTab />
       case 'tarifas': return <TarifasTab />
       case 'extras': return <ExtrasTab />
+      case 'notificaciones': return <NotificacionesTab />
     }
   }
 
@@ -583,6 +623,106 @@ export default function AdminMastersPage() {
     )
   }
 
+  // --- NOTIFICACIONES ---
+  function NotificacionesTab() {
+    const filtered = notifPeople.filter((p) =>
+      !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.email ?? '').toLowerCase().includes(search.toLowerCase()),
+    )
+
+    const toggleEnabled = async (personId: string, currentValue: boolean) => {
+      const newValue = !currentValue
+      setNotifPeople(prev => prev.map(p => p.id === personId ? { ...p, notifications_enabled: newValue } : p))
+      await supabase.from('people').update({ notifications_enabled: newValue }).eq('id', personId)
+    }
+
+    const togglePref = async (personId: string, key: string, currentPrefs: Record<string, boolean> | null) => {
+      const prefs = { ...(currentPrefs ?? {}) }
+      prefs[key] = !prefs[key]
+      setNotifPeople(prev => prev.map(p => p.id === personId ? { ...p, notification_preferences: prefs } : p))
+      await supabase.from('people').update({ notification_preferences: prefs }).eq('id', personId)
+    }
+
+    if (loadingData) {
+      return <div className="py-8 text-center text-gray-500">Cargando...</div>
+    }
+
+    return (
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2">Persona</th>
+              <th className="px-2 py-2 text-center" title="Master toggle">Activo</th>
+              <th className="px-2 py-2 text-center" title="Recibe todas las notificaciones">Todo</th>
+              {NOTIF_EVENT_KEYS.map(e => (
+                <th key={e.key} className="px-1.5 py-2 text-center whitespace-nowrap" title={e.key}>{e.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map(person => {
+              const prefs = person.notification_preferences ?? {}
+              const isDisabled = !person.notifications_enabled
+              const isReceiveAll = !!prefs.receive_all
+
+              return (
+                <tr key={person.id} className={isDisabled ? 'bg-gray-50 opacity-60' : ''}>
+                  <td className="sticky left-0 z-10 bg-white px-3 py-2">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-gray-900">{person.name}</span>
+                      <span className="text-xs text-gray-500">
+                        {person.email}
+                        {person.app_role && (
+                          <span className="ml-1.5 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+                            {person.app_role}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={person.notifications_enabled}
+                      onChange={() => toggleEnabled(person.id, person.notifications_enabled)}
+                      title={`Notificaciones ${person.notifications_enabled ? 'activas' : 'desactivadas'} para ${person.name}`}
+                      className="h-4 w-4 rounded border-gray-300 text-iconsa-blue focus:ring-iconsa-blue"
+                    />
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isReceiveAll}
+                      disabled={isDisabled}
+                      onChange={() => togglePref(person.id, 'receive_all', prefs)}
+                      title={`Recibir todas las notificaciones — ${person.name}`}
+                      className="h-4 w-4 rounded border-gray-300 text-iconsa-blue focus:ring-iconsa-blue disabled:opacity-40"
+                    />
+                  </td>
+                  {NOTIF_EVENT_KEYS.map(e => (
+                    <td key={e.key} className="px-1.5 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!prefs[e.key]}
+                        disabled={isDisabled || isReceiveAll}
+                        onChange={() => togglePref(person.id, e.key, prefs)}
+                        title={`${e.label} — ${person.name}`}
+                        className="h-4 w-4 rounded border-gray-300 text-iconsa-blue focus:ring-iconsa-blue disabled:opacity-40"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="py-8 text-center text-gray-500">No hay personas con email activo</div>
+        )}
+      </div>
+    )
+  }
+
   // ============================================================
   // Modal forms por tab
   // ============================================================
@@ -610,6 +750,7 @@ export default function AdminMastersPage() {
       case 'extras': return (
         <ExtraForm data={editingItem as Partial<Extra>} isNew={isNew} onSave={handleSave} onCancel={closeModal} saving={saving} projectOptions={allProjects} />
       )
+      case 'notificaciones': return null
     }
   }
 
@@ -646,20 +787,22 @@ export default function AdminMastersPage() {
         })}
       </div>
 
-      {/* Barra de busqueda + boton crear */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1">
-          <Input
-            placeholder={`Buscar ${tabLabel.toLowerCase()}...`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {/* Barra de busqueda + boton crear (no en notificaciones) */}
+      {activeTab !== 'notificaciones' && (
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <Input
+              placeholder={`Buscar ${tabLabel.toLowerCase()}...`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button onClick={openCreate} size="sm">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Agregar</span>
+          </Button>
         </div>
-        <Button onClick={openCreate} size="sm">
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Agregar</span>
-        </Button>
-      </div>
+      )}
 
       {/* Contenido del tab */}
       {renderContent()}

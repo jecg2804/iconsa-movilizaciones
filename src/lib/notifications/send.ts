@@ -42,7 +42,29 @@ export async function sendNotification(params: {
 
   console.log(`[Notification] ${params.eventType}: sending to ${params.recipients.length} recipient(s)`)
 
-  for (const recipient of params.recipients) {
+  // Filtrar recipients por notification_preferences
+  const recipientIds = params.recipients.map(r => r.id)
+  const { data: prefsData } = await supabase
+    .from('people')
+    .select('id, notification_preferences')
+    .in('id', recipientIds)
+
+  const prefsMap = new Map(
+    (prefsData ?? []).map(p => [p.id, p.notification_preferences as Record<string, boolean> | null])
+  )
+
+  const eligibleRecipients = params.recipients.filter(r => {
+    const prefs = prefsMap.get(r.id)
+    if (!prefs || Object.keys(prefs).length === 0) return true // Legacy — no prefs, send
+    if (prefs.receive_all === true) return true
+    // Si el eventType no tiene key en prefs, enviar por default
+    if (!(params.eventType in prefs)) return true
+    return prefs[params.eventType] === true
+  })
+
+  console.log(`[Notification] ${params.eventType}: ${eligibleRecipients.length}/${params.recipients.length} eligible after prefs filter`)
+
+  for (const recipient of eligibleRecipients) {
     const targetEmail = TEST_EMAIL ?? recipient.email
 
     if (!targetEmail) {
@@ -55,7 +77,7 @@ export async function sendNotification(params: {
         channel: 'email',
         status: 'skipped',
         error_message: 'No email address',
-        payload: params.data ?? {},
+        payload: (params.data ?? {}) as { [key: string]: string | number | boolean | null | undefined },
       })
       if (logErr) console.error('[Notification] Failed to log skip to notification_log:', logErr.message)
       skipped++
@@ -102,7 +124,7 @@ export async function sendNotification(params: {
         channel: 'email',
         status: 'sent',
         provider_message_id: result?.id ?? null,
-        payload: params.data ?? {},
+        payload: (params.data ?? {}) as { [key: string]: string | number | boolean | null | undefined },
         sent_at: new Date().toISOString(),
       })
       if (logErr) console.error('[Notification] Failed to log sent to notification_log:', logErr.message)
@@ -118,7 +140,7 @@ export async function sendNotification(params: {
         channel: 'email',
         status: 'failed',
         error_message: errorMsg,
-        payload: params.data ?? {},
+        payload: (params.data ?? {}) as { [key: string]: string | number | boolean | null | undefined },
       })
       if (logErr) console.error('[Notification] Failed to log error to notification_log:', logErr.message)
       failed++
@@ -128,4 +150,18 @@ export async function sendNotification(params: {
 
   console.log(`[Notification] ${params.eventType} result: sent=${sent} skipped=${skipped} failed=${failed}`)
   return { sent, skipped, failed }
+}
+
+/** Usuarios con receive_all: true — reciben TODAS las notificaciones */
+export async function getReceiveAllUsers(): Promise<{ id: string; email: string | null; name: string }[]> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('people')
+    .select('id, email, name')
+    .eq('status', 'Activo')
+    .eq('notifications_enabled', true)
+    .not('email', 'is', null)
+    .contains('notification_preferences', { receive_all: true })
+  if (error) console.error('[Notification] getReceiveAllUsers error:', error.message)
+  return data ?? []
 }

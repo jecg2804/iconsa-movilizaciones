@@ -19,7 +19,7 @@ import {
 import { canEditSolicitud } from '@/lib/utils/roles'
 import { formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
-import { notifySolicitudEnviada } from '@/lib/notifications/actions'
+import { notifySolicitudEnviada, notifySolicitudUrgenteNueva } from '@/lib/notifications/actions'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
 import type { SelectOption } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
@@ -447,6 +447,7 @@ export default function SolicitudDetailPage() {
 
     // Notificar a Charris
     notifySolicitudEnviada(solicitud.id).catch(console.error)
+    notifySolicitudUrgenteNueva(solicitud.id).catch(console.error)
 
     // Refrescar datos
     const updated = await fetchSolicitud(id)

@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/service'
-import { sendNotification } from './send'
+import { sendNotification, getReceiveAllUsers } from './send'
 import * as templates from './templates'
 
 // =============================================================================
@@ -229,7 +229,8 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
     const requesterName = await getPersonName(req.requester_id)
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudEnviada({
       requestId: req.request_id ?? '',
@@ -266,7 +267,8 @@ export async function notifySolicitudEditada(requestId: string, personId: string
     const editorName = await getPersonName(personId)
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudEditada({
       requestId: req.request_id ?? '',
@@ -299,7 +301,8 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
     const cancellerName = personId ? await getPersonName(personId) : 'Sistema'
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id, personId)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudCancelada({
       requestId: req.request_id ?? '',
@@ -329,7 +332,9 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
     const req = await getRequestWithProject(requestId)
     if (!req || req.status !== 'Completada') { console.log('[Notify] solicitud_completada: skipped, status =', req?.status); return }
 
-    const recipients = await getProjectPMs(req.project_id)
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.solicitudCompletada({
       requestId: req.request_id ?? '',
@@ -383,7 +388,9 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 
     if (!req) { console.warn('[Notify] lineas_programadas: request not found'); return }
 
-    const recipients = await getProjectPMs(req.project_id)
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.lineasProgramadas({
       requestId: req.request_id ?? '',
@@ -424,7 +431,9 @@ export async function notifyViajeCancelado(tripId: string): Promise<void> {
     if (!trip) { console.warn('[Notify] viaje_cancelado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeCancelado({
       tripId: trip.trip_id ?? '',
@@ -464,7 +473,9 @@ export async function notifyViajeReprogramado(
     if (!trip) { console.warn('[Notify] viaje_reprogramado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeReprogramado({
       tripId: trip.trip_id ?? '',
@@ -505,7 +516,9 @@ export async function notifyViajeEditado(
     if (!trip) { console.warn('[Notify] viaje_editado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeEditado({
       tripId: trip.trip_id ?? '',
@@ -557,7 +570,9 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
       .select('id')
       .eq('trip_id', tripId)
 
-    const recipients = await getTripDriver(tripId)
+    const driver = await getTripDriver(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(driver, receiveAll)
 
     const template = templates.viajeAsignadoConductor({
       tripId: trip.trip_id ?? '',
@@ -611,7 +626,8 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
     const isPartial = (line.qty_delivered ?? 0) < line.quantity
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.entregaConfirmada({
       requestId: req.request_id ?? '',
@@ -681,7 +697,8 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     const requestIds = await getTripRequestIds(tripId)
     const charris = await getPeopleByRole('logistica')
     const pms = await getTripProjectPMs(tripId)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const now = new Date()
     const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
@@ -721,7 +738,9 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 
     if (!trip) { console.warn('[Notify] incidencia_ruta: trip not found'); return }
 
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, receiveAll)
 
     const template = templates.incidenciaRuta({
       tripId: trip.trip_id ?? '',
@@ -758,7 +777,9 @@ export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
     if (!trip) { console.warn('[Notify] retorno_registrado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, receiveAll)
 
     const arrivalTime = trip.actual_arrival ?? new Date().toISOString()
 
@@ -800,7 +821,9 @@ export async function notifySugerenciaFallback(suggestionId: string): Promise<vo
       ? await getPersonName(sug.suggested_by)
       : 'Desconocido'
 
-    const recipients = await getPeopleByRole('admin')
+    const admins = await getPeopleByRole('admin')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(admins, receiveAll)
 
     const template = templates.sugerenciaFallback({
       tableName: sug.table_name,
@@ -818,5 +841,175 @@ export async function notifySugerenciaFallback(suggestionId: string): Promise<vo
     })
   } catch (err) {
     console.error('[Notify] sugerencia_fallback FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 14. SOLICITUD URGENTE NUEVA → usuarios con solicitud_urgente_nueva
+// =============================================================================
+export async function notifySolicitudUrgenteNueva(requestId: string): Promise<void> {
+  try {
+    console.log('[Notify] solicitud_urgente_nueva called', { requestId })
+    const supabase = createServiceClient()
+    const req = await getRequestWithProject(requestId)
+    if (!req) { console.warn('[Notify] solicitud_urgente_nueva: request not found'); return }
+
+    // Calcular urgencia
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const target = new Date(req.date_required + 'T12:00:00')
+    target.setHours(0, 0, 0, 0)
+    const days = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (days > 3) {
+      console.log(`[Notify] solicitud_urgente_nueva: skipped, ${days} days until due (not urgent)`)
+      return
+    }
+
+    const { data: lines } = await supabase
+      .from('sm_request_lines')
+      .select('id')
+      .eq('request_id', requestId)
+
+    const requesterName = await getPersonName(req.requester_id)
+
+    // Destinatarios: personas con solicitud_urgente_nueva o receive_all
+    const { data: urgentRecipients } = await supabase
+      .from('people')
+      .select('id, email, name')
+      .eq('notifications_enabled', true)
+      .eq('status', 'Activo')
+      .not('email', 'is', null)
+
+    const recipients = (urgentRecipients ?? []).filter(p => {
+      // Se filtrará por preferences en sendNotification, pero pre-filtrar aquí
+      // para no enviar a personas sin la preferencia activada
+      return true // sendNotification maneja el filtro por eventType
+    })
+
+    const receiveAll = await getReceiveAllUsers()
+    const allRecipients = dedup(recipients, receiveAll)
+
+    const template = templates.solicitudUrgenteNueva({
+      requestId: req.request_id ?? '',
+      projectName: req.projectName,
+      requesterName,
+      dateRequired: req.date_required,
+      lineCount: lines?.length ?? 0,
+      referenceId: req.id,
+    })
+
+    await sendNotification({
+      eventType: 'solicitud_urgente_nueva',
+      referenceType: 'sm_request',
+      referenceId: req.id,
+      recipients: allRecipients,
+      ...template,
+      data: { request_id: req.request_id },
+    })
+  } catch (err) {
+    console.error('[Notify] solicitud_urgente_nueva FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 15. ALERTA DIARIA URGENTES → cron diario 7AM Panamá
+// =============================================================================
+export async function notifyAlertaDiariaUrgentes(): Promise<void> {
+  try {
+    console.log('[Notify] alerta_diaria_urgentes called')
+    const supabase = createServiceClient()
+
+    // Calcular fecha límite: hoy + 3 días
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const limitDate = new Date(today)
+    limitDate.setDate(limitDate.getDate() + 3)
+    const limitStr = limitDate.toISOString().split('T')[0]
+
+    // Solicitudes activas con fecha requerida ≤ hoy + 3 días
+    const { data: requests, error: rErr } = await supabase
+      .from('sm_requests')
+      .select('id, request_id, project_id, requester_id, date_required')
+      .in('status', ['Enviada', 'En Proceso'])
+      .lte('date_required', limitStr)
+      .order('date_required')
+
+    if (rErr) console.error('[Notify] alerta_diaria_urgentes requests error:', rErr.message)
+    if (!requests?.length) {
+      console.log('[Notify] alerta_diaria_urgentes: no urgent requests found')
+      return
+    }
+
+    // Para cada request: contar líneas pendientes/parciales
+    const items: Array<{
+      requestId: string
+      projectName: string
+      requesterName: string
+      dateRequired: string
+      daysUntil: number
+      pendingLines: number
+    }> = []
+
+    for (const req of requests) {
+      const { count } = await supabase
+        .from('sm_request_lines')
+        .select('id', { count: 'exact', head: true })
+        .eq('request_id', req.id)
+        .in('status', ['Pendiente', 'Parcial'])
+
+      if (!count || count === 0) continue
+
+      const { data: project } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', req.project_id)
+        .single()
+
+      const requesterName = await getPersonName(req.requester_id)
+
+      const target = new Date(req.date_required + 'T12:00:00')
+      target.setHours(0, 0, 0, 0)
+      const days = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+      items.push({
+        requestId: req.request_id ?? req.id,
+        projectName: project?.name ?? '',
+        requesterName,
+        dateRequired: req.date_required,
+        daysUntil: days,
+        pendingLines: count,
+      })
+    }
+
+    if (items.length === 0) {
+      console.log('[Notify] alerta_diaria_urgentes: no requests with pending lines')
+      return
+    }
+
+    console.log(`[Notify] alerta_diaria_urgentes: ${items.length} urgent requests with pending lines`)
+
+    // Destinatarios: personas con alerta_diaria_urgentes o receive_all
+    const { data: dailyRecipients } = await supabase
+      .from('people')
+      .select('id, email, name')
+      .eq('notifications_enabled', true)
+      .eq('status', 'Activo')
+      .not('email', 'is', null)
+
+    const receiveAll = await getReceiveAllUsers()
+    const allRecipients = dedup(dailyRecipients ?? [], receiveAll)
+
+    const template = templates.alertaDiariaUrgentes({ items })
+
+    await sendNotification({
+      eventType: 'alerta_diaria_urgentes',
+      referenceType: 'sm_request',
+      referenceId: 'daily-alert',
+      recipients: allRecipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] alerta_diaria_urgentes FAILED:', err)
   }
 }
