@@ -400,3 +400,97 @@ ${ctaButton('Revisar Sugerencias →', `${APP_URL}/admin/masters`)}`
     html: emailLayout('Nueva Sugerencia', body),
   }
 }
+
+// =============================================================================
+// 14. SOLICITUD URGENTE NUEVA → usuarios con solicitud_urgente_nueva
+// =============================================================================
+export function solicitudUrgenteNueva(data: {
+  requestId: string
+  projectName: string
+  requesterName: string
+  dateRequired: string
+  lineCount: number
+  referenceId: string
+}): TemplateResult {
+  const days = daysUntil(data.dateRequired)
+  const absDays = Math.abs(days)
+
+  const bannerText = days < 0
+    ? `🔴 VENCIDA: Fecha requerida pasó hace ${absDays} día${absDays !== 1 ? 's' : ''}`
+    : `⚠️ URGENTE: Fecha requerida en ${days} día${days !== 1 ? 's' : ''}`
+
+  const body = `
+${alertBanner(bannerText, 'danger')}
+<p>Se ha enviado una solicitud con fecha requerida próxima o vencida. Requiere atención inmediata.</p>
+${dataTable(
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
+  dataRow('Proyecto', data.projectName) +
+  dataRow('Solicitante', data.requesterName) +
+  dataRow('Fecha requerida', formatDate(data.dateRequired)) +
+  dataRow('Líneas', `${data.lineCount} ítem${data.lineCount !== 1 ? 's' : ''}`)
+)}
+${ctaButton('Ver Solicitud →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
+
+  const subject = days < 0
+    ? `🔴 VENCIDA: Solicitud ${data.requestId} — ${data.projectName} (venció hace ${absDays} días)`
+    : `⚠️ URGENTE: Solicitud ${data.requestId} — ${data.projectName} (vence en ${days} días)`
+
+  return {
+    subject,
+    html: emailLayout('Solicitud Urgente', body),
+  }
+}
+
+// =============================================================================
+// 15. ALERTA DIARIA URGENTES → resumen de solicitudes urgentes sin programar
+// =============================================================================
+export function alertaDiariaUrgentes(data: {
+  items: Array<{
+    requestId: string
+    projectName: string
+    requesterName: string
+    dateRequired: string
+    daysUntil: number
+    pendingLines: number
+  }>
+}): TemplateResult {
+  const count = data.items.length
+
+  const tableRows = data.items.map(item => {
+    const rowColor = item.daysUntil < 0 ? '#fef2f2' : item.daysUntil <= 3 ? '#fffbeb' : '#ffffff'
+    const daysText = item.daysUntil < 0
+      ? `<span style="color:#C0392B;font-weight:bold;">Venció hace ${Math.abs(item.daysUntil)}d</span>`
+      : `<span style="color:#B45309;font-weight:bold;">${item.daysUntil}d</span>`
+
+    return `<tr style="background:${rowColor};">
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:13px;">${item.requestId}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${item.projectName}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${item.requesterName}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${formatDate(item.dateRequired)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${daysText}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${item.pendingLines}</td>
+    </tr>`
+  }).join('')
+
+  const body = `
+${alertBanner(`📋 ${count} solicitud${count !== 1 ? 'es' : ''} urgente${count !== 1 ? 's' : ''} sin programar completamente`, 'warning')}
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <thead>
+    <tr style="background:#1B3A5C;color:white;">
+      <th style="padding:8px 10px;text-align:left;">Solicitud</th>
+      <th style="padding:8px 10px;text-align:left;">Proyecto</th>
+      <th style="padding:8px 10px;text-align:left;">Solicitante</th>
+      <th style="padding:8px 10px;text-align:left;">Fecha Req.</th>
+      <th style="padding:8px 10px;text-align:center;">Días</th>
+      <th style="padding:8px 10px;text-align:center;">Pend.</th>
+    </tr>
+  </thead>
+  <tbody>${tableRows}</tbody>
+</table>
+${ctaButton('Ver Backlog →', `${APP_URL}/programacion`)}`
+
+  return {
+    subject: `📋 Alerta diaria: ${count} solicitud${count !== 1 ? 'es' : ''} urgente${count !== 1 ? 's' : ''} sin programar`,
+    html: emailLayout('Alerta Diaria — Solicitudes Urgentes', body),
+  }
+}

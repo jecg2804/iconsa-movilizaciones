@@ -4,6 +4,29 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-20 — Code: 2 Notificaciones urgentes
+
+### solicitud_urgente_nueva
+- Template con banner rojo/naranja según días al vencimiento
+- Función `notifySolicitudUrgenteNueva(requestId)` — se auto-descarta si days > 3
+- Se llama en 2 lugares: `useSolicitudes.ts` y `solicitudes/[id]/page.tsx` (después de notifySolicitudEnviada)
+- Destinatarios: personas con pref `solicitud_urgente_nueva: true` + receive_all (filtrado por sendNotification)
+
+### alerta_diaria_urgentes
+- Template con tabla resumen de solicitudes urgentes (vencidas + próximas 3 días) con líneas pendientes/parciales
+- Función `notifyAlertaDiariaUrgentes()` — query solicitudes Enviada/En Proceso con date_required ≤ hoy+3 y líneas Pendiente/Parcial
+- Cron endpoint: `src/app/api/cron/alertas-urgentes/route.ts` con Bearer auth via CRON_SECRET
+- vercel.json creado: schedule `0 12 * * *` (12:00 UTC = 7:00 AM Panamá)
+
+### Admin UI
+- 2 columnas nuevas en tab Notificaciones: "Urgente" y "Diaria"
+
+### PENDIENTE James
+- Agregar env var `CRON_SECRET` en Vercel con valor random (ej: `cron_mov_2026_xK9mP4qR7tW2`)
+- Agregar `CRON_SECRET` también en `.env.local` para testing local
+
+---
+
 ## 2026-03-20 — Code: Notification Preferences — Filtrado + Admin UI
 
 ### send.ts

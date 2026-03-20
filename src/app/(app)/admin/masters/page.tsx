@@ -132,6 +132,8 @@ const NOTIF_EVENT_KEYS = [
   { key: 'entrega_confirmada', label: 'Entrega' },
   { key: 'salida_registrada', label: 'Salida' },
   { key: 'sugerencia_fallback', label: 'Sugerencia' },
+  { key: 'solicitud_urgente_nueva', label: 'Urgente' },
+  { key: 'alerta_diaria_urgentes', label: 'Diaria' },
 ] as const
 
 const STATUS_OPTIONS: SelectOption[] = [

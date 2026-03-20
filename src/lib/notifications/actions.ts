@@ -843,3 +843,173 @@ export async function notifySugerenciaFallback(suggestionId: string): Promise<vo
     console.error('[Notify] sugerencia_fallback FAILED:', err)
   }
 }
+
+// =============================================================================
+// 14. SOLICITUD URGENTE NUEVA → usuarios con solicitud_urgente_nueva
+// =============================================================================
+export async function notifySolicitudUrgenteNueva(requestId: string): Promise<void> {
+  try {
+    console.log('[Notify] solicitud_urgente_nueva called', { requestId })
+    const supabase = createServiceClient()
+    const req = await getRequestWithProject(requestId)
+    if (!req) { console.warn('[Notify] solicitud_urgente_nueva: request not found'); return }
+
+    // Calcular urgencia
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const target = new Date(req.date_required + 'T12:00:00')
+    target.setHours(0, 0, 0, 0)
+    const days = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (days > 3) {
+      console.log(`[Notify] solicitud_urgente_nueva: skipped, ${days} days until due (not urgent)`)
+      return
+    }
+
+    const { data: lines } = await supabase
+      .from('sm_request_lines')
+      .select('id')
+      .eq('request_id', requestId)
+
+    const requesterName = await getPersonName(req.requester_id)
+
+    // Destinatarios: personas con solicitud_urgente_nueva o receive_all
+    const { data: urgentRecipients } = await supabase
+      .from('people')
+      .select('id, email, name')
+      .eq('notifications_enabled', true)
+      .eq('status', 'Activo')
+      .not('email', 'is', null)
+
+    const recipients = (urgentRecipients ?? []).filter(p => {
+      // Se filtrará por preferences en sendNotification, pero pre-filtrar aquí
+      // para no enviar a personas sin la preferencia activada
+      return true // sendNotification maneja el filtro por eventType
+    })
+
+    const receiveAll = await getReceiveAllUsers()
+    const allRecipients = dedup(recipients, receiveAll)
+
+    const template = templates.solicitudUrgenteNueva({
+      requestId: req.request_id ?? '',
+      projectName: req.projectName,
+      requesterName,
+      dateRequired: req.date_required,
+      lineCount: lines?.length ?? 0,
+      referenceId: req.id,
+    })
+
+    await sendNotification({
+      eventType: 'solicitud_urgente_nueva',
+      referenceType: 'sm_request',
+      referenceId: req.id,
+      recipients: allRecipients,
+      ...template,
+      data: { request_id: req.request_id },
+    })
+  } catch (err) {
+    console.error('[Notify] solicitud_urgente_nueva FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 15. ALERTA DIARIA URGENTES → cron diario 7AM Panamá
+// =============================================================================
+export async function notifyAlertaDiariaUrgentes(): Promise<void> {
+  try {
+    console.log('[Notify] alerta_diaria_urgentes called')
+    const supabase = createServiceClient()
+
+    // Calcular fecha límite: hoy + 3 días
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const limitDate = new Date(today)
+    limitDate.setDate(limitDate.getDate() + 3)
+    const limitStr = limitDate.toISOString().split('T')[0]
+
+    // Solicitudes activas con fecha requerida ≤ hoy + 3 días
+    const { data: requests, error: rErr } = await supabase
+      .from('sm_requests')
+      .select('id, request_id, project_id, requester_id, date_required')
+      .in('status', ['Enviada', 'En Proceso'])
+      .lte('date_required', limitStr)
+      .order('date_required')
+
+    if (rErr) console.error('[Notify] alerta_diaria_urgentes requests error:', rErr.message)
+    if (!requests?.length) {
+      console.log('[Notify] alerta_diaria_urgentes: no urgent requests found')
+      return
+    }
+
+    // Para cada request: contar líneas pendientes/parciales
+    const items: Array<{
+      requestId: string
+      projectName: string
+      requesterName: string
+      dateRequired: string
+      daysUntil: number
+      pendingLines: number
+    }> = []
+
+    for (const req of requests) {
+      const { count } = await supabase
+        .from('sm_request_lines')
+        .select('id', { count: 'exact', head: true })
+        .eq('request_id', req.id)
+        .in('status', ['Pendiente', 'Parcial'])
+
+      if (!count || count === 0) continue
+
+      const { data: project } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', req.project_id)
+        .single()
+
+      const requesterName = await getPersonName(req.requester_id)
+
+      const target = new Date(req.date_required + 'T12:00:00')
+      target.setHours(0, 0, 0, 0)
+      const days = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+      items.push({
+        requestId: req.request_id ?? req.id,
+        projectName: project?.name ?? '',
+        requesterName,
+        dateRequired: req.date_required,
+        daysUntil: days,
+        pendingLines: count,
+      })
+    }
+
+    if (items.length === 0) {
+      console.log('[Notify] alerta_diaria_urgentes: no requests with pending lines')
+      return
+    }
+
+    console.log(`[Notify] alerta_diaria_urgentes: ${items.length} urgent requests with pending lines`)
+
+    // Destinatarios: personas con alerta_diaria_urgentes o receive_all
+    const { data: dailyRecipients } = await supabase
+      .from('people')
+      .select('id, email, name')
+      .eq('notifications_enabled', true)
+      .eq('status', 'Activo')
+      .not('email', 'is', null)
+
+    const receiveAll = await getReceiveAllUsers()
+    const allRecipients = dedup(dailyRecipients ?? [], receiveAll)
+
+    const template = templates.alertaDiariaUrgentes({ items })
+
+    await sendNotification({
+      eventType: 'alerta_diaria_urgentes',
+      referenceType: 'sm_request',
+      referenceId: 'daily-alert',
+      recipients: allRecipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] alerta_diaria_urgentes FAILED:', err)
+  }
+}
