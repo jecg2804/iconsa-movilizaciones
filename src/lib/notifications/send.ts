@@ -113,7 +113,10 @@ export async function sendNotification(params: {
         html: params.html,
       })
 
-      if (error) throw new Error(error.message)
+      if (error) {
+        console.error(`[Notification] Resend error for ${recipient.name}: ${error.message} (name: ${error.name})`)
+        throw new Error(error.message)
+      }
 
       const { error: logErr } = await supabase.from('notification_log').insert({
         event_type: params.eventType,
