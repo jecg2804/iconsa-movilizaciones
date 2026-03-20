@@ -4,6 +4,36 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-03-20 — Code: Notification Preferences — Filtrado + Admin UI
+
+### send.ts
+- Filtro por `notification_preferences` ANTES del loop de envío
+- Si `receive_all: true` → enviar siempre. Si no hay prefs (legacy) → enviar. Si eventType no existe como key → enviar por default
+- Nueva función exportada `getReceiveAllUsers()` — retorna personas con `receive_all: true`
+
+### actions.ts
+- 14 funciones notify ahora incluyen `receiveAllUsers` en el array de recipients via `dedup()`
+- James y Astrid (admins con `receive_all: true`) reciben TODAS las notificaciones
+
+### Admin UI
+- Nuevo tab "Notificaciones" en `/admin/masters` con tabla inline
+- Toggle master `notifications_enabled`, toggle `receive_all`, 11 checkboxes por event type
+- Checkboxes disabled cuando `receive_all = true` o `notifications_enabled = false`
+- UPDATE inmediato (optimistic) al cambiar cualquier checkbox
+
+### database.ts regenerado
+- Ahora incluye `notification_preferences` en tipo `people`
+
+### SOLICITUD BD (James → Chat)
+- Cambiar key en BD de `suggestion_fallback` → `sugerencia_fallback` en `people.notification_preferences`:
+```sql
+UPDATE people
+SET notification_preferences = notification_preferences - 'suggestion_fallback' || jsonb_build_object('sugerencia_fallback', notification_preferences->'suggestion_fallback')
+WHERE notification_preferences ? 'suggestion_fallback';
+```
+
+---
+
 ## 2026-03-18 — Chat: Restructuración de docs del repo
 
 - CLAUDE.md editado: quitado NestJS/Metabase, 18→44 tablas, Quick Reference, source-of-truth → Supabase MCP, estados corregidos (Parcial solo línea, En Transito sin acento), workflow simplificado

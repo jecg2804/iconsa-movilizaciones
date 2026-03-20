@@ -1,7 +1,7 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/service'
-import { sendNotification } from './send'
+import { sendNotification, getReceiveAllUsers } from './send'
 import * as templates from './templates'
 
 // =============================================================================
@@ -229,7 +229,8 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
     const requesterName = await getPersonName(req.requester_id)
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudEnviada({
       requestId: req.request_id ?? '',
@@ -266,7 +267,8 @@ export async function notifySolicitudEditada(requestId: string, personId: string
     const editorName = await getPersonName(personId)
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudEditada({
       requestId: req.request_id ?? '',
@@ -299,7 +301,8 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
     const cancellerName = personId ? await getPersonName(personId) : 'Sistema'
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id, personId)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudCancelada({
       requestId: req.request_id ?? '',
@@ -329,7 +332,9 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
     const req = await getRequestWithProject(requestId)
     if (!req || req.status !== 'Completada') { console.log('[Notify] solicitud_completada: skipped, status =', req?.status); return }
 
-    const recipients = await getProjectPMs(req.project_id)
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.solicitudCompletada({
       requestId: req.request_id ?? '',
@@ -383,7 +388,9 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 
     if (!req) { console.warn('[Notify] lineas_programadas: request not found'); return }
 
-    const recipients = await getProjectPMs(req.project_id)
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.lineasProgramadas({
       requestId: req.request_id ?? '',
@@ -424,7 +431,9 @@ export async function notifyViajeCancelado(tripId: string): Promise<void> {
     if (!trip) { console.warn('[Notify] viaje_cancelado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeCancelado({
       tripId: trip.trip_id ?? '',
@@ -464,7 +473,9 @@ export async function notifyViajeReprogramado(
     if (!trip) { console.warn('[Notify] viaje_reprogramado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeReprogramado({
       tripId: trip.trip_id ?? '',
@@ -505,7 +516,9 @@ export async function notifyViajeEditado(
     if (!trip) { console.warn('[Notify] viaje_editado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeEditado({
       tripId: trip.trip_id ?? '',
@@ -557,7 +570,9 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
       .select('id')
       .eq('trip_id', tripId)
 
-    const recipients = await getTripDriver(tripId)
+    const driver = await getTripDriver(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(driver, receiveAll)
 
     const template = templates.viajeAsignadoConductor({
       tripId: trip.trip_id ?? '',
@@ -611,7 +626,8 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
     const isPartial = (line.qty_delivered ?? 0) < line.quantity
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.entregaConfirmada({
       requestId: req.request_id ?? '',
@@ -681,7 +697,8 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     const requestIds = await getTripRequestIds(tripId)
     const charris = await getPeopleByRole('logistica')
     const pms = await getTripProjectPMs(tripId)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const now = new Date()
     const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
@@ -721,7 +738,9 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 
     if (!trip) { console.warn('[Notify] incidencia_ruta: trip not found'); return }
 
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, receiveAll)
 
     const template = templates.incidenciaRuta({
       tripId: trip.trip_id ?? '',
@@ -758,7 +777,9 @@ export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
     if (!trip) { console.warn('[Notify] retorno_registrado: trip not found'); return }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, receiveAll)
 
     const arrivalTime = trip.actual_arrival ?? new Date().toISOString()
 
@@ -800,7 +821,9 @@ export async function notifySugerenciaFallback(suggestionId: string): Promise<vo
       ? await getPersonName(sug.suggested_by)
       : 'Desconocido'
 
-    const recipients = await getPeopleByRole('admin')
+    const admins = await getPeopleByRole('admin')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(admins, receiveAll)
 
     const template = templates.sugerenciaFallback({
       tableName: sug.table_name,
