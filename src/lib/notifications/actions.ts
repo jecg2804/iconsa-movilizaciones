@@ -873,22 +873,20 @@ export async function notifySolicitudUrgenteNueva(requestId: string): Promise<vo
 
     const requesterName = await getPersonName(req.requester_id)
 
-    // Destinatarios: personas con solicitud_urgente_nueva o receive_all
+    // Destinatarios: pre-filtrar por solicitud_urgente_nueva o receive_all
     const { data: urgentRecipients } = await supabase
       .from('people')
-      .select('id, email, name')
+      .select('id, email, name, notification_preferences')
       .eq('notifications_enabled', true)
       .eq('status', 'Activo')
       .not('email', 'is', null)
 
-    const recipients = (urgentRecipients ?? []).filter(p => {
-      // Se filtrará por preferences en sendNotification, pero pre-filtrar aquí
-      // para no enviar a personas sin la preferencia activada
-      return true // sendNotification maneja el filtro por eventType
+    const allRecipients = (urgentRecipients ?? []).filter(p => {
+      const prefs = p.notification_preferences as Record<string, boolean> | null
+      if (!prefs || Object.keys(prefs).length === 0) return true
+      if (prefs.receive_all === true) return true
+      return prefs.solicitud_urgente_nueva === true
     })
-
-    const receiveAll = await getReceiveAllUsers()
-    const allRecipients = dedup(recipients, receiveAll)
 
     const template = templates.solicitudUrgenteNueva({
       requestId: req.request_id ?? '',
@@ -989,16 +987,20 @@ export async function notifyAlertaDiariaUrgentes(): Promise<void> {
 
     console.log(`[Notify] alerta_diaria_urgentes: ${items.length} urgent requests with pending lines`)
 
-    // Destinatarios: personas con alerta_diaria_urgentes o receive_all
+    // Destinatarios: pre-filtrar por alerta_diaria_urgentes o receive_all
     const { data: dailyRecipients } = await supabase
       .from('people')
-      .select('id, email, name')
+      .select('id, email, name, notification_preferences')
       .eq('notifications_enabled', true)
       .eq('status', 'Activo')
       .not('email', 'is', null)
 
-    const receiveAll = await getReceiveAllUsers()
-    const allRecipients = dedup(dailyRecipients ?? [], receiveAll)
+    const allRecipients = (dailyRecipients ?? []).filter(p => {
+      const prefs = p.notification_preferences as Record<string, boolean> | null
+      if (!prefs || Object.keys(prefs).length === 0) return true
+      if (prefs.receive_all === true) return true
+      return prefs.alerta_diaria_urgentes === true
+    })
 
     const template = templates.alertaDiariaUrgentes({ items })
 

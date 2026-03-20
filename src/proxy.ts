@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
     })
 
     // Rutas públicas (no requieren auth)
-    const publicRoutes = ['/login', '/forgot-password', '/auth/confirm']
+    const publicRoutes = ['/login', '/forgot-password', '/auth/confirm', '/api/cron']
     if (publicRoutes.some((route) => pathname.startsWith(route))) {
       return supabaseResponse
     }

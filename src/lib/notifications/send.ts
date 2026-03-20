@@ -3,7 +3,13 @@
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase/service'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend
+}
 
 // TEST MODE: cuando está seteado, TODOS los emails van a esta dirección
 const TEST_EMAIL = process.env.NOTIFICATION_TEST_EMAIL
@@ -106,14 +112,17 @@ export async function sendNotification(params: {
         ? `[TEST → ${recipient.name}] ${params.subject}`
         : params.subject
 
-      const { data: result, error } = await resend.emails.send({
+      const { data: result, error } = await getResend().emails.send({
         from: FROM_EMAIL,
         to: targetEmail,
         subject,
         html: params.html,
       })
 
-      if (error) throw new Error(error.message)
+      if (error) {
+        console.error(`[Notification] Resend error for ${recipient.name}: ${error.message} (name: ${error.name})`)
+        throw new Error(error.message)
+      }
 
       const { error: logErr } = await supabase.from('notification_log').insert({
         event_type: params.eventType,
