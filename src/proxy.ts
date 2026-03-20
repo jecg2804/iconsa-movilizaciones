@@ -94,7 +94,8 @@ export const config = {
      * - _next/image (optimización de imágenes)
      * - favicon.ico, sitemap.xml, robots.txt
      * - Archivos con extensión (imágenes, etc.)
+     * - api/cron (cron jobs autenticados por Bearer token, no por session)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
