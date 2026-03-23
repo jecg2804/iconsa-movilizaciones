@@ -15,6 +15,7 @@ import {
   notifyRetornoRegistrado,
 } from '@/lib/notifications/actions'
 import { formatDate, formatQty } from '@/lib/utils/format'
+import { canRegisterEvent } from '@/lib/utils/roles'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
@@ -530,8 +531,8 @@ export default function MisViajesDetailPage() {
 
   // Código de confirmación solo visible para logistica y admin y pm
   const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
-  // PMs solo ven viajes — no registran eventos
-  const canRegisterEvents = role !== 'pm'
+  // Todos los roles con acceso a mis-viajes pueden registrar eventos (incluye PM para entregas)
+  const canRegisterEvents = canRegisterEvent(role)
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
