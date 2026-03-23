@@ -701,7 +701,7 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     const recipients = dedup(charris, pms, receiveAll)
 
     const now = new Date()
-    const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
+    const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })
 
     const template = templates.salidaRegistrada({
       tripId: trip.trip_id ?? '',

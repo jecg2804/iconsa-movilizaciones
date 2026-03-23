@@ -360,7 +360,7 @@ export function retornoRegistrado(data: {
   requestIds: string[]
   referenceId: string
 }): TemplateResult {
-  const arrivalFormatted = new Date(data.arrivalTime).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
+  const arrivalFormatted = new Date(data.arrivalTime).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })
 
   const body = `
 ${alertBanner('El viaje completó su ruta y retornó a base.', 'success')}
