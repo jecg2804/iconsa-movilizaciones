@@ -27,6 +27,7 @@ interface SolicitudFormProps {
     dateSubmitted?: string | null
     dateCompleted?: string | null
     dateCancelled?: string | null
+    fulfillmentType?: string | null
   }
   /** Proyectos disponibles para el dropdown (para PM, solo sus proyectos asignados) */
   projects: SelectOption[]
@@ -76,6 +77,7 @@ function SolicitudForm({
   )
   const [notes, setNotes] = useState<string>(initialData?.notes ?? '')
   const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments ?? [])
+  const [fulfillmentType, setFulfillmentType] = useState<string>(initialData?.fulfillmentType ?? 'fleet')
   // UUID estable para folder de storage (en modo crear, genera uno temporal)
   const folderIdRef = useRef(solicitudId ?? crypto.randomUUID())
 
@@ -89,10 +91,11 @@ function SolicitudForm({
         date_required: overrides?.date_required ?? dateRequired,
         notes: overrides?.notes !== undefined ? overrides.notes : notes || null,
         attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
+        fulfillment_type: overrides?.fulfillment_type ?? fulfillmentType,
       }
       onChange(data)
     },
-    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, onChange],
+    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, fulfillmentType, onChange],
   )
 
   // Propagar el estado inicial al montar

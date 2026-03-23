@@ -76,6 +76,7 @@ export interface SolicitudInput {
   date_required: string
   notes?: string | null
   attachments?: unknown[] | null
+  fulfillment_type?: string | null
 }
 
 export interface LineInput {
@@ -97,6 +98,9 @@ export interface LineInput {
   material_category: string | null
   po_reference: string | null
   notes: string | null
+  requires_code?: boolean | null
+  designated_receiver_id?: string | null
+  designated_receiver_name?: string | null
 }
 
 export interface SolicitudesFilter {
@@ -256,6 +260,9 @@ function lineInputToRow(
     material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
+    requires_code: line.requires_code ?? false,
+    designated_receiver_id: line.designated_receiver_id ?? null,
+    designated_receiver_name: line.designated_receiver_name ?? null,
   }
 }
 
@@ -445,6 +452,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           material_category: (line.material_category as string | null) ?? null,
           po_reference: (line.po_reference as string | null) ?? null,
           notes: (line.notes as string | null) ?? null,
+          requires_code: (line.requires_code as boolean | null) ?? false,
+          designated_receiver_id: (line.designated_receiver_id as string | null) ?? null,
+          designated_receiver_name: (line.designated_receiver_name as string | null) ?? null,
           status: line.status as string,
           qty_scheduled: (line.qty_scheduled as number | null) ?? null,
           qty_delivered: (line.qty_delivered as number | null) ?? null,
@@ -506,6 +516,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           date_required: header.date_required,
           notes: header.notes ?? null,
           attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
+          fulfillment_type: header.fulfillment_type ?? 'fleet',
           status,
           created_by: personId ?? null,
         }
@@ -614,6 +625,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
         if (header.attachments !== undefined) headerUpdate.attachments = header.attachments
+        if (header.fulfillment_type !== undefined) headerUpdate.fulfillment_type = header.fulfillment_type
         if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
@@ -680,6 +692,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 material_category: line.material_category,
                 po_reference: line.po_reference,
                 notes: line.notes,
+                requires_code: line.requires_code ?? false,
+                designated_receiver_id: line.designated_receiver_id ?? null,
+                designated_receiver_name: line.designated_receiver_name ?? null,
               }
             if (personId) lineUpdate.updated_by = personId
 

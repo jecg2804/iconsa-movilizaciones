@@ -75,10 +75,12 @@ export default function NuevaSolicitudPage() {
     requester_id: '',
     date_required: '',
     notes: null,
+    fulfillment_type: 'fleet',
   })
   const [lines, setLines] = useState<LineInput[]>([])
   const [showLineEditor, setShowLineEditor] = useState(false)
   const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null)
+  const [bulkRequiresCode, setBulkRequiresCode] = useState(false)
   const [headerErrors, setHeaderErrors] = useState<Record<string, string>>({})
 
   // Hook de solicitudes (para saveSolicitud)
@@ -371,6 +373,54 @@ export default function NuevaSolicitudPage() {
           currentPersonId={person?.id ?? ''}
           role={role}
         />
+      </div>
+
+      {/* Opciones de movilización */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 space-y-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm font-medium text-gray-700">Tipo de movilización:</span>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="fulfillment"
+              value="fleet"
+              checked={header.fulfillment_type === 'fleet'}
+              onChange={() => setHeader(h => ({ ...h, fulfillment_type: 'fleet' }))}
+              className="accent-navy"
+            />
+            Envío por flota
+          </label>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="fulfillment"
+              value="pickup"
+              checked={header.fulfillment_type === 'pickup'}
+              onChange={() => setHeader(h => ({ ...h, fulfillment_type: 'pickup' }))}
+              className="accent-navy"
+            />
+            Retiro en Chilibre
+          </label>
+        </div>
+        {header.fulfillment_type === 'pickup' && (
+          <p className="text-xs text-iconsa-gray">
+            Sujeto a confirmación de Logística. Tarifa: B/. 75.00
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={bulkRequiresCode}
+              onChange={(e) => {
+                setBulkRequiresCode(e.target.checked)
+                setLines(prev => prev.map(l => ({ ...l, requires_code: e.target.checked })))
+              }}
+              className="accent-navy"
+            />
+            Requiere código de confirmación
+          </label>
+        </div>
       </div>
 
       {/* Seccion de lineas */}

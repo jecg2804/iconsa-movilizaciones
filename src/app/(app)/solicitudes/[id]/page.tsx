@@ -590,6 +590,7 @@ export default function SolicitudDetailPage() {
             dateSubmitted: solicitud.date_submitted ?? undefined,
             dateCompleted: solicitud.date_completed ?? undefined,
             dateCancelled: solicitud.date_cancelled ?? undefined,
+            fulfillmentType: ((solicitud as unknown as Record<string, unknown>).fulfillment_type as string) ?? 'fleet',
           }}
           projects={projectOptions}
           people={people}
