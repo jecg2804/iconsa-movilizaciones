@@ -535,6 +535,8 @@ export default function MisViajesDetailPage() {
   const canRegisterEvents = canRegisterEvent(role)
   // PM solo ve Entrega + Incidencia (no puede UPDATE trips → no Salida/Retorno)
   const isPM = role === 'pm'
+  // Retorno secundario: disponible después de Salida sin requerir Entrega
+  const showRetornoSecondary = hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
@@ -671,6 +673,16 @@ export default function MisViajesDetailPage() {
                 loading={registering && activeEvent === 'Llegada'}
                 disabled={registering}
                 onClick={() => setActiveEvent('Llegada')}
+              />
+            )}
+
+            {/* Retorno secundario — disponible después de Salida sin necesitar Entrega */}
+            {showRetornoSecondary && (
+              <EventButton
+                eventType="Retorno"
+                loading={registering && activeEvent === 'Retorno'}
+                disabled={registering}
+                onClick={() => setActiveEvent('Retorno')}
               />
             )}
 
