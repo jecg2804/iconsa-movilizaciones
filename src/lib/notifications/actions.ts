@@ -915,6 +915,13 @@ export async function notifySolicitudUrgenteNueva(requestId: string): Promise<vo
 // =============================================================================
 export async function notifyAlertaDiariaUrgentes(): Promise<void> {
   try {
+    // No enviar los domingos (ICONSA no opera)
+    const now = new Date()
+    if (now.getUTCDay() === 0) {
+      console.log('[Notify] alerta_diaria_urgentes skipped: domingo')
+      return
+    }
+
     console.log('[Notify] alerta_diaria_urgentes called')
     const supabase = createServiceClient()
 
