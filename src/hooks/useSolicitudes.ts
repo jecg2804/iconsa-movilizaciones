@@ -28,6 +28,7 @@ export interface SolicitudWithRelations {
   priority: string | null
   notes: string | null
   attachments: unknown
+  fulfillment_type: string | null
   created_at: string | null
   updated_at: string | null
   project: { id: string; code: string; name: string } | null
@@ -59,6 +60,9 @@ export interface LineWithRelations {
   status: string
   qty_scheduled: number | null
   qty_delivered: number | null
+  requires_code: boolean | null
+  designated_receiver_id: string | null
+  designated_receiver_name: string | null
   created_at: string
   updated_at: string
   equipment: { id: string; spectrum_code: string | null; description: string } | null
@@ -362,6 +366,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           priority: row.priority,
           notes: row.notes,
           attachments: row.attachments,
+          fulfillment_type: row.fulfillment_type ?? 'fleet',
           created_at: row.created_at,
           updated_at: row.updated_at,
           project: project as SolicitudWithRelations['project'],
@@ -484,6 +489,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         priority: data.priority,
         notes: data.notes,
         attachments: data.attachments,
+        fulfillment_type: data.fulfillment_type ?? 'fleet',
         created_at: data.created_at,
         updated_at: data.updated_at,
         project: project as SolicitudWithRelations['project'],

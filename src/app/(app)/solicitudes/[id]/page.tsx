@@ -52,6 +52,9 @@ function lineToInput(line: LineWithRelations): LineInput {
     material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
+    requires_code: line.requires_code ?? false,
+    designated_receiver_id: line.designated_receiver_id ?? null,
+    designated_receiver_name: line.designated_receiver_name ?? null,
   }
 }
 
@@ -590,7 +593,7 @@ export default function SolicitudDetailPage() {
             dateSubmitted: solicitud.date_submitted ?? undefined,
             dateCompleted: solicitud.date_completed ?? undefined,
             dateCancelled: solicitud.date_cancelled ?? undefined,
-            fulfillmentType: ((solicitud as unknown as Record<string, unknown>).fulfillment_type as string) ?? 'fleet',
+            fulfillmentType: solicitud.fulfillment_type ?? 'fleet',
           }}
           projects={projectOptions}
           people={people}
