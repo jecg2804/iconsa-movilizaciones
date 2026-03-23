@@ -17,7 +17,8 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
-import { formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
+import { formatDate, formatDateTime, formatQty, formatTimePanama } from '@/lib/utils/format'
+import Link from 'next/link'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import { notifySolicitudEnviada, notifySolicitudUrgenteNueva } from '@/lib/notifications/actions'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
@@ -544,6 +545,33 @@ export default function SolicitudDetailPage() {
           {errorMessage}
         </div>
       )}
+
+      {/* Banner de entrega — solo si hay líneas en tránsito */}
+      {(() => {
+        const tripEnRoute = associatedTrips.find(t => t.status === 'En Ruta')
+        const hasLinesInTransit = solicitud.lines?.some((l: { status: string }) => l.status === 'En Transito')
+        if (!tripEnRoute || !hasLinesInTransit) return null
+        const salidaEvent = tripEnRoute.events?.find((e: { event_type: string }) => e.event_type === 'Salida')
+        return (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p className="text-sm font-semibold text-blue-900">
+                🚛 Material en camino
+              </p>
+              <p className="text-xs text-blue-700">
+                Viaje <span className="font-mono font-bold">{tripEnRoute.trip_id}</span>
+                {salidaEvent && <> | Salió {formatTimePanama(salidaEvent.event_timestamp)}</>}
+              </p>
+            </div>
+            <Link
+              href={`/mis-viajes/${tripEnRoute.id}?action=deliver`}
+              className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90 transition-colors"
+            >
+              Confirmar Recepción →
+            </Link>
+          </div>
+        )
+      })()}
 
       {/* Header del formulario */}
       <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">

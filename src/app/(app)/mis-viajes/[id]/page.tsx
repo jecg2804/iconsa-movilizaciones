@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
@@ -270,6 +270,8 @@ export default function MisViajesDetailPage() {
   const params = useParams()
   const id = params.id as string
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialAction = searchParams?.get('action')
   const supabase = useMemo(() => createClient(), [])
 
   const { role, loading: authLoading } = useAuth()
@@ -283,6 +285,7 @@ export default function MisViajesDetailPage() {
 
   // Estado del modal de registro de evento
   const [activeEvent, setActiveEvent] = useState<TripEventType | null>(null)
+  const [actionHandled, setActionHandled] = useState(false)
 
   // Opciones de receptor para entrega
   const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
@@ -537,6 +540,18 @@ export default function MisViajesDetailPage() {
   const isPM = role === 'pm'
   // Retorno secundario: disponible después de Salida sin requerir Entrega
   const showRetornoSecondary = hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
+
+  // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
+  useEffect(() => {
+    if (actionHandled || !trip || pageLoading) return
+    if (initialAction === 'deliver' && hasSalida && !tripDone) {
+      setActiveEvent('Entrega')
+      setActionHandled(true)
+    } else if (initialAction === 'dispatch' && !hasSalida && !tripDone) {
+      setActiveEvent('Salida')
+      setActionHandled(true)
+    }
+  }, [initialAction, trip, pageLoading, hasSalida, tripDone, actionHandled])
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">

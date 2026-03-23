@@ -361,6 +361,31 @@ export default function ProgramacionPage() {
           </span>
         ),
       },
+      {
+        key: 'actions',
+        header: '',
+        className: 'w-[110px]',
+        render: (row: TripWithRelations) => {
+          const today = new Date().toISOString().split('T')[0]
+          if (row.status === 'Programado' && row.scheduled_date === today) {
+            return (
+              <a href={`/mis-viajes/${row.id}?action=dispatch`}
+                 className="text-xs font-medium text-navy hover:underline whitespace-nowrap">
+                🚛 Despachar →
+              </a>
+            )
+          }
+          if (row.status === 'En Ruta') {
+            return (
+              <a href={`/mis-viajes/${row.id}`}
+                 className="text-xs font-medium text-blue-600 hover:underline whitespace-nowrap">
+                Ver Eventos →
+              </a>
+            )
+          }
+          return null
+        },
+      },
     ],
     [],
   )

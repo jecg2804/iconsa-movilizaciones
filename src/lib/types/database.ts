@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
@@ -165,6 +165,61 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_observations: {
+        Row: {
+          attachments: Json | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          observation_type: string
+          reported_by: string | null
+          request_line_id: string
+          trip_event_id: string
+        }
+        Insert: {
+          attachments?: Json | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          observation_type: string
+          reported_by?: string | null
+          request_line_id: string
+          trip_event_id: string
+        }
+        Update: {
+          attachments?: Json | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          observation_type?: string
+          reported_by?: string | null
+          request_line_id?: string
+          trip_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_observations_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_observations_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "sm_request_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_observations_trip_event_id_fkey"
+            columns: ["trip_event_id"]
+            isOneToOne: false
+            referencedRelation: "trip_events"
             referencedColumns: ["id"]
           },
         ]
@@ -1825,6 +1880,8 @@ export type Database = {
           created_at: string | null
           delivered_at: string | null
           description: string
+          designated_receiver_id: string | null
+          designated_receiver_name: string | null
           equipment_id: string | null
           equipment_text: string | null
           from_location_id: string | null
@@ -1840,6 +1897,7 @@ export type Database = {
           qty_scheduled: number | null
           quantity: number
           request_id: string
+          requires_code: boolean | null
           status: string
           to_location_id: string | null
           to_text: string | null
@@ -1855,6 +1913,8 @@ export type Database = {
           created_at?: string | null
           delivered_at?: string | null
           description: string
+          designated_receiver_id?: string | null
+          designated_receiver_name?: string | null
           equipment_id?: string | null
           equipment_text?: string | null
           from_location_id?: string | null
@@ -1870,6 +1930,7 @@ export type Database = {
           qty_scheduled?: number | null
           quantity?: number
           request_id: string
+          requires_code?: boolean | null
           status?: string
           to_location_id?: string | null
           to_text?: string | null
@@ -1885,6 +1946,8 @@ export type Database = {
           created_at?: string | null
           delivered_at?: string | null
           description?: string
+          designated_receiver_id?: string | null
+          designated_receiver_name?: string | null
           equipment_id?: string | null
           equipment_text?: string | null
           from_location_id?: string | null
@@ -1900,6 +1963,7 @@ export type Database = {
           qty_scheduled?: number | null
           quantity?: number
           request_id?: string
+          requires_code?: boolean | null
           status?: string
           to_location_id?: string | null
           to_text?: string | null
@@ -1921,6 +1985,13 @@ export type Database = {
             columns: ["cost_code_id"]
             isOneToOne: false
             referencedRelation: "cost_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_request_lines_designated_receiver_id_fkey"
+            columns: ["designated_receiver_id"]
+            isOneToOne: false
+            referencedRelation: "people"
             referencedColumns: ["id"]
           },
           {
@@ -1985,6 +2056,7 @@ export type Database = {
           date_created: string | null
           date_required: string
           date_submitted: string | null
+          fulfillment_type: string | null
           id: string
           initial_priority: string | null
           notes: string | null
@@ -2006,6 +2078,7 @@ export type Database = {
           date_created?: string | null
           date_required: string
           date_submitted?: string | null
+          fulfillment_type?: string | null
           id?: string
           initial_priority?: string | null
           notes?: string | null
@@ -2027,6 +2100,7 @@ export type Database = {
           date_created?: string | null
           date_required?: string
           date_submitted?: string | null
+          fulfillment_type?: string | null
           id?: string
           initial_priority?: string | null
           notes?: string | null
@@ -2121,6 +2195,48 @@ export type Database = {
           },
         ]
       }
+      trip_event_lines: {
+        Row: {
+          created_at: string | null
+          id: string
+          line_status: string
+          quantity: number
+          request_line_id: string
+          trip_event_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          line_status: string
+          quantity: number
+          request_line_id: string
+          trip_event_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          line_status?: string
+          quantity?: number
+          request_line_id?: string
+          trip_event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_event_lines_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "sm_request_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_event_lines_trip_event_id_fkey"
+            columns: ["trip_event_id"]
+            isOneToOne: false
+            referencedRelation: "trip_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trip_events: {
         Row: {
           attachments: Json | null
@@ -2134,6 +2250,8 @@ export type Database = {
           received_by_id: string | null
           received_by_name: string | null
           registered_by: string | null
+          reverts_event_id: string | null
+          source: string | null
           trip_id: string
         }
         Insert: {
@@ -2148,6 +2266,8 @@ export type Database = {
           received_by_id?: string | null
           received_by_name?: string | null
           registered_by?: string | null
+          reverts_event_id?: string | null
+          source?: string | null
           trip_id: string
         }
         Update: {
@@ -2162,6 +2282,8 @@ export type Database = {
           received_by_id?: string | null
           received_by_name?: string | null
           registered_by?: string | null
+          reverts_event_id?: string | null
+          source?: string | null
           trip_id?: string
         }
         Relationships: [
@@ -2180,6 +2302,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "trip_events_reverts_event_id_fkey"
+            columns: ["reverts_event_id"]
+            isOneToOne: false
+            referencedRelation: "trip_events"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "trip_events_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
@@ -2193,6 +2322,7 @@ export type Database = {
           created_at: string | null
           id: string
           qty_delivered: number | null
+          qty_dispatched: number | null
           quantity_assigned: number
           request_line_id: string
           trip_id: string
@@ -2202,6 +2332,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           qty_delivered?: number | null
+          qty_dispatched?: number | null
           quantity_assigned: number
           request_line_id: string
           trip_id: string
@@ -2211,6 +2342,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           qty_delivered?: number | null
+          qty_dispatched?: number | null
           quantity_assigned?: number
           request_line_id?: string
           trip_id?: string
@@ -2249,6 +2381,7 @@ export type Database = {
           escort: boolean | null
           id: string
           is_external: boolean | null
+          is_self_pickup: boolean | null
           notes: string | null
           rate_id: string | null
           route_summary: string | null
@@ -2276,6 +2409,7 @@ export type Database = {
           escort?: boolean | null
           id?: string
           is_external?: boolean | null
+          is_self_pickup?: boolean | null
           notes?: string | null
           rate_id?: string | null
           route_summary?: string | null
@@ -2303,6 +2437,7 @@ export type Database = {
           escort?: boolean | null
           id?: string
           is_external?: boolean | null
+          is_self_pickup?: boolean | null
           notes?: string | null
           rate_id?: string | null
           route_summary?: string | null
@@ -2924,6 +3059,6 @@ export const Constants = {
   },
 } as const
 
-// Helper types
+// Helper type used throughout the codebase
 export type Row<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row']

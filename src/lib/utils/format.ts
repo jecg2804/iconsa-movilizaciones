@@ -114,3 +114,35 @@ export function formatCompletionDelta(
   if (days < 0) return { text: `${Math.abs(days)}d tarde`, color: 'text-iconsa-red' }
   return { text: 'a tiempo', color: 'text-iconsa-green' }
 }
+
+/**
+ * Sub-status operativo para solicitudes "En Proceso".
+ * Muestra resumen de líneas por estado.
+ */
+export function getOperationalSummary(lines: { status: string }[]): string {
+  const inTransit = lines.filter(l => l.status === 'En Transito').length
+  const delivered = lines.filter(l => l.status === 'Entregada').length
+  const scheduled = lines.filter(l => l.status === 'Programada').length
+  const pending = lines.filter(l => l.status === 'Pendiente').length
+  const partial = lines.filter(l => l.status === 'Parcial').length
+  const total = lines.length
+
+  if (inTransit > 0) return `🚛 ${inTransit} en tránsito`
+  if (delivered > 0 && (pending > 0 || scheduled > 0 || partial > 0))
+    return `📦 ${delivered} de ${total} entregadas`
+  if (scheduled > 0) return `📅 ${scheduled} programada${scheduled !== 1 ? 's' : ''}`
+  if (pending > 0) return `⏳ ${pending} sin programar`
+  return ''
+}
+
+/**
+ * Formatea timestamp a hora local Panamá.
+ */
+export function formatTimePanama(timestamp: string | null | undefined): string {
+  if (!timestamp) return '—'
+  return new Date(timestamp).toLocaleTimeString('es-PA', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Panama',
+  })
+}

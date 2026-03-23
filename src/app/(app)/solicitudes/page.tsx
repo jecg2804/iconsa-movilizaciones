@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
 import { canCreateSolicitud } from '@/lib/utils/roles'
-import { formatDate, formatQty, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
+import { formatDate, formatQty, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta, getOperationalSummary } from '@/lib/utils/format'
 import { REQUEST_STATUSES } from '@/lib/utils/constants'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -276,7 +276,16 @@ export default function SolicitudesPage() {
         header: 'Estado',
         sortable: true,
         className: 'w-[130px]',
-        render: (row) => <Badge label={row.status} variant="status" />,
+        render: (row) => (
+          <div>
+            <Badge label={row.status} variant="status" />
+            {row.status === 'En Proceso' && row.lines?.length > 0 && (
+              <p className="text-xs text-iconsa-gray mt-0.5">
+                {getOperationalSummary(row.lines)}
+              </p>
+            )}
+          </div>
+        ),
         sortValue: (row) => row.status,
       },
       {
