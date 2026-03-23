@@ -533,6 +533,8 @@ export default function MisViajesDetailPage() {
   const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
   // Todos los roles con acceso a mis-viajes pueden registrar eventos (incluye PM para entregas)
   const canRegisterEvents = canRegisterEvent(role)
+  // PM solo ve Entrega + Incidencia (no puede UPDATE trips → no Salida/Retorno)
+  const isPM = role === 'pm'
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
@@ -652,8 +654,8 @@ export default function MisViajesDetailPage() {
               <p className="text-sm text-red-700">{registerError}</p>
             )}
 
-            {/* Siguiente evento principal */}
-            {nextMainEvent && (
+            {/* Siguiente evento principal (PM solo ve Entrega) */}
+            {nextMainEvent && (!isPM || nextMainEvent === 'Entrega') && (
               <EventButton
                 eventType={nextMainEvent}
                 loading={registering && activeEvent === nextMainEvent}
@@ -662,8 +664,8 @@ export default function MisViajesDetailPage() {
               />
             )}
 
-            {/* Llegada (opcional, solo si aplica) */}
-            {showLlegadaButton && (
+            {/* Llegada (opcional, solo si aplica — no visible para PM) */}
+            {showLlegadaButton && !isPM && (
               <EventButton
                 eventType="Llegada"
                 loading={registering && activeEvent === 'Llegada'}
