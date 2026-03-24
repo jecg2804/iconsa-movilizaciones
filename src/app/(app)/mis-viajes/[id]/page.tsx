@@ -19,6 +19,7 @@ import { canRegisterEvent } from '@/lib/utils/roles'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
+import { DispatchModal, type DispatchData } from '@/components/viajes/DispatchModal'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
 import { CodeConfirmation } from '@/components/viajes/CodeConfirmation'
@@ -272,7 +273,7 @@ export default function Page() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
-  const { role, loading: authLoading } = useAuth()
+  const { person, role, loading: authLoading } = useAuth()
   const { fetchTrip } = useTrips()
   const { registerEvent, registering, registerError } = useTripEvents(id)
 
@@ -284,6 +285,8 @@ export default function Page() {
   // Estado del modal de registro de evento
   const [activeEvent, setActiveEvent] = useState<TripEventType | null>(null)
   const [actionHandled, setActionHandled] = useState(false)
+  const [dispatching, setDispatching] = useState(false)
+  const [dispatchError, setDispatchError] = useState<string | null>(null)
 
   // Opciones de receptor para entrega
   const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
@@ -506,6 +509,80 @@ export default function Page() {
     [registerEvent, assignedLineIds, fetchTrip, id, loadEvents, trip],
   )
 
+  // --- Despacho editable (reemplaza Salida simple) ---
+  const handleDispatch = useCallback(
+    async (data: DispatchData) => {
+      if (!trip) return
+      setDispatching(true)
+      setDispatchError(null)
+
+      try {
+        // 1. UPDATE trip: conductor, vehículo, remolque, status, salida
+        const { error: tripError } = await supabase
+          .from('trips')
+          .update({
+            driver_id: data.driver_id,
+            vehicle_id: data.vehicle_id,
+            trailer_id: data.trailer_id,
+            status: 'En Ruta',
+            actual_departure: new Date().toISOString(),
+          })
+          .eq('id', trip.id)
+
+        if (tripError) throw tripError
+
+        // 2. UPDATE líneas a 'En Transito' (SIN acento — CRÍTICO para cascade)
+        const lineIds = data.lines.map((l) => l.request_line_id)
+        if (lineIds.length > 0) {
+          const { error: linesError } = await supabase
+            .from('sm_request_lines')
+            .update({ status: 'En Transito' })
+            .in('id', lineIds)
+
+          if (linesError) throw linesError
+        }
+
+        // 3. UPDATE trip_line_assignments: qty_dispatched
+        for (const line of data.lines) {
+          await supabase
+            .from('trip_line_assignments')
+            .update({ qty_dispatched: line.qty_dispatched })
+            .eq('trip_id', trip.id)
+            .eq('request_line_id', line.request_line_id)
+        }
+
+        // 4. INSERT evento de Salida
+        const { error: eventError } = await supabase
+          .from('trip_events')
+          .insert({
+            trip_id: trip.id,
+            event_type: 'Salida',
+            event_timestamp: new Date().toISOString(),
+            registered_by: person?.id ?? null,
+            notes: data.notes || null,
+          })
+
+        if (eventError) throw eventError
+
+        // 5. Notificación
+        notifySalidaRegistrada(trip.id).catch(console.error)
+
+        // 6. Reload
+        setActiveEvent(null)
+        const tripData = await fetchTrip(id)
+        setTrip(tripData)
+        await loadEvents()
+      } catch (err) {
+        setDispatchError(
+          err instanceof Error ? err.message : 'Error al registrar despacho',
+        )
+      } finally {
+        setDispatching(false)
+      }
+    },
+    [supabase, trip, person, fetchTrip, id, loadEvents],
+  )
+
   // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
   useEffect(() => {
     if (actionHandled || !trip || pageLoading) return
@@ -667,8 +744,8 @@ export default function Page() {
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:static sm:inset-auto sm:z-auto sm:rounded-lg sm:border sm:shadow-sm sm:px-6 sm:py-4">
           <div className="mx-auto max-w-2xl space-y-2">
             {/* Error de registro */}
-            {registerError && (
-              <p className="text-sm text-red-700">{registerError}</p>
+            {(registerError || dispatchError) && (
+              <p className="text-sm text-red-700">{registerError || dispatchError}</p>
             )}
 
             {/* Siguiente evento principal (PM solo ve Entrega) */}
@@ -712,8 +789,18 @@ export default function Page() {
         </div>
       )}
 
-      {/* Overlay de registro de evento */}
-      {activeEvent && (
+      {/* Overlay de despacho editable (reemplaza Salida simple) */}
+      {activeEvent === 'Salida' && trip && (
+        <DispatchModal
+          trip={trip}
+          onConfirm={handleDispatch}
+          onClose={() => setActiveEvent(null)}
+          loading={dispatching}
+        />
+      )}
+
+      {/* Overlay de registro de evento (todos excepto Salida) */}
+      {activeEvent && activeEvent !== 'Salida' && (
         <EventModal
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}
