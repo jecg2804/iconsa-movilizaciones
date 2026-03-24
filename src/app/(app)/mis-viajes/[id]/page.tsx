@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -266,7 +266,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
 
 // --- Pagina principal ---
 
-export default function MisViajesDetailPage() {
+function MisViajesDetailPage() {
   const params = useParams()
   const id = params.id as string
   const router = useRouter()
@@ -725,5 +725,13 @@ export default function MisViajesDetailPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <MisViajesDetailPage />
+    </Suspense>
   )
 }
