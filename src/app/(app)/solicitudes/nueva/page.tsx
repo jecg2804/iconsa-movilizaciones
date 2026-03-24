@@ -209,19 +209,25 @@ export default function NuevaSolicitudPage() {
 
   const handleLineSave = useCallback(
     (line: LineInput) => {
+      // Aplicar bulk requires_code si está activo
+      const lineWithBulk = {
+        ...line,
+        requires_code: bulkRequiresCode ? true : line.requires_code,
+      }
+
       if (editingLineIndex !== null) {
         // Editar linea existente
         setLines((prev) =>
-          prev.map((existing, i) => (i === editingLineIndex ? line : existing)),
+          prev.map((existing, i) => (i === editingLineIndex ? lineWithBulk : existing)),
         )
       } else {
         // Agregar linea nueva
-        setLines((prev) => [...prev, line])
+        setLines((prev) => [...prev, lineWithBulk])
       }
       setShowLineEditor(false)
       setEditingLineIndex(null)
     },
-    [editingLineIndex],
+    [editingLineIndex, bulkRequiresCode],
   )
 
   const handleLineCancel = useCallback(() => {

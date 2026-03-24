@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { DispatchModal, type DispatchData } from '@/components/viajes/DispatchModal'
 import { DeliveryModal, type DeliveryData } from '@/components/viajes/DeliveryModal'
+import { RevertModal } from '@/components/viajes/RevertModal'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
 import { CodeConfirmation } from '@/components/viajes/CodeConfirmation'
@@ -38,6 +39,7 @@ interface TripEvent {
   received_by_name: string | null
   notes: string | null
   attachments: Attachment[]
+  reverts_event_id: string | null
 }
 
 // --- Componente de fila de asignacion (solo lectura) ---
@@ -288,6 +290,8 @@ export default function Page() {
   const [actionHandled, setActionHandled] = useState(false)
   const [dispatching, setDispatching] = useState(false)
   const [dispatchError, setDispatchError] = useState<string | null>(null)
+  const [revertEvent, setRevertEvent] = useState<TripEvent | null>(null)
+  const [reverting, setReverting] = useState(false)
 
   // Opciones de receptor para entrega
   const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
@@ -397,7 +401,8 @@ export default function Page() {
         registered_by:registered_by(name),
         received_by_name,
         notes,
-        attachments
+        attachments,
+        reverts_event_id
       `)
       .eq('trip_id', id)
       .order('event_timestamp', { ascending: true })
@@ -418,6 +423,7 @@ export default function Page() {
           received_by_name: (row.received_by_name as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
           attachments: att,
+          reverts_event_id: (row.reverts_event_id as string | null) ?? null,
         }
       })
       setEvents(mapped)
@@ -705,6 +711,97 @@ export default function Page() {
     [supabase, trip, person, fetchTrip, id, loadEvents],
   )
 
+  // --- Reversión de eventos ---
+  const handleRevert = useCallback(
+    async (reason: string) => {
+      if (!revertEvent || !trip) return
+      setReverting(true)
+      setDispatchError(null)
+
+      try {
+        const eventType = revertEvent.event_type
+
+        // 1. INSERT Reversion event (eventos INMUTABLES — no DELETE/UPDATE)
+        await supabase.from('trip_events').insert({
+          trip_id: trip.id,
+          event_type: 'Reversion',
+          event_timestamp: new Date().toISOString(),
+          registered_by: person?.id ?? null,
+          notes: reason,
+          reverts_event_id: revertEvent.id,
+        })
+
+        // 2. Revert state changes
+        if (eventType === 'Salida') {
+          // Trip → Programado
+          await supabase
+            .from('trips')
+            .update({ status: 'Programado', actual_departure: null })
+            .eq('id', trip.id)
+
+          // Lines → Programada
+          const lineIds = trip.assignments.map((a) => a.request_line_id)
+          if (lineIds.length > 0) {
+            await supabase
+              .from('sm_request_lines')
+              .update({ status: 'Programada' })
+              .in('id', lineIds)
+          }
+        }
+
+        if (eventType === 'Entrega') {
+          // Get trip_event_lines para saber qué revertir
+          const { data: eventLines } = await supabase
+            .from('trip_event_lines')
+            .select('request_line_id, quantity')
+            .eq('trip_event_id', revertEvent.id)
+
+          for (const el of eventLines ?? []) {
+            const { data: current } = await supabase
+              .from('sm_request_lines')
+              .select('qty_delivered')
+              .eq('id', el.request_line_id)
+              .single()
+
+            // Math.max(0, ...) — enforce_qty_integrity blocks negatives
+            const newQty = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
+
+            await supabase
+              .from('sm_request_lines')
+              .update({
+                qty_delivered: newQty,
+                status: 'En Transito', // SIN acento — CRÍTICO
+                delivered_at: null,
+              })
+              .eq('id', el.request_line_id)
+          }
+          // NO revertir ubicación de equipo — refleja realidad física
+        }
+
+        if (eventType === 'Retorno') {
+          // Trip → En Ruta
+          await supabase
+            .from('trips')
+            .update({ status: 'En Ruta', actual_arrival: null })
+            .eq('id', trip.id)
+        }
+
+        // 3. Reload
+        setRevertEvent(null)
+        const tripData = await fetchTrip(id)
+        setTrip(tripData)
+        await loadEvents()
+      } catch (err) {
+        setDispatchError(
+          err instanceof Error ? err.message : 'Error al revertir evento',
+        )
+      } finally {
+        setReverting(false)
+      }
+    },
+    [supabase, trip, person, revertEvent, fetchTrip, id, loadEvents],
+  )
+
   // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
   useEffect(() => {
     if (actionHandled || !trip || pageLoading) return
@@ -751,6 +848,16 @@ export default function Page() {
   const isPM = role === 'pm'
   // Retorno secundario: disponible después de Salida sin requerir Entrega
   const showRetornoSecondary = hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
+
+  // Último evento revertible (solo Salida/Entrega/Retorno, no ya revertido)
+  const canRevert = role === 'logistica' || role === 'admin'
+  const revertibleTypes = ['Salida', 'Entrega', 'Retorno']
+  const revertedIds = new Set(
+    events.filter((e) => e.event_type === 'Reversion' && e.reverts_event_id).map((e) => e.reverts_event_id!),
+  )
+  const lastRevertible = canRevert && !tripDone
+    ? [...events].reverse().find((e) => revertibleTypes.includes(e.event_type) && !revertedIds.has(e.id)) ?? null
+    : null
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
@@ -908,6 +1015,17 @@ export default function Page() {
               onClick={() => setActiveEvent('Incidencia')}
             />
           </div>
+
+          {/* Botón reversión — solo logistica/admin, solo último evento revertible */}
+          {lastRevertible && (
+            <button
+              type="button"
+              onClick={() => setRevertEvent(lastRevertible)}
+              className="text-xs text-red-600 hover:text-red-800 hover:underline mt-1"
+            >
+              ⟲ Revertir {lastRevertible.event_type}
+            </button>
+          )}
         </div>
       )}
 
@@ -943,6 +1061,16 @@ export default function Page() {
           onConfirm={handleRegisterEvent}
           onClose={() => setActiveEvent(null)}
           loading={registering}
+        />
+      )}
+
+      {/* Overlay de reversión */}
+      {revertEvent && (
+        <RevertModal
+          event={revertEvent}
+          onConfirm={handleRevert}
+          onClose={() => setRevertEvent(null)}
+          loading={reverting}
         />
       )}
     </div>
