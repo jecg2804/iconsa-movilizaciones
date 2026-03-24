@@ -506,6 +506,20 @@ export default function Page() {
     [registerEvent, assignedLineIds, fetchTrip, id, loadEvents, trip],
   )
 
+  // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
+  useEffect(() => {
+    if (actionHandled || !trip || pageLoading) return
+    const urlParams = new URLSearchParams(window.location.search)
+    const action = urlParams.get('action')
+    if (action === 'deliver' && hasSalida && !tripDone) {
+      setActiveEvent('Entrega')
+      setActionHandled(true)
+    } else if (action === 'dispatch' && !hasSalida && !tripDone) {
+      setActiveEvent('Salida')
+      setActionHandled(true)
+    }
+  }, [trip, pageLoading, hasSalida, tripDone, actionHandled])
+
   // --- Guards ---
   if (authLoading || pageLoading) {
     return (
@@ -538,20 +552,6 @@ export default function Page() {
   const isPM = role === 'pm'
   // Retorno secundario: disponible después de Salida sin requerir Entrega
   const showRetornoSecondary = hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
-
-  // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
-  useEffect(() => {
-    if (actionHandled || !trip || pageLoading) return
-    const urlParams = new URLSearchParams(window.location.search)
-    const action = urlParams.get('action')
-    if (action === 'deliver' && hasSalida && !tripDone) {
-      setActiveEvent('Entrega')
-      setActionHandled(true)
-    } else if (action === 'dispatch' && !hasSalida && !tripDone) {
-      setActiveEvent('Salida')
-      setActionHandled(true)
-    }
-  }, [trip, pageLoading, hasSalida, tripDone, actionHandled])
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
