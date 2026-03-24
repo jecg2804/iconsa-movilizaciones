@@ -1,6 +1,6 @@
 'use client'
 
-import { Truck, MapPin, CheckCircle, Home, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Truck, MapPin, CheckCircle, Home, AlertTriangle, RotateCcw, ClipboardCheck, Car } from 'lucide-react'
 import FileDisplay from '@/components/ui/FileDisplay'
 import type { Attachment } from '@/lib/supabase/storage'
 
@@ -33,6 +33,10 @@ function getEventIcon(type: string) {
       return <AlertTriangle className="h-4 w-4" />
     case 'Reversion':
       return <RotateCcw className="h-4 w-4" />
+    case 'Preparacion':
+      return <ClipboardCheck className="h-4 w-4" />
+    case 'Retiro':
+      return <Car className="h-4 w-4" />
     default:
       return <MapPin className="h-4 w-4" />
   }
@@ -53,6 +57,10 @@ function getEventColor(type: string, isReverted: boolean): string {
       return 'bg-iconsa-orange text-white'
     case 'Reversion':
       return 'bg-red-100 text-red-600'
+    case 'Preparacion':
+      return 'bg-amber-500 text-white'
+    case 'Retiro':
+      return 'bg-iconsa-green text-white'
     default:
       return 'bg-gray-400 text-white'
   }

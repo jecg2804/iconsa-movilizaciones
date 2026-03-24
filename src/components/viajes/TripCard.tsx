@@ -10,14 +10,11 @@ interface TripCardProps {
 }
 
 // Pasos en orden de la barra de progreso
-const PROGRESS_STEPS: MyTripEvent['event_type'][] = [
-  'Salida',
-  'Llegada',
-  'Entrega',
-  'Retorno',
-]
+const FLEET_STEPS: MyTripEvent['event_type'][] = ['Salida', 'Llegada', 'Entrega', 'Retorno']
+const PICKUP_STEPS: MyTripEvent['event_type'][] = ['Preparacion', 'Retiro']
 
-function ProgressBar({ events }: { events: MyTripEvent[] }) {
+function ProgressBar({ events, isPickup }: { events: MyTripEvent[]; isPickup: boolean }) {
+  const PROGRESS_STEPS = isPickup ? PICKUP_STEPS : FLEET_STEPS
   const completedTypes = new Set(events.map((e) => e.event_type))
 
   return (
@@ -84,6 +81,9 @@ export function TripCard({ trip, onClick }: TripCardProps) {
             <span className="font-mono text-sm text-iconsa-gray">{trip.id.slice(0, 8)}</span>
           )}
           <Badge variant="trip" label={trip.status} />
+          {trip.is_self_pickup && (
+            <Badge variant="custom" label="Retiro" bg="bg-amber-100" text="text-amber-800" />
+          )}
           {trip.att_permit && (
             <Badge variant="custom" label="ATT" bg="bg-purple-100" text="text-purple-800" />
           )}
@@ -125,7 +125,7 @@ export function TripCard({ trip, onClick }: TripCardProps) {
       </div>
 
       {/* Barra de progreso */}
-      <ProgressBar events={trip.events} />
+      <ProgressBar events={trip.events} isPickup={trip.is_self_pickup} />
     </button>
   )
 }

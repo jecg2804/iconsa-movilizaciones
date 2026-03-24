@@ -37,6 +37,7 @@ export interface MyTripSummary {
   confirmation_code: string | null
   att_permit: boolean | null
   escort: boolean | null
+  is_self_pickup: boolean
   driver: { id: string; name: string } | null
   vehicle: { id: string; description: string; spectrum_code: string | null } | null
   trailer: { id: string; description: string } | null
@@ -74,6 +75,7 @@ export function useMyTrips() {
           confirmation_code,
           att_permit,
           escort,
+          is_self_pickup,
           driver:driver_id(id, name),
           vehicle:vehicle_id(id, description, spectrum_code),
           trailer:trailer_id(id, description),
@@ -164,6 +166,7 @@ export function useMyTrips() {
           confirmation_code: (r.confirmation_code as string | null) ?? null,
           att_permit: (r.att_permit as boolean | null) ?? null,
           escort: (r.escort as boolean | null) ?? null,
+          is_self_pickup: (r.is_self_pickup as boolean) ?? false,
           driver,
           vehicle,
           trailer,

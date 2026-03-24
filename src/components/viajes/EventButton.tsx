@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2, Truck, MapPin, CheckCircle, Home, AlertTriangle } from 'lucide-react'
+import { Loader2, Truck, MapPin, CheckCircle, Home, AlertTriangle, ClipboardCheck, Car } from 'lucide-react'
 import type { TripEventType } from '@/hooks/useTripEvents'
 
 interface EventButtonProps {
@@ -38,6 +38,16 @@ const EVENT_CONFIG: Record<
     label: 'Registrar Incidencia',
     icon: <AlertTriangle className="h-6 w-6" />,
     colorClass: 'bg-iconsa-orange hover:bg-iconsa-orange/90 text-white',
+  },
+  Preparacion: {
+    label: 'Registrar Preparación',
+    icon: <ClipboardCheck className="h-6 w-6" />,
+    colorClass: 'bg-amber-500 hover:bg-amber-600 text-white',
+  },
+  Retiro: {
+    label: 'Confirmar Retiro',
+    icon: <Car className="h-6 w-6" />,
+    colorClass: 'bg-iconsa-green hover:bg-iconsa-green/90 text-white',
   },
 }
 
