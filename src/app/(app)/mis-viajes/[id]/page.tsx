@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { DispatchModal, type DispatchData } from '@/components/viajes/DispatchModal'
+import { DeliveryModal, type DeliveryData } from '@/components/viajes/DeliveryModal'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
 import { CodeConfirmation } from '@/components/viajes/CodeConfirmation'
@@ -583,6 +584,127 @@ export default function Page() {
     [supabase, trip, person, fetchTrip, id, loadEvents],
   )
 
+  // --- Entrega con per-line status, trip_event_lines, delivery_observations ---
+  const [delivering, setDelivering] = useState(false)
+
+  const handleDelivery = useCallback(
+    async (data: DeliveryData) => {
+      if (!trip) return
+      setDelivering(true)
+      setDispatchError(null)
+
+      try {
+        const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
+
+        // 1. UPDATE sm_request_lines: qty_delivered += qty, status
+        for (const line of accepted) {
+          const { data: current } = await supabase
+            .from('sm_request_lines')
+            .select('qty_delivered, quantity')
+            .eq('id', line.request_line_id)
+            .single()
+
+          const currentDelivered = current?.qty_delivered ?? 0
+          const newDelivered = currentDelivered + line.quantity
+          const totalQty = current?.quantity ?? line.quantity
+          const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
+
+          await supabase
+            .from('sm_request_lines')
+            .update({
+              qty_delivered: newDelivered,
+              status: newStatus,
+              ...(newStatus === 'Entregada' ? { delivered_at: new Date().toISOString() } : {}),
+            })
+            .eq('id', line.request_line_id)
+        }
+
+        // 2. UPDATE trip_line_assignments: qty_delivered
+        for (const line of accepted) {
+          const assignment = trip.assignments.find((a) => a.request_line_id === line.request_line_id)
+          if (assignment) {
+            await supabase
+              .from('trip_line_assignments')
+              .update({ qty_delivered: (assignment.qty_delivered ?? 0) + line.quantity })
+              .eq('trip_id', trip.id)
+              .eq('request_line_id', line.request_line_id)
+          }
+        }
+
+        // 3. INSERT trip_events
+        const { data: event, error: eventError } = await supabase
+          .from('trip_events')
+          .insert({
+            trip_id: trip.id,
+            event_type: 'Entrega',
+            event_timestamp: new Date().toISOString(),
+            registered_by: person?.id ?? null,
+            received_by_name: data.received_by_name,
+            received_by_id: data.received_by_id,
+            notes: data.notes || null,
+            attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
+            confirmation_code_used: data.confirmation_code || null,
+          })
+          .select('id')
+          .single()
+
+        if (eventError) throw eventError
+
+        // 4. INSERT trip_event_lines
+        if (event) {
+          const eventLines = data.lines.map((l) => ({
+            trip_event_id: event.id,
+            request_line_id: l.request_line_id,
+            quantity: l.quantity,
+            line_status: l.line_status,
+          }))
+          await supabase.from('trip_event_lines').insert(eventLines)
+        }
+
+        // 5. INSERT delivery_observations
+        if (event) {
+          const observations = data.lines
+            .filter((l) => l.line_status === 'with_observations' && l.observation_type)
+            .map((l) => ({
+              trip_event_id: event.id,
+              request_line_id: l.request_line_id,
+              observation_type: l.observation_type!,
+              notes: l.observation_notes || null,
+              reported_by: person?.id ?? null,
+            }))
+          if (observations.length > 0) {
+            await supabase.from('delivery_observations').insert(observations)
+          }
+        }
+
+        // 6. Notifications
+        if (accepted.length > 0) {
+          notifyEntregaConfirmada(accepted[0].request_line_id).catch(console.error)
+        }
+        // Check if solicitudes completed
+        const reqIds = [...new Set(
+          trip.assignments.map((a) => a.line?.request?.id).filter(Boolean),
+        )] as string[]
+        for (const reqId of reqIds) {
+          notifySolicitudCompletada(reqId).catch(console.error)
+        }
+
+        // 7. Reload
+        setActiveEvent(null)
+        const tripData = await fetchTrip(id)
+        setTrip(tripData)
+        await loadEvents()
+      } catch (err) {
+        setDispatchError(
+          err instanceof Error ? err.message : 'Error al registrar entrega',
+        )
+      } finally {
+        setDelivering(false)
+      }
+    },
+    [supabase, trip, person, fetchTrip, id, loadEvents],
+  )
+
   // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
   useEffect(() => {
     if (actionHandled || !trip || pageLoading) return
@@ -799,8 +921,20 @@ export default function Page() {
         />
       )}
 
-      {/* Overlay de registro de evento (todos excepto Salida) */}
-      {activeEvent && activeEvent !== 'Salida' && (
+      {/* Overlay de entrega con per-line status */}
+      {activeEvent === 'Entrega' && trip && (
+        <DeliveryModal
+          trip={trip}
+          onConfirm={handleDelivery}
+          onClose={() => setActiveEvent(null)}
+          loading={delivering}
+          receiverOptions={receiverOptions}
+          person={person}
+        />
+      )}
+
+      {/* Overlay de registro de evento (Llegada, Retorno, Incidencia) */}
+      {activeEvent && activeEvent !== 'Salida' && activeEvent !== 'Entrega' && (
         <EventModal
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}

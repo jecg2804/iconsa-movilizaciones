@@ -69,7 +69,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
         .from('people')
         .select('id, name')
         .eq('status', 'Activo')
-        .in('app_role', ['campo', 'logistica'])
+        .eq('app_role', 'campo')
         .order('name')
       setDrivers(data ?? [])
       setDriversLoading(false)

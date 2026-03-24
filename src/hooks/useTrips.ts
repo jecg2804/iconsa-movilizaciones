@@ -58,6 +58,7 @@ export interface TripAssignment {
   request_line_id: string
   quantity_assigned: number
   qty_delivered: number
+  qty_dispatched: number
   // Info de la línea asignada
   line: {
     id: string
@@ -75,6 +76,9 @@ export interface TripAssignment {
     from_text: string | null
     to_text: string | null
     unit_text: string | null
+    requires_code: boolean
+    designated_receiver_id: string | null
+    designated_receiver_name: string | null
     equipment: { id: string; spectrum_code: string | null; description: string } | null
     request: {
       id: string
@@ -221,6 +225,9 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         from_text: (rawLine.from_text as string | null) ?? null,
         to_text: (rawLine.to_text as string | null) ?? null,
         unit_text: (rawLine.unit_text as string | null) ?? null,
+        requires_code: (rawLine.requires_code as boolean) ?? false,
+        designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
+        designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
         equipment: equipRel,
         request: rawRequest
           ? {
@@ -239,6 +246,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
       request_line_id: a.request_line_id as string,
       quantity_assigned: a.quantity_assigned as number,
       qty_delivered: (a.qty_delivered as number) ?? 0,
+      qty_dispatched: (a.qty_dispatched as number) ?? 0,
       line,
     }
   })
@@ -302,6 +310,9 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       from_text: (rawLine.from_text as string | null) ?? null,
       to_text: (rawLine.to_text as string | null) ?? null,
       unit_text: (rawLine.unit_text as string | null) ?? null,
+      requires_code: (rawLine.requires_code as boolean) ?? false,
+      designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
+      designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
       equipment,
       request: rawRequest
         ? {
@@ -321,6 +332,7 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
     request_line_id: a.request_line_id as string,
     quantity_assigned: a.quantity_assigned as number,
     qty_delivered: (a.qty_delivered as number) ?? 0,
+    qty_dispatched: (a.qty_dispatched as number) ?? 0,
     line,
   }
 }
@@ -545,6 +557,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             request_line_id,
             quantity_assigned,
             qty_delivered,
+            qty_dispatched,
             line:request_line_id(
               id,
               line_number,
@@ -555,6 +568,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               notes,
               qty_scheduled,
               qty_delivered,
+              requires_code,
+              designated_receiver_id,
+              designated_receiver_name,
               from_location:from_location_id(id, name),
               to_location:to_location_id(id, name),
               from_text,
@@ -643,6 +659,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             request_line_id,
             quantity_assigned,
             qty_delivered,
+            qty_dispatched,
             line:request_line_id(
               id,
               line_number,
@@ -653,6 +670,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               notes,
               qty_scheduled,
               qty_delivered,
+              requires_code,
+              designated_receiver_id,
+              designated_receiver_name,
               from_text,
               to_text,
               unit_text,
