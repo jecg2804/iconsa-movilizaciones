@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
@@ -266,12 +266,10 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
 
 // --- Pagina principal ---
 
-function MisViajesDetailPage() {
+export default function Page() {
   const params = useParams()
   const id = params.id as string
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const initialAction = searchParams?.get('action')
   const supabase = useMemo(() => createClient(), [])
 
   const { role, loading: authLoading } = useAuth()
@@ -544,14 +542,16 @@ function MisViajesDetailPage() {
   // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
   useEffect(() => {
     if (actionHandled || !trip || pageLoading) return
-    if (initialAction === 'deliver' && hasSalida && !tripDone) {
+    const urlParams = new URLSearchParams(window.location.search)
+    const action = urlParams.get('action')
+    if (action === 'deliver' && hasSalida && !tripDone) {
       setActiveEvent('Entrega')
       setActionHandled(true)
-    } else if (initialAction === 'dispatch' && !hasSalida && !tripDone) {
+    } else if (action === 'dispatch' && !hasSalida && !tripDone) {
       setActiveEvent('Salida')
       setActionHandled(true)
     }
-  }, [initialAction, trip, pageLoading, hasSalida, tripDone, actionHandled])
+  }, [trip, pageLoading, hasSalida, tripDone, actionHandled])
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-32 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
@@ -725,13 +725,5 @@ function MisViajesDetailPage() {
         />
       )}
     </div>
-  )
-}
-
-export default function Page() {
-  return (
-    <Suspense>
-      <MisViajesDetailPage />
-    </Suspense>
   )
 }
