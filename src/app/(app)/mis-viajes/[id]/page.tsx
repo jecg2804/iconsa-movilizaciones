@@ -13,6 +13,8 @@ import {
   notifySolicitudCompletada,
   notifyIncidenciaRuta,
   notifyRetornoRegistrado,
+  notifyMaterialPreparado,
+  notifyReversionRegistrada,
 } from '@/lib/notifications/actions'
 import { formatDate, formatQty } from '@/lib/utils/format'
 import { canRegisterEvent } from '@/lib/utils/roles'
@@ -732,6 +734,9 @@ export default function Page() {
           reverts_event_id: revertEvent.id,
         })
 
+        // Notificar reversión
+        notifyReversionRegistrada(trip.id, reason).catch(console.error)
+
         // 2. Revert state changes
         if (eventType === 'Salida') {
           // Trip → Programado
@@ -818,6 +823,8 @@ export default function Page() {
           notes: data.notes || null,
           attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
         })
+        // Notificar PMs que material está listo
+        notifyMaterialPreparado(trip.id).catch(console.error)
         setActiveEvent(null)
         const tripData = await fetchTrip(id)
         setTrip(tripData)

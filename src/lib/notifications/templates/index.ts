@@ -494,3 +494,51 @@ ${ctaButton('Ver Backlog →', `${APP_URL}/programacion`)}`
     html: emailLayout('Alerta Diaria — Solicitudes Urgentes', body),
   }
 }
+
+// =============================================================================
+// 15. MATERIAL PREPARADO → PMs (pickup)
+// =============================================================================
+export function materialPreparado(data: {
+  tripId: string
+  requestIds: string[]
+  referenceId: string
+}): TemplateResult {
+  const body = `
+${alertBanner('El material está listo para retiro en Chilibre.', 'success')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Solicitudes', data.requestIds.join(', ') || '—')
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+
+  return {
+    subject: `Material listo para retiro — Viaje ${data.tripId}`,
+    html: emailLayout('Material Listo para Retiro', body),
+  }
+}
+
+// =============================================================================
+// 16. REVERSION REGISTRADA → Charris + PMs
+// =============================================================================
+export function reversionRegistrada(data: {
+  tripId: string
+  eventType: string
+  reason: string
+  revertedBy: string
+  referenceId: string
+}): TemplateResult {
+  const body = `
+${alertBanner(`Se revirtió el evento <strong>${data.eventType}</strong> del viaje <strong style="font-family:monospace;">${data.tripId}</strong>.`, 'warning')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Evento revertido', data.eventType) +
+  dataRow('Razón', data.reason) +
+  dataRow('Revertido por', data.revertedBy)
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+
+  return {
+    subject: `Evento revertido — Viaje ${data.tripId}`,
+    html: emailLayout('Evento Revertido', body),
+  }
+}

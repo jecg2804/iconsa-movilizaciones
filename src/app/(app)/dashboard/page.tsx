@@ -86,6 +86,7 @@ export default async function DashboardPage() {
     completadasResult,
     recentSolicitudesResult,
     viajesHoyResult,
+    enRouteResult,
   ] = await Promise.all([
     buildPendientesQuery(),
     buildSinProgramarQuery(),
@@ -108,6 +109,21 @@ export default async function DashboardPage() {
       .eq('scheduled_date', today)
       .order('created_at', { ascending: false })
       .limit(5),
+    // En Tránsito Ahora
+    supabase
+      .from('trips')
+      .select(`
+        id, trip_id, actual_departure,
+        driver:driver_id(name),
+        assignments:trip_line_assignments(
+          id,
+          line:request_line_id(
+            to_location:to_location_id(name),
+            to_text
+          )
+        )
+      `)
+      .eq('status', 'En Ruta'),
   ])
 
   const pendientesCount = pendientesResult.count ?? 0
@@ -137,6 +153,26 @@ export default async function DashboardPage() {
     driver: Array.isArray(t.driver) ? (t.driver[0] ?? null) : t.driver,
     vehicle: Array.isArray(t.vehicle) ? (t.vehicle[0] ?? null) : t.vehicle,
   }))
+
+  // Mapear viajes en tránsito
+  const rawEnRoute = enRouteResult.data ?? []
+  interface EnRouteTrip { id: string; trip_id: string; destination: string; driver_name: string; departure_time: string; line_count: number }
+  const tripsEnRoute: EnRouteTrip[] = (rawEnRoute as unknown as Record<string, unknown>[]).map((t) => {
+    const driver = Array.isArray(t.driver) ? (t.driver[0] as { name: string } | null) : (t.driver as { name: string } | null)
+    const assignments = Array.isArray(t.assignments) ? t.assignments : []
+    const firstLine = (assignments[0] as Record<string, unknown> | undefined)?.line as Record<string, unknown> | null | undefined
+    const toLoc = firstLine ? (Array.isArray(firstLine.to_location) ? firstLine.to_location[0] : firstLine.to_location) as { name: string } | null : null
+    const toText = firstLine?.to_text as string | null
+    const departure = t.actual_departure ? new Date(t.actual_departure as string).toLocaleTimeString('es-PA', { timeZone: 'America/Panama', hour: '2-digit', minute: '2-digit' }) : ''
+    return {
+      id: t.id as string,
+      trip_id: (t.trip_id as string) ?? '',
+      destination: toLoc?.name ?? toText ?? '—',
+      driver_name: driver?.name ?? '—',
+      departure_time: departure,
+      line_count: assignments.length,
+    }
+  })
 
   const mesActual = new Date().toLocaleString('es-PA', {
     month: 'long',
@@ -219,6 +255,30 @@ export default async function DashboardPage() {
           {ROLE_LABELS[role]}
         </p>
       </div>
+
+      {/* En Tránsito Ahora — solo si hay viajes En Ruta */}
+      {tripsEnRoute.length > 0 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <h3 className="text-sm font-semibold text-blue-900 mb-3">
+            En Tránsito Ahora ({tripsEnRoute.length})
+          </h3>
+          <div className="space-y-2">
+            {tripsEnRoute.map((trip) => (
+              <div key={trip.id} className="flex items-center justify-between gap-2 text-sm flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-medium text-blue-900">{trip.trip_id}</span>
+                  <span className="text-blue-700">&rarr; {trip.destination}</span>
+                </div>
+                <div className="flex items-center gap-3 text-blue-600 text-xs">
+                  <span>{trip.driver_name}</span>
+                  {trip.departure_time && <span>{trip.departure_time}</span>}
+                  <span>{trip.line_count} línea{trip.line_count !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grid de KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

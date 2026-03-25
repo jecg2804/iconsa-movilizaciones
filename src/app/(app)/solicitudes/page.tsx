@@ -278,7 +278,12 @@ export default function SolicitudesPage() {
         className: 'w-[130px]',
         render: (row) => (
           <div>
-            <Badge label={row.status} variant="status" />
+            <div className="flex items-center gap-1 flex-wrap">
+              <Badge label={row.status} variant="status" />
+              {row.fulfillment_type === 'pickup' && (
+                <Badge variant="custom" label="Retiro" bg="bg-amber-100" text="text-amber-800" />
+              )}
+            </div>
             {row.status === 'En Proceso' && row.lines?.length > 0 && (
               <p className="text-xs text-iconsa-gray mt-0.5">
                 {getOperationalSummary(row.lines)}
@@ -334,6 +339,9 @@ export default function SolicitudesPage() {
             )}
           </span>
           <Badge label={row.status} variant="status" />
+          {row.fulfillment_type === 'pickup' && (
+            <Badge variant="custom" label="Retiro" bg="bg-amber-100" text="text-amber-800" />
+          )}
         </div>
         <div className="text-sm text-gray-900">
           {row.project ? (

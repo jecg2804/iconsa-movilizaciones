@@ -1022,3 +1022,85 @@ export async function notifyAlertaDiariaUrgentes(): Promise<void> {
     console.error('[Notify] alerta_diaria_urgentes FAILED:', err)
   }
 }
+
+// =============================================================================
+// 15. MATERIAL PREPARADO → PMs (pickup ready for collection)
+// =============================================================================
+export async function notifyMaterialPreparado(tripId: string): Promise<void> {
+  try {
+    console.log('[Notify] material_preparado called', { tripId })
+    const supabase = createServiceClient()
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] material_preparado: trip not found'); return }
+
+    const requestIds = await getTripRequestIds(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
+
+    if (recipients.length === 0) { console.log('[Notify] material_preparado: no recipients'); return }
+
+    const template = templates.materialPreparado({
+      tripId: trip.trip_id ?? '',
+      requestIds,
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'material_preparado',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] material_preparado FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 16. REVERSION REGISTRADA → Charris + PMs
+// =============================================================================
+export async function notifyReversionRegistrada(tripId: string, reason: string): Promise<void> {
+  try {
+    console.log('[Notify] reversion_registrada called', { tripId, reason })
+    const supabase = createServiceClient()
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] reversion_registrada: trip not found'); return }
+
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
+
+    if (recipients.length === 0) { console.log('[Notify] reversion_registrada: no recipients'); return }
+
+    const template = templates.reversionRegistrada({
+      tripId: trip.trip_id ?? '',
+      eventType: 'evento',
+      reason,
+      revertedBy: '',
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'reversion_registrada',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] reversion_registrada FAILED:', err)
+  }
+}
