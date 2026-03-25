@@ -489,7 +489,7 @@ export default function Page() {
   const handleRegisterEvent = useCallback(
     async (input: TripEventInput) => {
       const needsLineUpdate =
-        input.event_type === 'Salida' || input.event_type === 'Entrega'
+        input.event_type === 'Salida' || input.event_type === 'Entrega' || input.event_type === 'Retorno'
       const lineIds = needsLineUpdate ? assignedLineIds : []
 
       const success = await registerEvent(input, lineIds)
@@ -697,7 +697,7 @@ export default function Page() {
 
         // 6. Notifications
         if (accepted.length > 0) {
-          notifyEntregaConfirmada(accepted[0].request_line_id).catch(console.error)
+          notifyEntregaConfirmada(accepted[0].request_line_id, data.received_by_name).catch(console.error)
         }
         // Check if solicitudes completed
         const reqIds = [...new Set(
@@ -744,7 +744,7 @@ export default function Page() {
         })
 
         // Notificar reversión
-        notifyReversionRegistrada(trip.id, reason).catch(console.error)
+        notifyReversionRegistrada(trip.id, reason, eventType, person?.id ?? null).catch(console.error)
 
         // 2. Revert state changes
         if (eventType === 'Salida') {
@@ -762,6 +762,14 @@ export default function Page() {
               .update({ status: 'Programada' })
               .in('id', lineIds)
           }
+        }
+
+        if (eventType === 'Llegada') {
+          // Clear actual_arrival
+          await supabase
+            .from('trips')
+            .update({ actual_arrival: null })
+            .eq('id', trip.id)
         }
 
         if (eventType === 'Entrega') {
@@ -789,6 +797,22 @@ export default function Page() {
                 delivered_at: null,
               })
               .eq('id', el.request_line_id)
+          }
+
+          // Also update trip_line_assignments.qty_delivered
+          for (const el of eventLines ?? []) {
+            const { data: tla } = await supabase
+              .from('trip_line_assignments')
+              .select('qty_delivered')
+              .eq('trip_id', trip.id)
+              .eq('request_line_id', el.request_line_id)
+              .single()
+
+            await supabase
+              .from('trip_line_assignments')
+              .update({ qty_delivered: Math.max(0, (tla?.qty_delivered ?? 0) - el.quantity) })
+              .eq('trip_id', trip.id)
+              .eq('request_line_id', el.request_line_id)
           }
           // NO revertir ubicación de equipo — refleja realidad física
         }
@@ -931,7 +955,7 @@ export default function Page() {
 
         // 6. Notifications
         if (accepted.length > 0) {
-          notifyEntregaConfirmada(accepted[0].request_line_id).catch(console.error)
+          notifyEntregaConfirmada(accepted[0].request_line_id, data.received_by_name).catch(console.error)
         }
 
         // 7. Reload
@@ -997,7 +1021,7 @@ export default function Page() {
 
   // Último evento revertible (solo Salida/Entrega/Retorno, no ya revertido)
   const canRevert = role === 'logistica' || role === 'admin'
-  const revertibleTypes = ['Salida', 'Entrega', 'Retorno']
+  const revertibleTypes = ['Salida', 'Llegada', 'Entrega', 'Retorno']
   // revertedIds already computed above (line ~454)
   const lastRevertible = canRevert && !tripDone
     ? [...events].reverse().find((e) => revertibleTypes.includes(e.event_type) && !revertedIds.has(e.id)) ?? null

@@ -529,7 +529,7 @@ export async function notifyViajeEditado(
     })
 
     await sendNotification({
-      eventType: 'viaje_reprogramado',
+      eventType: 'viaje_editado',
       referenceType: 'trip',
       referenceId: trip.id,
       recipients,
@@ -597,7 +597,7 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
 // =============================================================================
 // 9. ENTREGA CONFIRMADA → Charris + ALL PMs of the request's project
 // =============================================================================
-export async function notifyEntregaConfirmada(requestLineId: string): Promise<void> {
+export async function notifyEntregaConfirmada(requestLineId: string, receivedByName?: string): Promise<void> {
   try {
     console.log('[Notify] entrega_confirmada called', { requestLineId })
     const supabase = createServiceClient()
@@ -635,7 +635,7 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
       description: line.description,
       qtyDelivered: line.qty_delivered ?? 0,
       qtyTotal: line.quantity,
-      receivedByName: '—',
+      receivedByName: receivedByName || '—',
       isPartial,
       referenceId: req.id,
     })
@@ -1066,9 +1066,14 @@ export async function notifyMaterialPreparado(tripId: string): Promise<void> {
 // =============================================================================
 // 16. REVERSION REGISTRADA → Charris + PMs
 // =============================================================================
-export async function notifyReversionRegistrada(tripId: string, reason: string): Promise<void> {
+export async function notifyReversionRegistrada(
+  tripId: string,
+  reason: string,
+  revertedEventType: string,
+  revertedByPersonId: string | null,
+): Promise<void> {
   try {
-    console.log('[Notify] reversion_registrada called', { tripId, reason })
+    console.log('[Notify] reversion_registrada called', { tripId, reason, revertedEventType })
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
@@ -1077,6 +1082,16 @@ export async function notifyReversionRegistrada(tripId: string, reason: string):
       .single()
 
     if (!trip) { console.warn('[Notify] reversion_registrada: trip not found'); return }
+
+    let revertedByName = ''
+    if (revertedByPersonId) {
+      const { data: revertPerson } = await supabase
+        .from('people')
+        .select('name')
+        .eq('id', revertedByPersonId)
+        .single()
+      revertedByName = revertPerson?.name ?? ''
+    }
 
     const charris = await getPeopleByRole('logistica')
     const pms = await getTripProjectPMs(tripId)
@@ -1087,9 +1102,9 @@ export async function notifyReversionRegistrada(tripId: string, reason: string):
 
     const template = templates.reversionRegistrada({
       tripId: trip.trip_id ?? '',
-      eventType: 'evento',
+      eventType: revertedEventType,
       reason,
-      revertedBy: '',
+      revertedBy: revertedByName,
       referenceId: trip.id,
     })
 

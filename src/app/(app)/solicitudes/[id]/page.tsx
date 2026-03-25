@@ -96,6 +96,7 @@ export default function SolicitudDetailPage() {
     project_id: '',
     requester_id: '',
     date_required: '',
+    fulfillment_type: 'fleet',
   })
   const [lines, setLines] = useState<LineInput[]>([])
   const [deletedLineIds, setDeletedLineIds] = useState<string[]>([])
