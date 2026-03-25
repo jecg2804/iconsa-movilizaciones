@@ -102,7 +102,12 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
 
       <div className="shrink-0 flex items-center gap-2">
         <span className="text-sm text-gray-700 whitespace-nowrap">
-          {formatQty(assignment.quantity_assigned)} {unitCode}
+          {formatQty(assignment.qty_dispatched && assignment.qty_dispatched !== assignment.quantity_assigned ? assignment.qty_dispatched : assignment.quantity_assigned)} {unitCode}
+          {assignment.qty_dispatched > 0 && assignment.qty_dispatched !== assignment.quantity_assigned && (
+            <span className="text-xs text-orange-600 ml-1">
+              (prog: {formatQty(assignment.quantity_assigned)})
+            </span>
+          )}
         </span>
         {line?.status && <Badge variant="line" label={line.status} />}
       </div>
@@ -450,13 +455,17 @@ export default function Page() {
   }, [id])
 
   // --- Logica de secuencia de eventos ---
+  // Eventos revertidos no cuentan (inmutables pero anulados por Reversion)
+  const revertedIds = new Set(
+    events.filter((e) => e.event_type === 'Reversion' && e.reverts_event_id).map((e) => e.reverts_event_id!),
+  )
   const isPickup = trip?.is_self_pickup === true
-  const hasSalida = events.some((e) => e.event_type === 'Salida')
-  const hasLlegada = events.some((e) => e.event_type === 'Llegada')
-  const hasEntrega = events.some((e) => e.event_type === 'Entrega')
-  const hasRetorno = events.some((e) => e.event_type === 'Retorno')
-  const hasPreparacion = events.some((e) => e.event_type === 'Preparacion')
-  const hasRetiro = events.some((e) => e.event_type === 'Retiro')
+  const hasSalida = events.some((e) => e.event_type === 'Salida' && !revertedIds.has(e.id))
+  const hasLlegada = events.some((e) => e.event_type === 'Llegada' && !revertedIds.has(e.id))
+  const hasEntrega = events.some((e) => e.event_type === 'Entrega' && !revertedIds.has(e.id))
+  const hasRetorno = events.some((e) => e.event_type === 'Retorno' && !revertedIds.has(e.id))
+  const hasPreparacion = events.some((e) => e.event_type === 'Preparacion' && !revertedIds.has(e.id))
+  const hasRetiro = events.some((e) => e.event_type === 'Retiro' && !revertedIds.has(e.id))
 
   const tripDone = trip?.status === 'Completado' || trip?.status === 'Cancelado'
 
@@ -989,9 +998,7 @@ export default function Page() {
   // Último evento revertible (solo Salida/Entrega/Retorno, no ya revertido)
   const canRevert = role === 'logistica' || role === 'admin'
   const revertibleTypes = ['Salida', 'Entrega', 'Retorno']
-  const revertedIds = new Set(
-    events.filter((e) => e.event_type === 'Reversion' && e.reverts_event_id).map((e) => e.reverts_event_id!),
-  )
+  // revertedIds already computed above (line ~454)
   const lastRevertible = canRevert && !tripDone
     ? [...events].reverse().find((e) => revertibleTypes.includes(e.event_type) && !revertedIds.has(e.id)) ?? null
     : null

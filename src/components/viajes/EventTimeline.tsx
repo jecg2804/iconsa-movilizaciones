@@ -119,7 +119,9 @@ export function EventTimeline({ events }: EventTimelineProps) {
                         : 'text-gray-900'
                   }`}
                 >
-                  {isReversion ? '⟲ Reversión' : event.event_type}
+                  {isReversion
+                    ? `⟲ Revirtió: ${events.find((e) => e.id === event.reverts_event_id)?.event_type ?? 'evento'}`
+                    : event.event_type}
                 </span>
                 {isReverted && (
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
