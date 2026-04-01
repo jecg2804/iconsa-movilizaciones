@@ -361,6 +361,9 @@ async function releaseLineFromAssignment(
 
   if (fetchError || !line) return false
 
+  // No revertir líneas en estados terminales (protección contra datos inconsistentes)
+  if (['Entregada', 'Cancelada'].includes(line.status)) return true
+
   const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - quantityAssigned)
   // Si no queda cantidad programada, determinar estado según entregas previas
   let newStatus = line.status
@@ -802,7 +805,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             .insert(assignmentRows)
 
           if (assignError) {
-            setSaveError(`Viaje creado pero error al asignar líneas: ${assignError.message}`)
+            // Limpiar viaje huérfano para no dejar datos inconsistentes
+            await supabase.from('trips').delete().eq('id', newTripId)
+            setSaveError(`Error al asignar líneas: ${assignError.message}`)
             return null
           }
 

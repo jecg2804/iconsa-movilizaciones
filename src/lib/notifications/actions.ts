@@ -20,7 +20,8 @@ async function getPeopleByRole(role: string): Promise<Recipient[]> {
     .eq('status', 'Activo')
     .eq('notifications_enabled', true)
   if (error) console.error('[Notify] getPeopleByRole error:', error.message)
-  console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`, data?.map(p => `${p.name} <${p.email}>`))
+  if (process.env.NODE_ENV !== 'production') console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`, data?.map(p => `${p.name} <${p.email}>`))
+  else console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`)
   return data ?? []
 }
 
@@ -49,7 +50,8 @@ async function getProjectPMs(projectId: string, excludePersonId?: string): Promi
   if (pErr) console.error('[Notify] getProjectPMs people error:', pErr.message)
 
   const recipients = (people ?? []).filter(p => !excludePersonId || p.id !== excludePersonId)
-  console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`, recipients.map(r => `${r.name} <${r.email}>`))
+  if (process.env.NODE_ENV !== 'production') console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`, recipients.map(r => `${r.name} <${r.email}>`))
+  else console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`)
   return recipients
 }
 
@@ -125,7 +127,8 @@ async function getTripDriver(tripId: string): Promise<Recipient[]> {
   if (pErr) console.error('[Notify] getTripDriver people error:', pErr.message)
   if (!person) return []
   if (!person.notifications_enabled) {
-    console.log(`[Notify] Driver ${person.name} has notifications disabled, skipping`)
+    if (process.env.NODE_ENV !== 'production') console.log(`[Notify] Driver ${person.name} has notifications disabled, skipping`)
+    else console.log('[Notify] Driver has notifications disabled, skipping')
     return []
   }
   return [{ id: person.id, email: person.email, name: person.name }]

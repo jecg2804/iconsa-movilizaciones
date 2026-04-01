@@ -77,8 +77,8 @@ export function useTripEvents(tripId: string) {
         }
 
         // 2. Transiciones de estado según tipo de evento
-        // NOTA: Salida y Entrega están bloqueados por los guards arriba.
-        // Se manejan desde DispatchModal (handleDispatch) y DeliveryModal (handleDelivery).
+        // NOTA: Salida y Entrega redirigidos a DispatchModal y DeliveryModal respectivamente.
+        // Los guards arriba retornan error si se intenta registrarlos por esta vía.
 
         if (input.event_type === 'Llegada') {
           // trips → actual_arrival
@@ -120,6 +120,13 @@ export function useTripEvents(tripId: string) {
                   updated_by: person?.id ?? null,
                 })
                 .eq('id', line.id)
+
+              // Resetear qty_dispatched en la asignación (el camión regresó sin entregar)
+              await supabase
+                .from('trip_line_assignments')
+                .update({ qty_dispatched: 0 })
+                .eq('trip_id', tripId)
+                .eq('request_line_id', line.id)
             }
           }
 

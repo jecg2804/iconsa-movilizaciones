@@ -8,17 +8,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
   }
 
-  // Check Bearer token (Vercel cron sends this automatically)
+  // Solo aceptar Bearer token (Vercel cron lo envía automáticamente)
   const authHeader = request.headers.get('authorization') || ''
-  const headerMatch = authHeader === `Bearer ${cronSecret}`
-
-  // Fallback: check query param for manual testing
-  const url = new URL(request.url)
-  const querySecret = url.searchParams.get('secret') || ''
-  const queryMatch = querySecret === cronSecret
-
-  if (!headerMatch && !queryMatch) {
-    console.error('[Cron] Auth failed. Header present:', !!authHeader, 'Query present:', !!querySecret)
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

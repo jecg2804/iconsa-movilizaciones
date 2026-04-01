@@ -297,8 +297,8 @@ export default function Page() {
   // Estado del modal de registro de evento
   const [activeEvent, setActiveEvent] = useState<TripEventType | null>(null)
   const [actionHandled, setActionHandled] = useState(false)
-  const [dispatching, setDispatching] = useState(false)
-  const [dispatchError, setDispatchError] = useState<string | null>(null)
+  const [eventBusy, setEventBusy] = useState(false)
+  const [eventError, setEventError] = useState<string | null>(null)
   const [revertEvent, setRevertEvent] = useState<TripEvent | null>(null)
   const [reverting, setReverting] = useState(false)
 
@@ -532,8 +532,8 @@ export default function Page() {
   const handleDispatch = useCallback(
     async (data: DispatchData) => {
       if (!trip) return
-      setDispatching(true)
-      setDispatchError(null)
+      setEventBusy(true)
+      setEventError(null)
 
       try {
         // 1. UPDATE trip: conductor, vehículo, remolque, status, salida
@@ -571,7 +571,7 @@ export default function Page() {
         }
 
         // 4. INSERT evento de Salida
-        const { error: eventError } = await supabase
+        const { error: insertEvtErr } = await supabase
           .from('trip_events')
           .insert({
             trip_id: trip.id,
@@ -581,7 +581,7 @@ export default function Page() {
             notes: data.notes || null,
           })
 
-        if (eventError) throw eventError
+        if (insertEvtErr) throw insertEvtErr
 
         // 5. Notificación
         notifySalidaRegistrada(trip.id).catch(console.error)
@@ -592,11 +592,11 @@ export default function Page() {
         setTrip(tripData)
         await loadEvents()
       } catch (err) {
-        setDispatchError(
+        setEventError(
           err instanceof Error ? err.message : 'Error al registrar despacho',
         )
       } finally {
-        setDispatching(false)
+        setEventBusy(false)
       }
     },
     [supabase, trip, person, fetchTrip, id, loadEvents],
@@ -609,7 +609,7 @@ export default function Page() {
     async (data: DeliveryData) => {
       if (!trip) return
       setDelivering(true)
-      setDispatchError(null)
+      setEventError(null)
 
       try {
         const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
@@ -623,8 +623,8 @@ export default function Page() {
             .single()
 
           const currentDelivered = current?.qty_delivered ?? 0
-          const newDelivered = currentDelivered + line.quantity
           const totalQty = current?.quantity ?? line.quantity
+          const newDelivered = Math.min(totalQty, currentDelivered + line.quantity)
           const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
 
           await supabase
@@ -713,7 +713,7 @@ export default function Page() {
         setTrip(tripData)
         await loadEvents()
       } catch (err) {
-        setDispatchError(
+        setEventError(
           err instanceof Error ? err.message : 'Error al registrar entrega',
         )
       } finally {
@@ -728,7 +728,7 @@ export default function Page() {
     async (reason: string) => {
       if (!revertEvent || !trip) return
       setReverting(true)
-      setDispatchError(null)
+      setEventError(null)
 
       try {
         const eventType = revertEvent.event_type
@@ -831,7 +831,7 @@ export default function Page() {
         setTrip(tripData)
         await loadEvents()
       } catch (err) {
-        setDispatchError(
+        setEventError(
           err instanceof Error ? err.message : 'Error al revertir evento',
         )
       } finally {
@@ -845,8 +845,8 @@ export default function Page() {
   const handlePreparation = useCallback(
     async (data: { notes: string; attachments: Attachment[] }) => {
       if (!trip) return
-      setDispatching(true)
-      setDispatchError(null)
+      setEventBusy(true)
+      setEventError(null)
       try {
         await supabase.from('trip_events').insert({
           trip_id: trip.id,
@@ -863,9 +863,9 @@ export default function Page() {
         setTrip(tripData)
         await loadEvents()
       } catch (err) {
-        setDispatchError(err instanceof Error ? err.message : 'Error al registrar preparación')
+        setEventError(err instanceof Error ? err.message : 'Error al registrar preparación')
       } finally {
-        setDispatching(false)
+        setEventBusy(false)
       }
     },
     [supabase, trip, person, fetchTrip, id, loadEvents],
@@ -876,7 +876,7 @@ export default function Page() {
     async (data: PickupData) => {
       if (!trip) return
       setDelivering(true)
-      setDispatchError(null)
+      setEventError(null)
       try {
         const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
 
@@ -889,8 +889,8 @@ export default function Page() {
             .single()
 
           const currentDelivered = current?.qty_delivered ?? 0
-          const newDelivered = currentDelivered + line.quantity
           const totalQty = current?.quantity ?? line.quantity
+          const newDelivered = Math.min(totalQty, currentDelivered + line.quantity)
           const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
 
           await supabase
@@ -964,7 +964,7 @@ export default function Page() {
         setTrip(tripData)
         await loadEvents()
       } catch (err) {
-        setDispatchError(err instanceof Error ? err.message : 'Error al registrar retiro')
+        setEventError(err instanceof Error ? err.message : 'Error al registrar retiro')
       } finally {
         setDelivering(false)
       }
@@ -1141,8 +1141,8 @@ export default function Page() {
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:static sm:inset-auto sm:z-auto sm:rounded-lg sm:border sm:shadow-sm sm:px-6 sm:py-4">
           <div className="mx-auto max-w-2xl space-y-2">
             {/* Error de registro */}
-            {(registerError || dispatchError) && (
-              <p className="text-sm text-red-700">{registerError || dispatchError}</p>
+            {(registerError || eventError) && (
+              <p className="text-sm text-red-700">{registerError || eventError}</p>
             )}
 
             {/* Siguiente evento principal (PM solo ve Entrega) */}
@@ -1203,7 +1203,7 @@ export default function Page() {
           trip={trip}
           onConfirm={handleDispatch}
           onClose={() => setActiveEvent(null)}
-          loading={dispatching}
+          loading={eventBusy}
         />
       )}
 
@@ -1225,7 +1225,7 @@ export default function Page() {
           trip={trip}
           onConfirm={handlePreparation}
           onClose={() => setActiveEvent(null)}
-          loading={dispatching}
+          loading={eventBusy}
         />
       )}
 
