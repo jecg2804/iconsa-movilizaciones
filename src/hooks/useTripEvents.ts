@@ -17,7 +17,6 @@ export interface TripEventInput {
   confirmation_code_used?: string | null
   received_by_id?: string | null
   received_by_name?: string | null
-  deliveredQuantities?: Record<string, number> // lineId → qty entregada en ESTE viaje
   attachments?: unknown[] | null
 }
 
@@ -98,7 +97,7 @@ export function useTripEvents(tripId: string) {
               .from('sm_request_lines')
               .select('id, qty_scheduled, quantity, qty_delivered')
               .in('id', assignedLineIds)
-              .in('status', ['En Transito', 'Programada'])
+              .in('status', ['En Transito'])
 
             for (const line of undelivered ?? []) {
               const { data: assignment } = await supabase

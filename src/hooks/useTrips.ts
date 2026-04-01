@@ -816,11 +816,14 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           for (const a of assignments) {
             const { data: currentLine } = await supabase
               .from('sm_request_lines')
-              .select('qty_scheduled')
+              .select('qty_scheduled, quantity')
               .eq('id', a.request_line_id)
               .single()
 
-            const newQtyScheduled = (currentLine?.qty_scheduled ?? 0) + a.quantity_assigned
+            const currentScheduled = currentLine?.qty_scheduled ?? 0
+            const totalQty = currentLine?.quantity ?? a.quantity_assigned
+            // Clampear para no exceder la cantidad total de la línea
+            const newQtyScheduled = Math.min(totalQty, currentScheduled + a.quantity_assigned)
 
             await supabase
               .from('sm_request_lines')

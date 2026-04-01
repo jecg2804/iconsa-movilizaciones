@@ -159,7 +159,6 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
         confirmation_code_used: codeUsed || null,
         received_by_id: receivedById ?? null,
         received_by_name: receivedByName || null,
-        deliveredQuantities: { ...deliveredQtys.current },
         attachments,
       })
       eventIdRef.current = crypto.randomUUID()

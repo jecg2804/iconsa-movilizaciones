@@ -764,7 +764,7 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 }
 
 // =============================================================================
-// 12. RETORNO REGISTRADO → ONLY Charris
+// 12. RETORNO REGISTRADO → Charris + PMs afectados
 // =============================================================================
 export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
   try {
@@ -781,8 +781,9 @@ export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
 
     const requestIds = await getTripRequestIds(tripId)
     const charris = await getPeopleByRole('logistica')
+    const pms = await getTripProjectPMs(tripId)
     const receiveAll = await getReceiveAllUsers()
-    const recipients = dedup(charris, receiveAll)
+    const recipients = dedup(charris, pms, receiveAll)
 
     const arrivalTime = trip.actual_arrival ?? new Date().toISOString()
 

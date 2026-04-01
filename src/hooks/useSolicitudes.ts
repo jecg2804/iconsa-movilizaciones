@@ -231,7 +231,8 @@ async function createSuggestions(
   }
 
   if (suggestions.length > 0) {
-    await supabase.from('suggestions').insert(suggestions)
+    const { error: sugErr } = await supabase.from('suggestions').insert(suggestions)
+    if (sugErr) console.error('[Solicitudes] Error al guardar sugerencias:', sugErr.message)
   }
 }
 
@@ -597,11 +598,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           requestId: refreshed?.request_id ?? '',
         }
       } catch (err) {
-        busyRef.current = false
         const message = err instanceof Error ? err.message : 'Error inesperado al guardar'
         setSaveError(message)
         return null
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
