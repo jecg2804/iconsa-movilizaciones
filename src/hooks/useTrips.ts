@@ -458,7 +458,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             requester:requester_id(id, name)
           )
         `)
-        .in('status', ['Pendiente', 'Parcial', 'Programada'])
+        .in('status', ['Pendiente', 'Parcial', 'Programada', 'En Transito'])
         // Excluir solicitudes que no deben aparecer en el backlog
         .not('request.status', 'in', '("Cancelada","Completada","Borrador")')
 
