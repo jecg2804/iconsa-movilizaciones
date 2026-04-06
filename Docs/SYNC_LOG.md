@@ -4,6 +4,107 @@ Ambos actores escriben aquí. James lo revisa para mantenerse al día.
 
 ---
 
+## 2026-04-06 — Code: Auditoría de docs + config cleanup
+
+### Documentación sincronizada
+- SYNC_LOG actualizado con 17 días de commits faltantes (ver abajo)
+- CLAUDE.md: quitado @import de FEATURE_SPEC_v3 (ahorra 75K chars de contexto)
+- CLAUDE.md: agregados form-submit-guard.md, tool-usage.md, MASTER_BACKLOG.md
+- FEATURE_SPEC.md: columna Prioridad eliminada de spec (ya eliminada del código Mar 12), Fecha Enviada documentada
+- FEATURE_SPEC.md: referencia ROADMAP.md → MASTER_BACKLOG.md
+- BUGS.md: bug Charris movido a resueltos, auditorías documentadas
+- 6 referencias rotas arregladas en tool-usage.md, events-page.md, implement-task.md
+- 3 archivos obsoletos eliminados de archive/ (ROADMAP, SETUP_NEW_WORKFLOW, demo_v8)
+- Nuevo command: deploy-check.md
+
+---
+
+## 2026-04-01 — Code: 2 auditorías completas + 13 fixes
+
+### Auditoría #1 (8 fixes — commit 84b305c)
+- Retorno resetea qty_dispatched en trip_line_assignments
+- releaseLineFromAssignment no revierte líneas en status terminal (Entregada/Cancelada)
+- saveTrip limpia viaje huérfano si falla INSERT assignments
+- Cron endpoint solo acepta Bearer token (eliminado query param inseguro)
+- handleDelivery/handlePickup usan Math.min clamp defensivo
+- Renombrado dispatchError → eventError para claridad
+- Console.log con PII envueltos en dev-only check
+- Fix comentario en useTripEvents
+
+### Auditoría #2 (5 fixes — commit 7302a7c)
+- busyRef movido al finally en saveSolicitud (evita bloqueo permanente)
+- notifyRetornoRegistrado ahora incluye PMs del proyecto
+- deliveredQuantities eliminado de TripEventInput (código muerto)
+- Retorno handler solo revierte líneas 'En Transito' (no 'Programada')
+- Sugerencias insert ahora reporta errores + qty_scheduled clampeado
+
+---
+
+## 2026-03-25 — Code: 8 pre-production fixes (commit 296f2cf)
+
+- Event revert: trip_line_assignments.qty_delivered decrementado junto con sm_request_lines
+- Retorno: líneas 'En Transito' no entregadas regresan a Pendiente con qty_scheduled decrementado
+- notifyReversionRegistrada: envía datos reales (event type + quién revirtió)
+- registerEvent: Salida/Entrega bloqueados, redirigen a DispatchModal/DeliveryModal
+- fulfillment_type preservado al editar solicitud
+- notifyViajeEditado: eventType corregido a 'viaje_editado'
+- notifyEntregaConfirmada: nombre real del receptor
+- Llegada agregado a revertibleTypes
+
+---
+
+## 2026-03-24 — Code: Events V2 Batches 5-11
+
+### Batch 5 (f821946) — Sub-status operativo
+- Banner "En Tránsito Ahora" en solicitudes con líneas activas
+- Shortcuts y URL params para navegación rápida
+
+### Batch 6 (aeb14ea) — Per-line configuration
+- fulfillment_type (fleet/pickup) a nivel de solicitud
+- requires_code y designated_receiver a nivel de línea
+
+### Batch 7 (1f9c1e9) — DispatchModal
+- Modal editable reemplaza confirmación simple de Salida
+- Conductor, vehículo, remolque, qty por línea
+
+### Batch 8 (a6e5b48) — DeliveryModal con per-line status
+- Observaciones por línea (ok/damaged/wrong_qty/rejected)
+- trip_event_lines para audit trail detallado
+- Código condicional basado en requires_code
+
+### Batch 9 (ebc6dce) — Event reversion
+- Modal de reversión con razón requerida
+- Salida/Entrega/Retorno/Llegada revertibles
+- reverts_event_id FK para tracking
+
+### Batch 10 (ed58c67) — Self-pickup flow
+- PreparationModal + PickupModal
+- fulfillment_type='pickup': Preparación → Retiro (sin Salida/Entrega)
+- is_self_pickup en trips
+
+### Batch 11 (c3216e0) — Dashboard + notifications
+- Sección "En Tránsito" en dashboard
+- Pickup badges en programación
+- notifyMaterialPreparado + notifyReversionRegistrada
+
+---
+
+## 2026-03-23 — Code: Fixes post-batches
+
+- React Hook error #310: useSearchParams y useEffect antes de early returns
+- Campos faltantes en interfaces (LineWithRelations, SolicitudWithRelations)
+- Suspense wrapper para mis-viajes detail
+
+---
+
+## 2026-03-20 — Code: CRON_SECRET y fixes menores (RESUELTO)
+
+- Cron auth: Bearer header + query param fallback (query param eliminado en auditoría Apr 1)
+- /api/cron excluido de middleware auth
+- Mejora de error logging en notificaciones
+
+---
+
 ## 2026-03-20 — Code: 2 Notificaciones urgentes
 
 ### solicitud_urgente_nueva

@@ -32,10 +32,12 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 │   ├── commit-after-step.md
 │   ├── cost-management.md
 │   ├── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza)
-│   └── supabase-readonly.md
+│   ├── supabase-readonly.md
+│   └── tool-usage.md             # MCPs, plugins, skills — cuándo y cómo usar cada herramienta
 ├── skills/                       # Patrones de implementación (cargan on-demand)
 │   ├── crud-page.md
 │   ├── events-page.md
+│   ├── form-submit-guard.md      # Anti doble-submit — useSubmitGuard en todo handler async
 │   ├── supabase-queries.md
 │   ├── self-update.md
 │   ├── partial-delivery/SKILL.md
@@ -70,7 +72,8 @@ src/
 | Documento | Cuándo leerlo |
 |-----------|---------------|
 | @Docs/FEATURE_SPEC.md | **Reglas de negocio, pantallas, campos, validaciones, estados.** Spec v4 (fuente de verdad para lógica de negocio). |
-| @Docs/FEATURE_SPEC_v3_FOUNDATIONAL.md | Contexto profundo: el spec original de 1249 líneas. Schema outdated pero reglas de negocio ~90% vigentes. |
+| Docs/FEATURE_SPEC_v3_FOUNDATIONAL.md | Contexto histórico (NO auto-cargar — 75K chars). Solo leer manualmente si necesitas entender decisiones originales. Schema outdated (18→44 tablas). |
+| @Docs/MASTER_BACKLOG.md | Roadmap de features por tier de prioridad. Estado actual del proyecto. |
 | @Docs/SYNC_LOG.md | **Leer al inicio de cada sesión.** Cambios recientes de Chat/James que te afectan. |
 | @Docs/BUGS.md | Bugs encontrados y resueltos. |
 | Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 44 tablas con COMMENT ON TABLE/COLUMN. |

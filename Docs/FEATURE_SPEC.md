@@ -203,9 +203,9 @@ MovimientOS es una aplicación web propia. Todos los empleados de ICONSA pueden 
 - Solicitante
 - Líneas (conteo)
 - Fecha requerida
-- Días (días hasta fecha requerida; para completadas/canceladas muestra delta vs fecha requerida)
-- Prioridad (badge con color, calculada client-side via `calculatePriority()`)
+- Fecha enviada (solo si aplica)
 - Estado (badge con color)
+- Días (días hasta fecha requerida; para completadas/canceladas muestra delta vs fecha requerida, con color)
 
 **Filtros:**
 - Proyecto (dropdown)
@@ -829,7 +829,7 @@ ELSE → 'Enviada'
 
 ### 11.2 — Pendiente
 
-Ver `Docs/ROADMAP.md` para el roadmap priorizado completo.
+Ver `Docs/MASTER_BACKLOG.md` para el roadmap priorizado completo.
 
 **Pre-producción:** RLS real, notificaciones, paginación, person_projects, /solicitudes/[id] completo.
 **Post-lanzamiento:** Inspecciones, reportes auto-generados, dashboards por rol, work orders, fuel tracking, datos históricos.

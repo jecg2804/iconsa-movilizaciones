@@ -1,13 +1,13 @@
 ---
 name: implement-task
-description: Implementar una tarea desde un archivo de task en Docs/TASKS/. Leer el archivo, entender el plan completo, y ejecutar paso a paso.
+description: Implementar una tarea desde un archivo de task (.md). Leer el archivo, entender el plan completo, y ejecutar paso a paso.
 ---
 
 Implementar la tarea descrita en: $ARGUMENTS
 
 ## Workflow
 
-1. Lee el archivo de tarea indicado (ej: `Docs/TASKS/password-recovery.md`)
+1. Lee el archivo de tarea indicado (ej: `EVENTS_V2_MASTER_FOR_CODE.md` o cualquier .md con el plan)
 2. Lee `CLAUDE.md` y `Docs/SYNC_LOG.md` para contexto actual
 3. Verifica el schema de BD relevante via Supabase MCP
 4. Lee las secciones relevantes de `Docs/FEATURE_SPEC.md` si la tarea lo requiere

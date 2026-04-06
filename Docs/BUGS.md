@@ -44,12 +44,25 @@ Claude Code puede actualizar este archivo directamente.
 | 37 | auth.users email_change NULL impedía login de 10 usuarios | 2026-03-18 | — (fix BD) |
 | 38 | auth.users recovery_token NULL impedía login después de fix 37 | 2026-03-18 | — (fix BD) |
 | 39 | notifications_enabled false para 10 PMs — notificaciones no llegaban | 2026-03-18 | — (fix BD) |
+| 40 | Charris no recibía todas las notificaciones de movilización | 2026-03-18 | — (fix código Mar 20) |
+| 41 | Retorno no reseteaba qty_dispatched en trip_line_assignments | 2026-04-01 | 84b305c |
+| 42 | releaseLineFromAssignment revertía líneas en status terminal (Entregada/Cancelada) | 2026-04-01 | 84b305c |
+| 43 | saveTrip dejaba viaje huérfano si fallaba INSERT assignments | 2026-04-01 | 84b305c |
+| 44 | Cron endpoint aceptaba secret via query param (inseguro) | 2026-04-01 | 84b305c |
+| 45 | handleDelivery/handlePickup sin Math.min clamp en qty_delivered | 2026-04-01 | 84b305c |
+| 46 | busyRef no se reseteaba en finally de saveSolicitud (bloqueo permanente) | 2026-04-01 | 7302a7c |
+| 47 | notifyRetornoRegistrado no incluía PMs del proyecto | 2026-04-01 | 7302a7c |
+| 48 | deliveredQuantities en TripEventInput definido pero nunca usado | 2026-04-01 | 7302a7c |
+| 49 | Retorno handler revertía líneas 'Programada' incorrectamente | 2026-04-01 | 7302a7c |
+| 50 | Sugerencias insert sin verificación de error (silencioso) | 2026-04-01 | 7302a7c |
+| 51 | qty_scheduled sin clamp a quantity en saveTrip | 2026-04-01 | 7302a7c |
+| 52 | Backlog no incluía líneas 'En Transito' para programación parcial | 2026-04-06 | 697af3e |
 
 ## Abiertos
 
 | # | Bug | Reportado | Prioridad |
 |---|-----|-----------|-----------|
-| — | Charris no recibe todas las notificaciones de movilización (solo retorno/solicitud) | 2026-03-18 | Alta — prompt generado |
+| — | (ninguno conocido) | — | — |
 
 ## Mejoras pendientes (no son bugs)
 
