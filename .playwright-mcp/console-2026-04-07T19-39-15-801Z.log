@@ -1,6 +1,0 @@
-[    1236ms] [ERROR] Amplitude Logger [Error]: Failed to fetch (api2.amplitude.com) @ https://app.humand.co/assets/index-CfiYEf73.js:17
-[    1236ms] [ERROR] Amplitude Logger [Error]: Failed to fetch (api2.amplitude.com) @ https://app.humand.co/assets/index-CfiYEf73.js:17
-[    1236ms] [ERROR] Amplitude Logger [Error]: Failed to fetch (api2.amplitude.com) @ https://app.humand.co/assets/index-CfiYEf73.js:17
-[    1526ms] [ERROR] Error loading translation file: /assets/translations/locale/en/translation.json?c=c859 @ https://app.humand.co/assets/index-CfiYEf73.js:17
-[    3691ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ https://app.humand.co/assets/index-CfiYEf73.js:17
-[    4708ms] [INFO] voiceflow webchat 2.161.0 @ https://app.humand.co/assets/index-CfiYEf73.js:17
