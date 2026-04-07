@@ -1,0 +1,254 @@
+- generic [ref=e1]:
+  - main [ref=e5]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button [ref=e9] [cursor=pointer]:
+          - img [ref=e10]
+        - link [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e13]
+      - generic [ref=e14]:
+        - button [ref=e15] [cursor=pointer]:
+          - img [ref=e17]
+          - text: Add People
+        - link [ref=e21] [cursor=pointer]:
+          - /url: https://admin.humand.co
+          - text: Admin
+        - link [ref=e22] [cursor=pointer]:
+          - /url: https://help.humand.co/hc/en-us?utm_source=platform&utm_medium=humandwebEN
+          - img [ref=e23]
+        - button [ref=e26] [cursor=pointer]:
+          - img [ref=e27]
+        - button [ref=e31] [cursor=pointer]:
+          - img [ref=e33]
+        - button [ref=e36] [cursor=pointer]:
+          - generic [ref=e38]: SK
+    - generic [ref=e43]:
+      - list [ref=e44]:
+        - listitem [ref=e45]:
+          - link [ref=e46] [cursor=pointer]:
+            - /url: /feed
+            - img [ref=e48]
+            - generic [ref=e52]: Feed
+        - listitem [ref=e53]:
+          - button [ref=e54] [cursor=pointer]:
+            - img [ref=e56]
+            - generic [ref=e64]: Groups
+        - listitem [ref=e65]:
+          - link [ref=e66] [cursor=pointer]:
+            - /url: /news
+            - img [ref=e68]
+            - generic [ref=e71]: Magazine
+        - listitem [ref=e72]:
+          - link [ref=e73] [cursor=pointer]:
+            - /url: /conversations
+            - img [ref=e75]
+            - generic [ref=e79]: Chats
+        - listitem [ref=e80]:
+          - link [ref=e81] [cursor=pointer]:
+            - /url: /library
+            - img [ref=e83]
+            - generic [ref=e90]: Knowledge libraries
+        - listitem [ref=e91]:
+          - link [ref=e92] [cursor=pointer]:
+            - /url: /events
+            - img [ref=e94]
+            - generic [ref=e98]: Events
+        - listitem [ref=e99]:
+          - link [ref=e100] [cursor=pointer]:
+            - /url: /service-portal
+            - img [ref=e102]
+            - generic [ref=e106]: Service portal
+        - listitem [ref=e107]:
+          - link [ref=e108] [cursor=pointer]:
+            - /url: /acknowledgements
+            - img [ref=e110]
+            - generic [ref=e115]: Kudos
+        - listitem [ref=e116]:
+          - link [ref=e117] [cursor=pointer]:
+            - /url: /forms
+            - img [ref=e119]
+            - generic [ref=e123]: Forms and Tasks
+        - listitem [ref=e124]:
+          - link [ref=e125] [cursor=pointer]:
+            - /url: /vacations
+            - img [ref=e127]
+            - generic [ref=e130]: Time off
+        - listitem [ref=e131]:
+          - link [ref=e132] [cursor=pointer]:
+            - /url: /performance
+            - img [ref=e134]
+            - generic [ref=e139]: Performance
+        - listitem [ref=e140]:
+          - link [ref=e141] [cursor=pointer]:
+            - /url: /goals
+            - img [ref=e143]
+            - generic [ref=e150]: Goals
+        - listitem [ref=e151]:
+          - link [ref=e152] [cursor=pointer]:
+            - /url: /people
+            - img [ref=e154]
+            - generic [ref=e160]: People
+        - listitem [ref=e161]:
+          - link [ref=e162] [cursor=pointer]:
+            - /url: /org-chart
+            - img [ref=e164]
+            - generic [ref=e170]: Org chart
+        - listitem [ref=e171]:
+          - link [ref=e172] [cursor=pointer]:
+            - /url: /files
+            - img [ref=e174]
+            - generic [ref=e178]: Files
+        - listitem [ref=e179]:
+          - generic [ref=e182]:
+            - button [ref=e183] [cursor=pointer]:
+              - img [ref=e185]
+              - generic [ref=e189]: Learning
+              - img [ref=e190]
+            - list [ref=e192]:
+              - listitem [ref=e193]:
+                - link [ref=e194] [cursor=pointer]:
+                  - /url: /courses
+                  - generic [ref=e196]: Courses
+              - listitem [ref=e197]:
+                - link [ref=e198] [cursor=pointer]:
+                  - /url: /paths
+                  - generic [ref=e200]: Paths
+              - listitem [ref=e201]:
+                - link [ref=e202] [cursor=pointer]:
+                  - /url: /sessions
+                  - generic [ref=e204]: Sessions
+                  - generic [ref=e207]: New
+        - listitem [ref=e208]:
+          - link [ref=e209] [cursor=pointer]:
+            - /url: /employee-lifecycle/onboardings
+            - img [ref=e211]
+            - generic [ref=e214]: Onboarding
+            - generic [ref=e217]: New
+        - listitem [ref=e218]:
+          - link [ref=e219] [cursor=pointer]:
+            - /url: /employee-lifecycle/tasks
+            - img [ref=e221]
+            - generic [ref=e225]: Tasks
+            - generic [ref=e228]: New
+        - listitem [ref=e229]:
+          - link [ref=e230] [cursor=pointer]:
+            - /url: /onboarding
+            - img [ref=e232]
+            - generic [ref=e235]: Onboarding
+        - listitem [ref=e236]:
+          - generic [ref=e239]:
+            - button [ref=e240] [cursor=pointer]:
+              - img [ref=e242]
+              - generic [ref=e248]: People Experience
+              - img [ref=e249]
+            - list [ref=e251]:
+              - listitem [ref=e252]:
+                - link [ref=e253] [cursor=pointer]:
+                  - /url: /people-experience/surveys
+                  - generic [ref=e255]: Available surveys
+              - listitem [ref=e256]:
+                - link [ref=e257] [cursor=pointer]:
+                  - /url: /people-experience/manager/surveys
+                  - generic [ref=e259]: Your team results
+        - listitem [ref=e260]:
+          - link [ref=e261] [cursor=pointer]:
+            - /url: /surveys
+            - img [ref=e263]
+            - generic [ref=e268]: Surveys
+            - generic [ref=e269]: "16"
+        - listitem [ref=e270]:
+          - link [ref=e271] [cursor=pointer]:
+            - /url: /documents
+            - img [ref=e273]
+            - generic [ref=e277]: My documents
+        - listitem [ref=e278]:
+          - link [ref=e279] [cursor=pointer]:
+            - /url: /marketplace
+            - img [ref=e281]
+            - generic [ref=e285]: Marketplace
+        - listitem [ref=e286]:
+          - button [ref=e287] [cursor=pointer]:
+            - img [ref=e289]
+            - generic [ref=e294]: Quick links
+      - generic [ref=e295]:
+        - separator [ref=e296]
+        - generic [ref=e297]:
+          - img [ref=e298]
+          - generic [ref=e300]: Built with love by
+          - img [ref=e301]
+    - generic [ref=e307]:
+      - generic [ref=e308]:
+        - generic [ref=e310]:
+          - generic [ref=e312]: Chats
+          - button [ref=e313] [cursor=pointer]:
+            - img [ref=e315]
+            - text: New
+        - generic [ref=e317]:
+          - img [ref=e319]
+          - textbox [ref=e322]:
+            - /placeholder: Search
+          - group
+        - heading [level=6] [ref=e326]: No active chats yet
+      - generic [ref=e327]:
+        - img [ref=e329]
+        - generic [ref=e332]: No messages yet
+        - generic [ref=e333]: When you have active chats, they will appear in this section
+  - dialog [ref=e336]:
+    - generic [ref=e337]:
+      - generic [ref=e338]:
+        - generic [ref=e339]: New features in Chats
+        - button "close" [ref=e340] [cursor=pointer]:
+          - img [ref=e341]
+      - generic [ref=e353]:
+        - generic [ref=e355]: Message info
+        - generic [ref=e357]: You can now see exactly who has read your messages in the chat.
+      - button "Next" [ref=e360] [cursor=pointer]
+  - generic:
+    - generic:
+      - button "open chat" [ref=e363] [cursor=pointer]:
+        - generic [ref=e364]:
+          - img [ref=e369]
+          - img "open chat"
+      - generic [ref=e372]:
+        - generic [ref=e373]:
+          - generic [ref=e375]:
+            - generic [ref=e376]: Sammy
+            - generic [ref=e377]:
+              - button "Sammy" [ref=e378]:
+                - img [ref=e380]
+              - button "Sammy" [ref=e382]:
+                - img [ref=e384]
+          - generic [ref=e388]:
+            - paragraph [ref=e394]: ¡Hola Samantha Kosmas! 👋 Soy Sammy, tu asistente con IA
+            - paragraph [ref=e400]: ¿En qué puedo ayudarte?
+          - generic [ref=e402]:
+            - generic:
+              - button "Start new chat"
+            - generic [ref=e403]:
+              - generic:
+                - button "scroll":
+                  - generic:
+                    - img "scroll"
+              - generic [ref=e405]:
+                - textbox [ref=e407]
+                - button "send" [disabled] [ref=e366]:
+                  - img "send" [ref=e367]
+          - generic:
+            - button "Start new chat Restart conversation"
+            - button "Cancel Cancel"
+          - generic:
+            - button "Restart conversation":
+              - generic:
+                - generic:
+                  - img
+              - generic: Restart conversation
+        - generic:
+          - paragraph: Privacy notice
+          - paragraph: Before we can proceed with your conversation, we kindly ask you to review and accept our privacy policy, outlining how we handle and protect your personal information throughout our services.
+          - button "Submit"
+          - button "Privacy policy":
+            - generic:
+              - generic:
+                - img
+              - generic: Privacy policy

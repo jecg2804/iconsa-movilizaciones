@@ -1,0 +1,627 @@
+- generic [ref=e1]:
+  - main [ref=e71]:
+    - generic [ref=e73]:
+      - generic [ref=e74]:
+        - button [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+        - link "COMPANY_LOGO_ALT" [ref=e77] [cursor=pointer]:
+          - /url: /
+          - img "COMPANY_LOGO_ALT" [ref=e79]
+      - generic [ref=e80]:
+        - button "Add People" [ref=e81] [cursor=pointer]:
+          - img [ref=e83]
+          - text: Add People
+        - link "Admin" [ref=e87] [cursor=pointer]:
+          - /url: https://admin.humand.co
+        - link [ref=e88] [cursor=pointer]:
+          - /url: https://help.humand.co/hc/en-us?utm_source=platform&utm_medium=humandwebEN
+          - img [ref=e89]
+        - button [ref=e92] [cursor=pointer]:
+          - img [ref=e93]
+        - button "0" [ref=e97] [cursor=pointer]:
+          - generic [ref=e98]:
+            - img [ref=e99]
+            - generic: "0"
+        - button "SK" [ref=e102] [cursor=pointer]:
+          - generic [ref=e104]: SK
+    - generic [ref=e109]:
+      - list [ref=e110]:
+        - listitem [ref=e111]:
+          - link "Feed" [ref=e112] [cursor=pointer]:
+            - /url: /feed
+            - img [ref=e114]
+            - generic [ref=e118]: Feed
+        - listitem [ref=e119]:
+          - button "Groups" [ref=e120] [cursor=pointer]:
+            - img [ref=e122]
+            - generic [ref=e130]: Groups
+        - listitem [ref=e131]:
+          - link "Magazine" [ref=e132] [cursor=pointer]:
+            - /url: /news
+            - img [ref=e134]
+            - generic [ref=e137]: Magazine
+        - listitem [ref=e138]:
+          - link "Chats" [ref=e139] [cursor=pointer]:
+            - /url: /conversations
+            - img [ref=e141]
+            - generic [ref=e145]: Chats
+        - listitem [ref=e146]:
+          - link "Knowledge libraries" [ref=e147] [cursor=pointer]:
+            - /url: /library
+            - img [ref=e149]
+            - generic [ref=e156]: Knowledge libraries
+        - listitem [ref=e157]:
+          - link "Events" [ref=e158] [cursor=pointer]:
+            - /url: /events
+            - img [ref=e160]
+            - generic [ref=e164]: Events
+        - listitem [ref=e165]:
+          - link "Service portal" [ref=e166] [cursor=pointer]:
+            - /url: /service-portal
+            - img [ref=e168]
+            - generic [ref=e172]: Service portal
+        - listitem [ref=e173]:
+          - link "Kudos" [ref=e174] [cursor=pointer]:
+            - /url: /acknowledgements
+            - img [ref=e176]
+            - generic [ref=e181]: Kudos
+        - listitem [ref=e182]:
+          - link "Forms and Tasks" [ref=e183] [cursor=pointer]:
+            - /url: /forms
+            - img [ref=e185]
+            - generic [ref=e189]: Forms and Tasks
+        - listitem [ref=e190]:
+          - link "Time off" [ref=e191] [cursor=pointer]:
+            - /url: /vacations
+            - img [ref=e193]
+            - generic [ref=e196]: Time off
+        - listitem [ref=e197]:
+          - link "Performance" [ref=e198] [cursor=pointer]:
+            - /url: /performance
+            - img [ref=e200]
+            - generic [ref=e205]: Performance
+        - listitem [ref=e206]:
+          - link "Goals" [ref=e207] [cursor=pointer]:
+            - /url: /goals
+            - img [ref=e209]
+            - generic [ref=e216]: Goals
+        - listitem [ref=e217]:
+          - link "People" [ref=e218] [cursor=pointer]:
+            - /url: /people
+            - img [ref=e220]
+            - generic [ref=e226]: People
+        - listitem [ref=e227]:
+          - link "Org chart" [ref=e228] [cursor=pointer]:
+            - /url: /org-chart
+            - img [ref=e230]
+            - generic [ref=e236]: Org chart
+        - listitem [ref=e237]:
+          - link "Files" [ref=e238] [cursor=pointer]:
+            - /url: /files
+            - img [ref=e240]
+            - generic [ref=e244]: Files
+        - listitem [ref=e245]:
+          - generic [ref=e248]:
+            - button "Learning" [active] [ref=e249] [cursor=pointer]:
+              - img [ref=e251]
+              - generic [ref=e255]: Learning
+              - img [ref=e1128]
+            - list [ref=e258]:
+              - listitem [ref=e259]:
+                - link "Courses" [ref=e260] [cursor=pointer]:
+                  - /url: /courses
+                  - generic [ref=e262]: Courses
+              - listitem [ref=e263]:
+                - link "Paths" [ref=e264] [cursor=pointer]:
+                  - /url: /paths
+                  - generic [ref=e266]: Paths
+              - listitem [ref=e267]:
+                - link "Sessions New" [ref=e268] [cursor=pointer]:
+                  - /url: /sessions
+                  - generic [ref=e270]: Sessions
+                  - generic [ref=e273]: New
+        - listitem [ref=e274]:
+          - link "Onboarding New" [ref=e275] [cursor=pointer]:
+            - /url: /employee-lifecycle/onboardings
+            - img [ref=e277]
+            - generic [ref=e280]: Onboarding
+            - generic [ref=e283]: New
+        - listitem [ref=e284]:
+          - link "Tasks New" [ref=e285] [cursor=pointer]:
+            - /url: /employee-lifecycle/tasks
+            - img [ref=e287]
+            - generic [ref=e291]: Tasks
+            - generic [ref=e294]: New
+        - listitem [ref=e295]:
+          - link "Onboarding" [ref=e296] [cursor=pointer]:
+            - /url: /onboarding
+            - img [ref=e298]
+            - generic [ref=e301]: Onboarding
+        - listitem [ref=e302]:
+          - generic [ref=e305]:
+            - button "People Experience" [ref=e306] [cursor=pointer]:
+              - img [ref=e308]
+              - generic [ref=e314]: People Experience
+              - img [ref=e315]
+            - list [ref=e317]:
+              - listitem [ref=e318]:
+                - link "Available surveys" [ref=e319] [cursor=pointer]:
+                  - /url: /people-experience/surveys
+                  - generic [ref=e321]: Available surveys
+              - listitem [ref=e322]:
+                - link "Your team results" [ref=e323] [cursor=pointer]:
+                  - /url: /people-experience/manager/surveys
+                  - generic [ref=e325]: Your team results
+        - listitem [ref=e326]:
+          - link "Surveys 16" [ref=e327] [cursor=pointer]:
+            - /url: /surveys
+            - img [ref=e329]
+            - generic [ref=e334]: Surveys
+            - generic [ref=e335]: "16"
+        - listitem [ref=e336]:
+          - link "My documents" [ref=e337] [cursor=pointer]:
+            - /url: /documents
+            - img [ref=e339]
+            - generic [ref=e343]: My documents
+        - listitem [ref=e344]:
+          - link "Marketplace" [ref=e345] [cursor=pointer]:
+            - /url: /marketplace
+            - img [ref=e347]
+            - generic [ref=e351]: Marketplace
+        - listitem [ref=e352]:
+          - button "Quick links" [ref=e353] [cursor=pointer]:
+            - img [ref=e355]
+            - generic [ref=e360]: Quick links
+      - generic [ref=e361]:
+        - separator [ref=e362]
+        - generic [ref=e363]:
+          - img [ref=e364]
+          - generic [ref=e366]: Built with love by
+          - img "Humand logo" [ref=e367]
+    - generic [ref=e375]:
+      - button "Key updates" [ref=e378] [cursor=pointer]:
+        - generic [ref=e381]:
+          - img [ref=e383]
+          - generic [ref=e388]: Key updates
+        - img [ref=e390]
+      - generic [ref=e392]:
+        - generic [ref=e393]: Feed
+        - generic [ref=e394]:
+          - button "Search" [ref=e395] [cursor=pointer]:
+            - img [ref=e397]
+            - generic [ref=e400]: Search
+          - button [ref=e401] [cursor=pointer]:
+            - img [ref=e403]
+      - generic [ref=e406]:
+        - generic [ref=e410]:
+          - generic [ref=e411]:
+            - generic [ref=e412]:
+              - link "SK" [ref=e414] [cursor=pointer]:
+                - /url: /profile/7996917
+              - generic [ref=e415]:
+                - text: Samantha Kosmas
+                - generic [ref=e418] [cursor=pointer]: All the organization
+            - generic [ref=e419]:
+              - 'button "Reach: 191" [ref=e420] [cursor=pointer]':
+                - img [ref=e421]
+                - generic [ref=e428]: "Reach: 191"
+              - generic [ref=e430]: 0 / 100 MB
+          - textbox [ref=e433]:
+            - paragraph [ref=e434]: Write something...
+          - generic [ref=e435]:
+            - generic [ref=e436]:
+              - button [ref=e438] [cursor=pointer]:
+                - img [ref=e439]
+              - button "Add gif" [ref=e443] [cursor=pointer]:
+                - img [ref=e444]
+              - button [ref=e448] [cursor=pointer]:
+                - img [ref=e449]
+              - button [ref=e454] [cursor=pointer]:
+                - img [ref=e455]
+            - generic [ref=e459]:
+              - generic [ref=e460]:
+                - button "Livestream" [ref=e461] [cursor=pointer]:
+                  - img [ref=e463]
+                  - generic [ref=e468]: Livestream
+                - generic [ref=e469]:
+                  - button [disabled]:
+                    - img
+              - button "Post" [disabled]:
+                - generic: Post
+        - button "Celebrations" [ref=e471] [cursor=pointer]:
+          - generic [ref=e473]: Celebrations
+          - img [ref=e475]
+      - generic [ref=e478]:
+        - generic [ref=e481]:
+          - generic [ref=e482]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e484] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e485]
+            - generic [ref=e486]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e489] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e492]: March 4th, 2026 at 7:43 AM
+            - button "Post menu" [ref=e496] [cursor=pointer]:
+              - img [ref=e497]
+          - generic [ref=e501]:
+            - generic [ref=e503]:
+              - textbox [ref=e505]:
+                - paragraph [ref=e506]: Como parte de nuestro programa de responsabilidad social empresarial, invitamos a los graduandos de primer ciclo de la Escuela Don Bosco Rural a una gira educativa al Biomuseo. Esta experiencia acercó a los jóvenes al patrimonio natural de Panamá, y...
+              - button "See more" [ref=e507] [cursor=pointer]
+            - generic [ref=e508]:
+              - generic [ref=e510]:
+                - button "Captura de pantalla 2026-03-04 a la(s) 9.43.07 a. m..webp" [ref=e516] [cursor=pointer]:
+                  - img "Captura de pantalla 2026-03-04 a la(s) 9.43.07 a. m..webp" [ref=e517]
+                - button "Next" [ref=e523] [cursor=pointer]:
+                  - img [ref=e524]
+                - generic [ref=e526]:
+                  - button "carousel indicator 1" [ref=e527] [cursor=pointer]:
+                    - img [ref=e528]
+                  - button "carousel indicator 2" [ref=e530] [cursor=pointer]:
+                    - img [ref=e531]
+                  - button "carousel indicator 3" [ref=e533] [cursor=pointer]:
+                    - img [ref=e534]
+              - generic [ref=e537]:
+                - generic "..." [ref=e538]:
+                  - button "Add reaction 👍" [ref=e539] [cursor=pointer]:
+                    - img "thumbs up" [ref=e540]
+                    - generic [ref=e541]: "0"
+                - button "Add reaction" [ref=e543] [cursor=pointer]:
+                  - img [ref=e544]
+              - generic [ref=e547]:
+                - separator [ref=e548]
+                - generic [ref=e551]:
+                  - button "Comment" [ref=e552] [cursor=pointer]:
+                    - img [ref=e554]
+                    - text: Comment
+                  - button "0 Comments" [ref=e557] [cursor=pointer]:
+                    - generic [ref=e558]: 0 Comments
+        - generic [ref=e561]:
+          - generic [ref=e562]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e564] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e565]
+            - generic [ref=e566]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e569] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e572]: February 23rd, 2026 at 9:34 PM
+            - button "Post menu" [ref=e576] [cursor=pointer]:
+              - img [ref=e577]
+          - generic [ref=e581]:
+            - generic [ref=e583]:
+              - paragraph [ref=e584]: ¡Hicimos historia! Humand levanta US$ 66M en Serie A Hoy es un día histórico para Humand… y para toda la región. Acabamos de cerrar la Serie A más grande en la historia de HR Tech en LATAM. Este hito no solo valida lo que venimos construyendo — nos
+              - button "See more" [ref=e585] [cursor=pointer]
+            - generic [ref=e586]:
+              - button "Humand Inversión.webp" [ref=e594] [cursor=pointer]:
+                - img "Humand Inversión.webp" [ref=e595]
+              - generic [ref=e597]:
+                - generic "..." [ref=e598]:
+                  - button "Add reaction 👍" [ref=e599] [cursor=pointer]:
+                    - img "thumbs up" [ref=e600]
+                    - generic [ref=e601]: "0"
+                - button "Add reaction" [ref=e603] [cursor=pointer]:
+                  - img [ref=e604]
+              - generic [ref=e607]:
+                - separator [ref=e608]
+                - generic [ref=e611]:
+                  - button "Comment" [ref=e612] [cursor=pointer]:
+                    - img [ref=e614]
+                    - text: Comment
+                  - button "0 Comments" [ref=e617] [cursor=pointer]:
+                    - generic [ref=e618]: 0 Comments
+        - generic [ref=e621]:
+          - generic [ref=e622]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e624] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e625]
+            - generic [ref=e626]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e629] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e632]: February 4th, 2025 at 1:20 AM
+            - button "Post menu" [ref=e636] [cursor=pointer]:
+              - img [ref=e637]
+          - generic [ref=e641]:
+            - generic [ref=e643]:
+              - paragraph [ref=e644]: 🌟 Retiro Humand 2024 en Mendoza🌟 Nuestro equipo se reunió en Mendoza para un retiro inolvidable. Disfrutamos de trekking, gastronomía y la cultura del vino, fortaleciendo la conexión y el trabajo en equipo. 🌄🍷 De 25 a 130 personas en tres edici
+              - button "See more" [ref=e645] [cursor=pointer]
+            - generic [ref=e646]:
+              - generic [ref=e648]:
+                - button "logo2.jpeg" [ref=e654] [cursor=pointer]:
+                  - img "logo2.jpeg"
+                - button "Next" [ref=e660] [cursor=pointer]:
+                  - img [ref=e661]
+                - generic [ref=e663]:
+                  - button "carousel indicator 1" [ref=e664] [cursor=pointer]:
+                    - img [ref=e665]
+                  - button "carousel indicator 2" [ref=e667] [cursor=pointer]:
+                    - img [ref=e668]
+                  - button "carousel indicator 3" [ref=e670] [cursor=pointer]:
+                    - img [ref=e671]
+              - generic [ref=e674]:
+                - generic "..." [ref=e675]:
+                  - button "Add reaction 👍" [ref=e676] [cursor=pointer]:
+                    - img "thumbs up" [ref=e677]
+                    - generic [ref=e678]: "0"
+                - button "Add reaction" [ref=e680] [cursor=pointer]:
+                  - img [ref=e681]
+              - generic [ref=e684]:
+                - separator [ref=e685]
+                - generic [ref=e688]:
+                  - button "Comment" [ref=e689] [cursor=pointer]:
+                    - img [ref=e691]
+                    - text: Comment
+                  - button "0 Comments" [ref=e694] [cursor=pointer]:
+                    - generic [ref=e695]: 0 Comments
+        - generic [ref=e698]:
+          - generic [ref=e699]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e701] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e702]
+            - generic [ref=e703]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e706] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e709]: June 23rd, 2024 at 8:58 PM
+            - button "Post menu" [ref=e713] [cursor=pointer]:
+              - img [ref=e714]
+          - generic [ref=e718]:
+            - generic [ref=e720]:
+              - paragraph [ref=e721]: Caso de éxito del Grupo Industrial Assa 🗣️ “Implementar Humand ha sido de las mejores cosas que nos han pasado en la empresa en los últimos 2 años”, fueron las palabras de Gabriel Sánchez, Director Corporativo de RR. HH. de Grupo Industrial Assa.
+              - button "See more" [ref=e722] [cursor=pointer]
+            - generic [ref=e723]:
+              - button "Captura de pantalla 2024-06-23 a la(s) 10.58.39 p. m..png" [ref=e731] [cursor=pointer]:
+                - img "Captura de pantalla 2024-06-23 a la(s) 10.58.39 p. m..png"
+              - generic [ref=e733]:
+                - generic "..." [ref=e734]:
+                  - button "Add reaction 👍" [ref=e735] [cursor=pointer]:
+                    - img "thumbs up" [ref=e736]
+                    - generic [ref=e737]: "0"
+                - button "Add reaction" [ref=e739] [cursor=pointer]:
+                  - img [ref=e740]
+              - generic [ref=e743]:
+                - separator [ref=e744]
+                - generic [ref=e747]:
+                  - button "Comment" [ref=e748] [cursor=pointer]:
+                    - img [ref=e750]
+                    - text: Comment
+                  - button "0 Comments" [ref=e753] [cursor=pointer]:
+                    - generic [ref=e754]: 0 Comments
+        - generic [ref=e757]:
+          - generic [ref=e758]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e760] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e761]
+            - generic [ref=e762]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e765] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e768]: March 7th, 2024 at 12:57 PM
+            - button "Post menu" [ref=e772] [cursor=pointer]:
+              - img [ref=e773]
+          - generic [ref=e777]:
+            - generic [ref=e779]:
+              - paragraph [ref=e780]: Caso de éxito de Greenpaper 🔎 ¿Cómo hacemos que la experiencia de nuestros colaboradores sea más agradable y, a la vez, logremos democratizar la comunicación en toda la empresa? Fue uno de los interrogantes que se planteó todo el equipo de RR. HH.
+              - button "See more" [ref=e781] [cursor=pointer]
+            - generic [ref=e782]:
+              - generic [ref=e794]:
+                - generic "..." [ref=e795]:
+                  - button "Add reaction 👍" [ref=e796] [cursor=pointer]:
+                    - img "thumbs up" [ref=e797]
+                    - generic [ref=e798]: "0"
+                - button "Add reaction" [ref=e800] [cursor=pointer]:
+                  - img [ref=e801]
+              - generic [ref=e804]:
+                - separator [ref=e805]
+                - generic [ref=e808]:
+                  - button "Comment" [ref=e809] [cursor=pointer]:
+                    - img [ref=e811]
+                    - text: Comment
+                  - button "0 Comments" [ref=e814] [cursor=pointer]:
+                    - generic [ref=e815]: 0 Comments
+        - generic [ref=e818]:
+          - generic [ref=e819]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e821] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e822]
+            - generic [ref=e823]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e826] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e829]: February 8th, 2024 at 11:51 AM
+            - button "Post menu" [ref=e833] [cursor=pointer]:
+              - img [ref=e834]
+          - generic [ref=e838]:
+            - generic [ref=e840]:
+              - paragraph [ref=e841]: De la mano de J. Julián Galeana Abarca, Generalista de RR. HH. y Desarrollo Organizacional; Armando Schiavon, COO de FB Group; Jesús García, Operador; Rodrigo Álvarez, Ingeniero Sr.; y Norma Estrada, Operadora de Producción, te contamos la historia d
+              - button "See more" [ref=e842] [cursor=pointer]
+            - generic [ref=e843]:
+              - generic [ref=e855]:
+                - generic "..." [ref=e856]:
+                  - button "Add reaction 👍" [ref=e857] [cursor=pointer]:
+                    - img "thumbs up" [ref=e858]
+                    - generic [ref=e859]: "0"
+                - button "Add reaction" [ref=e861] [cursor=pointer]:
+                  - img [ref=e862]
+              - generic [ref=e865]:
+                - separator [ref=e866]
+                - generic [ref=e869]:
+                  - button "Comment" [ref=e870] [cursor=pointer]:
+                    - img [ref=e872]
+                    - text: Comment
+                  - button "0 Comments" [ref=e875] [cursor=pointer]:
+                    - generic [ref=e876]: 0 Comments
+        - generic [ref=e879]:
+          - generic [ref=e880]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e882] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e883]
+            - generic [ref=e884]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e887] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e890]: February 5th, 2024 at 11:18 PM
+            - button "Post menu" [ref=e894] [cursor=pointer]:
+              - img [ref=e895]
+          - generic [ref=e899]:
+            - paragraph [ref=e902]: "Nuestro año finaliza con grandes resultados de la mano de Triunfo Seguros: nos conectamos, compartimos, nos actualizamos... Esperamos un 2024 con nuevos desafíos para cumplir juntos!!"
+            - generic [ref=e903]:
+              - generic [ref=e915]:
+                - generic "..." [ref=e916]:
+                  - button "Add reaction 👍" [ref=e917] [cursor=pointer]:
+                    - img "thumbs up" [ref=e918]
+                    - generic [ref=e919]: "0"
+                - button "Add reaction" [ref=e921] [cursor=pointer]:
+                  - img [ref=e922]
+              - generic [ref=e925]:
+                - separator [ref=e926]
+                - generic [ref=e929]:
+                  - button "Comment" [ref=e930] [cursor=pointer]:
+                    - img [ref=e932]
+                    - text: Comment
+                  - button "0 Comments" [ref=e935] [cursor=pointer]:
+                    - generic [ref=e936]: 0 Comments
+        - generic [ref=e939]:
+          - generic [ref=e940]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e942] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e943]
+            - generic [ref=e944]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e947] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e950]: February 1st, 2024 at 9:27 AM
+            - button "Post menu" [ref=e954] [cursor=pointer]:
+              - img [ref=e955]
+          - generic [ref=e959]:
+            - generic [ref=e961]:
+              - paragraph [ref=e962]: ¡Felices de compartir nuestra colaboración con SiSi en su proceso de transformación digital! 🚀 🥇 Paula Rocha, Gerente de Gestión Humana, y Manuela Rodríguez Lussich, Coordinadora de Gestión Humana, nos cuentan la historia de éxito de SiSi junto a
+              - button "See more" [ref=e963] [cursor=pointer]
+            - generic [ref=e964]:
+              - generic [ref=e976]:
+                - generic "..." [ref=e977]:
+                  - button "Add reaction 👍" [ref=e978] [cursor=pointer]:
+                    - img "thumbs up" [ref=e979]
+                    - generic [ref=e980]: "0"
+                - button "Add reaction" [ref=e982] [cursor=pointer]:
+                  - img [ref=e983]
+              - generic [ref=e986]:
+                - separator [ref=e987]
+                - generic [ref=e990]:
+                  - button "Comment" [ref=e991] [cursor=pointer]:
+                    - img [ref=e993]
+                    - text: Comment
+                  - button "0 Comments" [ref=e996] [cursor=pointer]:
+                    - generic [ref=e997]: 0 Comments
+        - generic [ref=e1000]:
+          - generic [ref=e1001]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e1003] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e1004]
+            - generic [ref=e1005]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e1008] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e1011]: September 28th, 2023 at 6:00 PM
+            - button "Post menu" [ref=e1015] [cursor=pointer]:
+              - img [ref=e1016]
+          - generic [ref=e1020]:
+            - generic [ref=e1022]:
+              - paragraph [ref=e1023]: "¿Quieres lograr una comunicación más fácil y efectiva con tus empleados? Mira el video para conocer cómo centralizar todos los procesos de Recursos Humanos en una sola app con Humand. Algunos de los beneficios son:"
+              - button "See more" [ref=e1024] [cursor=pointer]
+            - generic [ref=e1025]:
+              - generic [ref=e1037]:
+                - generic "..." [ref=e1038]:
+                  - button "Add reaction 👍" [ref=e1039] [cursor=pointer]:
+                    - img "thumbs up" [ref=e1040]
+                    - generic [ref=e1041]: "0"
+                - button "Add reaction" [ref=e1043] [cursor=pointer]:
+                  - img [ref=e1044]
+              - generic [ref=e1047]:
+                - separator [ref=e1048]
+                - generic [ref=e1051]:
+                  - button "Comment" [ref=e1052] [cursor=pointer]:
+                    - img [ref=e1054]
+                    - text: Comment
+                  - button "0 Comments" [ref=e1057] [cursor=pointer]:
+                    - generic [ref=e1058]: 0 Comments
+        - generic [ref=e1061]:
+          - generic [ref=e1062]:
+            - link "Ingeniería Continental Comunicaciones" [ref=e1064] [cursor=pointer]:
+              - /url: /profile/7853597
+              - img "Ingeniería Continental Comunicaciones" [ref=e1065]
+            - generic [ref=e1066]:
+              - link "Ingeniería Continental Comunicaciones" [ref=e1069] [cursor=pointer]:
+                - /url: /profile/7853597
+              - generic [ref=e1072]: September 28th, 2023 at 5:54 PM
+            - button "Post menu" [ref=e1076] [cursor=pointer]:
+              - img [ref=e1077]
+          - generic [ref=e1081]:
+            - generic [ref=e1083]:
+              - paragraph [ref=e1084]:
+                - text: ¡Hola a todos! 👋 Estamos emocionados de compartir algo especial contigo hoy. Descubre nuestro resumen sobre humand en un formato fácil de entender. ¿Te preguntas de qué se trata? 🤔 ¡Estás a un clic de distancia de descubrirlo!
+                - link "https://drive.googl" [ref=e1085] [cursor=pointer]:
+                  - /url: https://drive.googl
+              - button "See more" [ref=e1086] [cursor=pointer]
+            - generic [ref=e1087]:
+              - button "logo.png" [ref=e1095] [cursor=pointer]:
+                - img "logo.png"
+              - generic [ref=e1097]:
+                - generic "..." [ref=e1098]:
+                  - button "Add reaction 👍" [ref=e1099] [cursor=pointer]:
+                    - img "thumbs up" [ref=e1100]
+                    - generic [ref=e1101]: "0"
+                - button "Add reaction" [ref=e1103] [cursor=pointer]:
+                  - img [ref=e1104]
+              - generic [ref=e1107]:
+                - separator [ref=e1108]
+                - generic [ref=e1111]:
+                  - button "Comment" [ref=e1112] [cursor=pointer]:
+                    - img [ref=e1114]
+                    - text: Comment
+                  - button "0 Comments" [ref=e1117] [cursor=pointer]:
+                    - generic [ref=e1118]: 0 Comments
+  - generic:
+    - generic:
+      - button "open chat" [ref=e1122]:
+        - generic [ref=e1123]:
+          - img
+          - img "open chat"
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic: Sammy
+                - generic:
+                  - button "Sammy":
+                    - generic:
+                      - img
+                  - button "Sammy":
+                    - generic:
+                      - img
+            - generic:
+              - generic:
+                - button "Start new chat"
+              - generic:
+                - generic:
+                  - button "scroll":
+                    - generic:
+                      - img "scroll"
+                - generic:
+                  - generic:
+                    - generic:
+                      - textbox
+                    - button "send" [disabled] [ref=e1125]:
+                      - img "send" [ref=e1126]
+            - generic:
+              - button "Start new chat Restart conversation"
+              - button "Cancel Cancel"
+            - generic:
+              - button "Restart conversation":
+                - generic:
+                  - generic:
+                    - img
+                - generic: Restart conversation
+          - generic:
+            - paragraph: Privacy notice
+            - paragraph: Before we can proceed with your conversation, we kindly ask you to review and accept our privacy policy, outlining how we handle and protect your personal information throughout our services.
+            - button "Submit"
+            - button "Privacy policy":
+              - generic:
+                - generic:
+                  - img
+                - generic: Privacy policy
