@@ -71,11 +71,10 @@ src/
 
 | Documento | Cuándo leerlo |
 |-----------|---------------|
-| @Docs/FEATURE_SPEC.md | **Reglas de negocio, pantallas, campos, validaciones, estados.** Spec v4 (fuente de verdad para lógica de negocio). |
-| Docs/FEATURE_SPEC_v3_FOUNDATIONAL.md | Contexto histórico (NO auto-cargar — 75K chars). Solo leer manualmente si necesitas entender decisiones originales. Schema outdated (18→44 tablas). |
-| @Docs/MASTER_BACKLOG.md | Roadmap de features por tier de prioridad. Estado actual del proyecto. |
-| @Docs/SYNC_LOG.md | **Leer al inicio de cada sesión.** Cambios recientes de Chat/James que te afectan. |
-| @Docs/BUGS.md | Bugs encontrados y resueltos. |
+| @Docs/CHANGELOG.md | **Leer al inicio de cada sesión.** Qué se hizo recientemente (código + BD). Actualizar con cada commit. |
+| @Docs/BACKLOG.md | Lo que falta por hacer. Consultar cuando se planifica siguiente feature. |
+| Docs/FEATURE_SPEC.md | Reglas de negocio, pantallas, estados. Leer secciones relevantes (NO auto-cargar — 39K chars). |
+| Docs/reference/ | Research docs de Chat: Vision Roadmap, Self-Pickup, Vibecoder's Guide, Events V2 specs. |
 | Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 44 tablas con COMMENT ON TABLE/COLUMN. |
 
 **IMPORTANTE:** Para schema, siempre consultar Supabase MCP (no docs estáticos). Para reglas de negocio, FEATURE_SPEC.md es la fuente de verdad. Ver `.claude/rules/` para reglas de commit, supabase, y modificación de specs.

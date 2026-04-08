@@ -1,41 +1,28 @@
 ---
 name: self-update
-description: Cómo mantener SYNC_LOG.md y BUGS.md sincronizados después de cada paso implementado.
+description: Cómo mantener CHANGELOG.md actualizado después de cada commit.
 ---
 
-# Skill: Self-Update — Mantener documentación sincronizada
+# Skill: Self-Update — Mantener CHANGELOG actualizado
 
-Claude Code debe mantener la documentación actualizada como parte de su flujo normal.
+## Después de cada commit
 
-## Después de cada paso completado
+Agregar entry en `Docs/CHANGELOG.md` con formato:
+```
+- [feat|fix|docs|chore] Descripción breve (hash)
+```
 
-1. Escribir en `Docs/SYNC_LOG.md`:
-   - Qué se implementó
-   - Si se encontró alguna discrepancia con los specs
-   - Si se necesita un cambio de BD (para que James lo delegue a Chat)
+Bajo la fecha de hoy. Si no existe sección para hoy, crearla.
 
-2. Si encontraste un bug → documentar en `Docs/BUGS.md`
+## Si necesitas un cambio de BD
 
-## Cuando descubras una discrepancia
-
-Si el código no coincide con CLAUDE.md o Docs/FEATURE_SPEC.md:
-1. NO modifiques el spec
-2. Escribe en `Docs/SYNC_LOG.md`: "Code: Discrepancia — {spec} dice X, código hace Y, razón: Z"
-
-## Cuando necesites un cambio de BD
-
-Claude Code puede LEER Supabase (via MCP read-only) pero NO puede escribir.
-1. Escribe en `Docs/SYNC_LOG.md`: "Code: SOLICITUD BD — {descripción del cambio}. Razón: {por qué}."
+1. Agregar en CHANGELOG.md: `- [bd-pending] {descripción}. Razón: {por qué}.`
 2. James lo verá y delegará a Chat para ejecutar
-3. Chat escribirá confirmación en SYNC_LOG.md
-4. Tú verificas leyendo Supabase y continúas
+3. Cuando esté hecho, cambiar tag a `[bd]`
 
-## Formato de SYNC_LOG.md
+## Si encuentras una discrepancia con FEATURE_SPEC
 
-```markdown
-## {fecha} — Code: {descripción breve}
-- Qué se hizo
-- Archivos modificados
-- Discrepancias encontradas (si hay)
-- Solicitudes de BD (si hay)
+NO modificar el spec. Agregar en CHANGELOG.md:
+```
+- [discrepancia] FEATURE_SPEC dice X, código hace Y. Razón: Z.
 ```
