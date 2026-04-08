@@ -162,43 +162,32 @@ Viaje:     Programado → En Ruta → Completado / Cancelado
 **'En Transito' SIN acento** es canónico — mismatches fallan silenciosamente.
 Cascada (`cascade_request_status()`): cuando cambia una línea, re-evalúa la solicitud padre.
 
-## Workflow para Claude Code
+## Workflow
 
-### Commands disponibles
-- `/project:implement-task Docs/TASKS/nombre.md` — Lee un task file y lo implementa paso a paso
-- `/project:fix-bug "descripción del problema"` — Diagnostica y arregla un bug
-- `/project:review "solicitudes"` — Revisa código contra FEATURE_SPEC
-
-### Subagent disponible
-- `code-reviewer` — Revisión read-only de código antes de commit. Invocarlo: "usa el code-reviewer subagent para revisar mis cambios"
+### Commands
+- `/project:fix-bug "descripción"` — Diagnostica y arregla un bug
+- `/project:deploy-check` — Verifica readiness pre-deploy (build, types, secrets, git)
 
 ### Flujo por tarea
-1. Lee `Docs/SYNC_LOG.md` para contexto reciente
-2. Lee el task file o entiende el bug
-3. Verifica schema via Supabase MCP si es necesario
-4. Implementa. `npm run build` después de cada paso.
-5. Commit después de cada paso: `feat:`, `fix:`, `docs:` — mensaje descriptivo
-6. `/clear` entre tareas no relacionadas. `/compact` al 50% de contexto.
-7. Actualizar `Docs/SYNC_LOG.md` al terminar
+1. CHANGELOG.md y BACKLOG.md se auto-cargan (contexto reciente + pendientes)
+2. Feature nuevo → Plan Mode. Bug → `/fix-bug`. Auditoría → Explore agents.
+3. Si toca eventos/fulfillment → leer `Docs/reference/Self-pickup.md`
+4. Si planifica feature nuevo → leer `Docs/reference/Vision Roadmap.md`
+5. Verifica schema via Supabase MCP si es necesario
+6. `npm run build` después de cada paso
+7. Commit → CHANGELOG.md entry (atómico, mismo commit)
 
-### CUANDO NECESITES UN CAMBIO DE BD
-- STOP. Escribir en `Docs/SYNC_LOG.md`: "Code: SOLICITUD BD — {descripción}. Razón: {por qué}."
-- James lo verá y delegará a Chat para ejecutar.
+### Cambios de BD
+- STOP. Agregar `[bd-pending]` en CHANGELOG.md. James → Chat ejecuta → cambiar a `[bd]`.
 
 ### NUNCA
-- No hacer commits ni push a `main`. Solo `jaime/dev`.
-- No modificar Feature Spec ni CLAUDE.md (solo Chat los modifica).
+- No commits/push a `main`. Solo `jaime/dev`.
 - No ESCRIBIR en Supabase. Solo LEER via MCP.
 
-## Tres actores — quién hace qué
-
-**Claude Chat (claude.ai):** Planificación, diseño, discusión de lógica de negocio, auditoría de documentos, cambios directos en Supabase (tiene acceso de escritura). Si Claude Code necesita un cambio de BD → James consulta con Chat primero.
-
-**James (humano):** Decisiones finales, input de negocio, coordinación con equipo ICONSA, aprobación de cambios. Push a git solo desde `jaime/dev`.
-
-**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, LEER Supabase via MCP (read-only, NO escribir), actualizar SYNC_LOG/BUGS, hacer commit+push automático a jaime/dev.
-
-**Regla de oro:** Si algo involucra cambiar BD o lógica de negocio no documentada → STOP, escribe en SYNC_LOG.md, y dile a James que consulte con Chat. Si es solo implementación de código basada en lo que ya está en docs → HAZLO.
+### Quién hace qué
+- **Code (yo):** Implementar, auditar, fix bugs, builds, commits a jaime/dev
+- **Chat:** Escribir a Supabase, web research, leer PDFs de ICONSA
+- **James:** Decisiones finales, input de negocio, aprobaciones
 
 ## Git
 
