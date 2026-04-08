@@ -5,6 +5,7 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-08
+- [feat] Parada Level 1 — intermediate stop event for supplier pickups (446b0c7)
 - [fix] AD-4 — PM cannot see confirmation code on pickup trips (6b92458)
 - [fix] Remove pickup radio from solicitud form — decided at programming level (2faf6e2)
 - [chore] Finalize workflow — clean reference docs, simplify CLAUDE.md (0e759cb)
