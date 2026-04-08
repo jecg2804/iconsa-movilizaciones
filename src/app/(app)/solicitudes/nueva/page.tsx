@@ -384,36 +384,6 @@ export default function NuevaSolicitudPage() {
       {/* Opciones de movilización */}
       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 space-y-3">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">Tipo de movilización:</span>
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-            <input
-              type="radio"
-              name="fulfillment"
-              value="fleet"
-              checked={header.fulfillment_type === 'fleet'}
-              onChange={() => setHeader(h => ({ ...h, fulfillment_type: 'fleet' }))}
-              className="accent-navy"
-            />
-            Envío por flota
-          </label>
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-            <input
-              type="radio"
-              name="fulfillment"
-              value="pickup"
-              checked={header.fulfillment_type === 'pickup'}
-              onChange={() => setHeader(h => ({ ...h, fulfillment_type: 'pickup' }))}
-              className="accent-navy"
-            />
-            Retiro en Chilibre
-          </label>
-        </div>
-        {header.fulfillment_type === 'pickup' && (
-          <p className="text-xs text-iconsa-gray">
-            Sujeto a confirmación de Logística. Tarifa: B/. 75.00
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-4 border-t border-gray-100 pt-3">
           <label className="flex items-center gap-1.5 text-sm cursor-pointer">
             <input
               type="checkbox"
