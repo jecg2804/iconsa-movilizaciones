@@ -1009,8 +1009,8 @@ export default function Page() {
     )
   }
 
-  // Código de confirmación solo visible para logistica y admin y pm
-  const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
+  // Código de confirmación visible para logistica/admin siempre, PM solo en fleet (no pickup)
+  const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || (role === 'pm' && !trip.is_self_pickup)
   // Todos los roles con acceso a mis-viajes pueden registrar eventos (incluye PM para entregas)
   const canRegisterEvents = canRegisterEvent(role)
   // PM solo ve Entrega + Incidencia (no puede UPDATE trips → no Salida/Retorno)
