@@ -1,6 +1,6 @@
 'use client'
 
-import { Truck, MapPin, CheckCircle, Home, AlertTriangle, RotateCcw, ClipboardCheck, Car } from 'lucide-react'
+import { Truck, MapPin, CheckCircle, Home, AlertTriangle, RotateCcw, ClipboardCheck, Car, CircleDot } from 'lucide-react'
 import FileDisplay from '@/components/ui/FileDisplay'
 import type { Attachment } from '@/lib/supabase/storage'
 
@@ -13,6 +13,8 @@ interface EventItem {
   notes: string | null
   attachments?: Attachment[]
   reverts_event_id?: string | null
+  location?: string | null
+  stop_type?: string | null
 }
 
 interface EventTimelineProps {
@@ -37,6 +39,8 @@ function getEventIcon(type: string) {
       return <ClipboardCheck className="h-4 w-4" />
     case 'Retiro':
       return <Car className="h-4 w-4" />
+    case 'Parada':
+      return <CircleDot className="h-4 w-4" />
     default:
       return <MapPin className="h-4 w-4" />
   }
@@ -61,6 +65,8 @@ function getEventColor(type: string, isReverted: boolean): string {
       return 'bg-amber-500 text-white'
     case 'Retiro':
       return 'bg-iconsa-green text-white'
+    case 'Parada':
+      return 'bg-cyan-600 text-white'
     default:
       return 'bg-gray-400 text-white'
   }
@@ -138,6 +144,19 @@ export function EventTimeline({ events }: EventTimelineProps) {
                   {isReversion ? 'Revertido por' : 'Registrado por'}{' '}
                   {event.registered_by.name}
                 </p>
+              )}
+
+              {event.event_type === 'Parada' && !isReverted && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                  {event.location && (
+                    <span className="text-xs font-medium text-cyan-700">📍 {event.location}</span>
+                  )}
+                  {event.stop_type && (
+                    <span className="inline-flex rounded-full bg-cyan-50 px-2 py-0.5 text-xs text-cyan-700 border border-cyan-200">
+                      {event.stop_type === 'retiro' ? 'Retiro' : event.stop_type === 'entrega' ? 'Entrega' : 'Intercambio'}
+                    </span>
+                  )}
+                </div>
               )}
 
               {event.event_type === 'Entrega' && event.received_by_name && !isReverted && (

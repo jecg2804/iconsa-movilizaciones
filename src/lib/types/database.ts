@@ -169,6 +169,133 @@ export type Database = {
           },
         ]
       }
+      custody_transfers: {
+        Row: {
+          attachments: Json | null
+          confirmation_method: string | null
+          created_at: string | null
+          created_by: string | null
+          equipment_id: string | null
+          from_custodian_id: string | null
+          from_location_id: string | null
+          from_location_text: string | null
+          id: string
+          invoice_cufe: string | null
+          notes: string | null
+          request_line_id: string | null
+          source_event_id: string | null
+          source_trip_id: string | null
+          to_custodian_id: string | null
+          to_location_id: string | null
+          to_location_text: string | null
+          transfer_type: string
+        }
+        Insert: {
+          attachments?: Json | null
+          confirmation_method?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          equipment_id?: string | null
+          from_custodian_id?: string | null
+          from_location_id?: string | null
+          from_location_text?: string | null
+          id?: string
+          invoice_cufe?: string | null
+          notes?: string | null
+          request_line_id?: string | null
+          source_event_id?: string | null
+          source_trip_id?: string | null
+          to_custodian_id?: string | null
+          to_location_id?: string | null
+          to_location_text?: string | null
+          transfer_type: string
+        }
+        Update: {
+          attachments?: Json | null
+          confirmation_method?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          equipment_id?: string | null
+          from_custodian_id?: string | null
+          from_location_id?: string | null
+          from_location_text?: string | null
+          id?: string
+          invoice_cufe?: string | null
+          notes?: string | null
+          request_line_id?: string | null
+          source_event_id?: string | null
+          source_trip_id?: string | null
+          to_custodian_id?: string | null
+          to_location_id?: string | null
+          to_location_text?: string | null
+          transfer_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custody_transfers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_from_custodian_id_fkey"
+            columns: ["from_custodian_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_from_location_id_fkey"
+            columns: ["from_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "sm_request_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_source_event_id_fkey"
+            columns: ["source_event_id"]
+            isOneToOne: false
+            referencedRelation: "trip_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_source_trip_id_fkey"
+            columns: ["source_trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_to_custodian_id_fkey"
+            columns: ["to_custodian_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custody_transfers_to_location_id_fkey"
+            columns: ["to_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_observations: {
         Row: {
           attachments: Json | null
@@ -2252,6 +2379,7 @@ export type Database = {
           registered_by: string | null
           reverts_event_id: string | null
           source: string | null
+          stop_type: string | null
           trip_id: string
         }
         Insert: {
@@ -2268,6 +2396,7 @@ export type Database = {
           registered_by?: string | null
           reverts_event_id?: string | null
           source?: string | null
+          stop_type?: string | null
           trip_id: string
         }
         Update: {
@@ -2284,6 +2413,7 @@ export type Database = {
           registered_by?: string | null
           reverts_event_id?: string | null
           source?: string | null
+          stop_type?: string | null
           trip_id?: string
         }
         Relationships: [
@@ -2925,6 +3055,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      complete_pickup_trip: { Args: { p_trip_id: string }; Returns: undefined }
       get_my_app_role: { Args: never; Returns: string }
     }
     Enums: {
@@ -3059,6 +3190,5 @@ export const Constants = {
   },
 } as const
 
-// Helper type used throughout the codebase
-export type Row<T extends keyof Database['public']['Tables']> =
-  Database['public']['Tables'][T]['Row']
+// Helper type for row access
+export type Row<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']

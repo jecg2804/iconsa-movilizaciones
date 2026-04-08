@@ -26,6 +26,7 @@ import { DeliveryModal, type DeliveryData } from '@/components/viajes/DeliveryMo
 import { RevertModal } from '@/components/viajes/RevertModal'
 import { PreparationModal } from '@/components/viajes/PreparationModal'
 import { PickupModal, type PickupData } from '@/components/viajes/PickupModal'
+import { ParadaModal, type ParadaData } from '@/components/viajes/ParadaModal'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
 import { CodeConfirmation } from '@/components/viajes/CodeConfirmation'
@@ -44,6 +45,8 @@ interface TripEvent {
   notes: string | null
   attachments: Attachment[]
   reverts_event_id: string | null
+  location: string | null
+  stop_type: string | null
 }
 
 // --- Componente de fila de asignacion (solo lectura) ---
@@ -410,7 +413,9 @@ export default function Page() {
         received_by_name,
         notes,
         attachments,
-        reverts_event_id
+        reverts_event_id,
+        location,
+        stop_type
       `)
       .eq('trip_id', id)
       .order('event_timestamp', { ascending: true })
@@ -432,6 +437,8 @@ export default function Page() {
           notes: (row.notes as string | null) ?? null,
           attachments: att,
           reverts_event_id: (row.reverts_event_id as string | null) ?? null,
+          location: (row.location as string | null) ?? null,
+          stop_type: (row.stop_type as string | null) ?? null,
         }
       })
       setEvents(mapped)
@@ -870,6 +877,55 @@ export default function Page() {
     [supabase, trip, person, fetchTrip, id, loadEvents],
   )
 
+  // --- Parada intermedia (informacional — no cambia estados) ---
+  const handleParada = useCallback(
+    async (data: ParadaData) => {
+      if (!trip) return
+      setEventBusy(true)
+      setEventError(null)
+      try {
+        // 1. INSERT trip_events con event_type='Parada'
+        const { data: event, error } = await supabase.from('trip_events').insert({
+          trip_id: trip.id,
+          event_type: 'Parada',
+          event_timestamp: new Date().toISOString(),
+          registered_by: person?.id ?? null,
+          location: data.location,
+          stop_type: data.stop_type,
+          notes: data.notes || null,
+          attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
+        }).select('id').single()
+
+        if (error) throw error
+
+        // 2. Si hay líneas afectadas, INSERT trip_event_lines
+        if (data.lines && data.lines.length > 0 && event) {
+          await supabase.from('trip_event_lines').insert(
+            data.lines.map((l) => ({
+              trip_event_id: event.id,
+              request_line_id: l.request_line_id,
+              quantity: l.quantity,
+              line_status: l.line_status,
+            }))
+          )
+        }
+
+        // NO cambiar status de trip ni líneas — Parada es informacional
+        // NO notificaciones (se agregan después)
+
+        setActiveEvent(null)
+        const tripData = await fetchTrip(id)
+        setTrip(tripData)
+        await loadEvents()
+      } catch (err) {
+        setEventError(err instanceof Error ? err.message : 'Error al registrar parada')
+      } finally {
+        setEventBusy(false)
+      }
+    },
+    [supabase, trip, person, fetchTrip, id, loadEvents],
+  )
+
   // --- Retiro (pickup — delivery + complete trip via RPC) ---
   const handlePickup = useCallback(
     async (data: PickupData) => {
@@ -1020,7 +1076,7 @@ export default function Page() {
 
   // Último evento revertible (solo Salida/Entrega/Retorno, no ya revertido)
   const canRevert = role === 'logistica' || role === 'admin'
-  const revertibleTypes = ['Salida', 'Llegada', 'Entrega', 'Retorno']
+  const revertibleTypes = ['Salida', 'Llegada', 'Entrega', 'Retorno', 'Parada']
   // revertedIds already computed above (line ~454)
   const lastRevertible = canRevert && !tripDone
     ? [...events].reverse().find((e) => revertibleTypes.includes(e.event_type) && !revertedIds.has(e.id)) ?? null
@@ -1164,6 +1220,16 @@ export default function Page() {
               />
             )}
 
+            {/* Parada intermedia — disponible después de Salida, múltiples veces, no PM, no pickup */}
+            {hasSalida && !tripDone && !isPM && !isPickup && (
+              <EventButton
+                eventType="Parada"
+                loading={eventBusy && activeEvent === 'Parada'}
+                disabled={eventBusy}
+                onClick={() => setActiveEvent('Parada')}
+              />
+            )}
+
             {/* Retorno secundario — disponible después de Salida sin necesitar Entrega */}
             {showRetornoSecondary && (
               <EventButton
@@ -1239,8 +1305,18 @@ export default function Page() {
         />
       )}
 
+      {/* Overlay de parada intermedia */}
+      {activeEvent === 'Parada' && trip && (
+        <ParadaModal
+          trip={trip}
+          onConfirm={handleParada}
+          onClose={() => setActiveEvent(null)}
+          loading={eventBusy}
+        />
+      )}
+
       {/* Overlay de registro de evento (Llegada, Retorno, Incidencia) */}
-      {activeEvent && !['Salida', 'Entrega', 'Preparacion', 'Retiro'].includes(activeEvent) && (
+      {activeEvent && !['Salida', 'Entrega', 'Preparacion', 'Retiro', 'Parada'].includes(activeEvent) && (
         <EventModal
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}
