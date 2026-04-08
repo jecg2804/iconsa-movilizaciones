@@ -19,8 +19,7 @@ Conductor registra paradas intermedias en proveedores/almacenes. Tipo: retiro/en
 | AD-1 | Self-pickup forzado en Trip entity — debería ser PickupOrder separado | Semántica rota (Trip sin driver/vehicle) | ⏳ Deferred — hide pickup first |
 | AD-2 | No existe tabla custody_transfers — el primitivo fundamental falta | Trigger acoplado a trip_events, no extensible | ⏳ Hacer ANTES de más fulfillment methods |
 | AD-3 | Fulfillment a nivel Trip, no línea — bloquea hybrid fulfillment | PM que necesita 1 item por camión + 1 por pickup = 2 solicitudes | ⏳ Depende de AD-1 |
-| AD-4 | PM ve código de confirmación en pickup — debería no verlo | Rompe verificación (PM es receptor en pickup) | ⏳ Quick fix pre-producción |
-| AD-5 | Sin UX mobile optimizado para almacenistas | Touch targets, audio tones, alto contraste | 🔮 Future |
+| AD-4 | PM ve código de confirmación en pickup — debería no verlo | Rompe verificación (PM es receptor en pickup) | ✅ Fixed (6b92458) |
 
 ---
 

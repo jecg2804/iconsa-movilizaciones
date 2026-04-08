@@ -1,0 +1,411 @@
+/**
+ * Shared test helpers for MovimientOS E2E tests.
+ * Every test file imports from here — single source of truth for selectors and utilities.
+ */
+
+import { type Page, expect } from '@playwright/test'
+import { createClient } from '@supabase/supabase-js'
+import { config } from 'dotenv'
+
+config({ path: '.env.local' })
+
+// --- Supabase service client (bypasses RLS for BD verification) ---
+export const db = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+)
+
+// --- Constants ---
+export const BASE = 'http://localhost:3000'
+export const ADMIN = { email: 'jcucalon@iconsanet.com', password: 'Frijolin31!' }
+
+// --- Login ---
+export async function login(page: Page, creds = ADMIN) {
+  await page.goto(`${BASE}/login`)
+  await page.waitForTimeout(1000)
+  if (page.url().includes('dashboard') || page.url().includes('solicitudes') || page.url().includes('programacion')) {
+    return // already logged in
+  }
+  await page.getByRole('textbox', { name: 'Correo electrónico' }).fill(creds.email)
+  await page.getByRole('textbox', { name: 'Contraseña' }).fill(creds.password)
+  await page.getByRole('button', { name: 'Iniciar Sesión' }).click()
+  await page.waitForURL('**/dashboard', { timeout: 15000 })
+}
+
+// --- Custom Select dropdown interaction ---
+export async function pick(page: Page, btnName: string | RegExp, optText: string | RegExp) {
+  await page.getByRole('button', { name: btnName }).click()
+  await page.waitForTimeout(300)
+  const opt = page.getByRole('option', { name: optText })
+  if (await opt.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await opt.click()
+  } else {
+    const search = page.locator('input[placeholder="Buscar..."]').last()
+    if (await search.isVisible().catch(() => false)) {
+      await search.fill(typeof optText === 'string' ? optText : '')
+      await page.waitForTimeout(500)
+      await page.getByRole('option').first().click()
+    }
+  }
+  await page.waitForTimeout(300)
+}
+
+// --- Use fallback text input (for locations/equipment not in dropdown) ---
+export async function pickFallback(page: Page, value: string) {
+  await page.getByRole('button', { name: /No esta en la lista/ }).first().click()
+  await page.locator('input[placeholder*="Escriba"]').last().fill(value)
+  await page.waitForTimeout(200)
+}
+
+// --- Screenshot helper ---
+export async function snap(page: Page, name: string) {
+  await page.screenshot({ path: `test-results/screenshots/${name}.png` })
+}
+
+// --- Create a solicitud with N lines and return the DB ID ---
+export async function createSolicitud(
+  page: Page,
+  opts: {
+    project?: RegExp
+    date?: string
+    lines: Array<{
+      type: 'Equipo' | 'Material'
+      equipmentSearch?: string
+      description?: string
+      from: string | { dropdown: RegExp }
+      to: string | { dropdown: RegExp }
+      quantity?: number
+      unit?: RegExp
+    }>
+    send?: boolean // default true — send the solicitud (Borrador → Enviada)
+    requiresCode?: boolean
+  },
+): Promise<{ dbId: string; displayId: string }> {
+  await page.goto(`${BASE}/solicitudes/nueva`)
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(1000)
+
+  // Select project
+  await pick(page, /Proyecto/, opts.project ?? /Muelle 14/)
+
+  // Set date
+  await page.getByRole('textbox', { name: 'Fecha Requerida' }).fill(opts.date ?? '2026-04-15')
+
+  // Confirmation code checkbox at solicitud level
+  if (opts.requiresCode) {
+    const cb = page.getByRole('checkbox', { name: /Requiere código de confirmación/ })
+    if (!(await cb.isChecked())) await cb.click()
+  }
+
+  // Add each line
+  for (const line of opts.lines) {
+    const addBtn = page.getByRole('button', { name: /Agregar Linea/ }).first()
+    await expect(addBtn).toBeVisible({ timeout: 5000 })
+    await addBtn.click()
+    await page.waitForTimeout(800)
+
+    // Type toggle
+    if (line.type === 'Material') {
+      await page.getByRole('button', { name: 'Material' }).click()
+      await page.waitForTimeout(300)
+    }
+
+    // Equipment (for Equipo type)
+    if (line.type === 'Equipo' && line.equipmentSearch) {
+      await page.locator('button', { hasText: 'Buscar equipo...' }).click()
+      await page.locator('input[placeholder="Buscar..."]').last().fill(line.equipmentSearch)
+      await page.waitForTimeout(800)
+      await page.getByRole('option').first().click()
+      await page.waitForTimeout(300)
+    }
+
+    // Description (for Material type)
+    if (line.type === 'Material' && line.description) {
+      await page.getByRole('textbox', { name: /Descripcion del material/ }).fill(line.description)
+    }
+
+    // From location
+    if (typeof line.from === 'string') {
+      // Fallback text
+      await page.getByText('No esta en la lista').first().click()
+      await page.locator('input[placeholder*="Escriba"]').last().fill(line.from)
+    } else {
+      await pick(page, 'Desde', line.from.dropdown)
+    }
+
+    // To location
+    if (typeof line.to === 'string') {
+      // Need to find the "No esta en la lista" for the "to" field
+      const fallbacks = page.getByText('No esta en la lista')
+      if (await fallbacks.nth(1).isVisible().catch(() => false)) {
+        await fallbacks.nth(1).click()
+      } else {
+        await fallbacks.first().click()
+      }
+      await page.locator('input[placeholder*="Escriba"]').last().fill(line.to)
+    } else {
+      await pick(page, 'Hasta', line.to.dropdown)
+    }
+
+    // Quantity
+    if (line.quantity) {
+      await page.getByRole('spinbutton', { name: /Cantidad/ }).fill(String(line.quantity))
+    }
+
+    // Unit
+    if (line.unit) {
+      await pick(page, 'Unidad', line.unit)
+    }
+
+    // Save line
+    await page.getByRole('button', { name: /Guardar Linea/ }).click()
+    await page.waitForTimeout(1500)
+
+    // Handle duplicate warning
+    const continueBtn = page.getByRole('button', { name: /Continuar de todas formas/ })
+    if (await continueBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await continueBtn.scrollIntoViewIfNeeded()
+      await continueBtn.click()
+      await page.waitForTimeout(1500)
+    }
+  }
+
+  // Send or save as draft
+  const send = opts.send !== false
+  if (send) {
+    await page.getByRole('button', { name: /Enviar Solicitud/ }).click()
+  } else {
+    await page.getByRole('button', { name: /Guardar Borrador/ }).click()
+  }
+  await page.waitForTimeout(2000)
+
+  // Get DB ID of the created solicitud
+  const { data } = await db
+    .from('sm_requests')
+    .select('id, request_id')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  return { dbId: data?.id ?? '', displayId: data?.request_id ?? '' }
+}
+
+// --- Create a trip from backlog lines and return the DB ID ---
+export async function createTrip(
+  page: Page,
+  opts?: {
+    isPickup?: boolean
+    conductor?: RegExp
+    vehicle?: RegExp
+    date?: string
+    lineCount?: number // how many lines to add (default: all available)
+  },
+): Promise<{ dbId: string; displayId: string; confirmationCode: string }> {
+  await page.goto(`${BASE}/programacion`)
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(2000)
+
+  // Select lines from backlog
+  const checkboxes = page.locator('input[type="checkbox"]')
+  const count = await checkboxes.count()
+  const maxLines = opts?.lineCount ?? count
+  for (let i = 0; i < Math.min(count, maxLines); i++) {
+    const cb = checkboxes.nth(i)
+    if (await cb.isVisible().catch(() => false)) {
+      await cb.click()
+      await page.waitForTimeout(200)
+    }
+  }
+
+  // Click programar button
+  const programarBtn = page.getByRole('button', { name: /Programar|Nueva Movilización|Crear Movilización/ }).first()
+  await expect(programarBtn).toBeVisible({ timeout: 3000 })
+  await programarBtn.click()
+  await page.waitForURL('**/viaje/nuevo**', { timeout: 10000 })
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(3000)
+
+  // Wait for form
+  await expect(page.getByText('Cargando formulario')).not.toBeVisible({ timeout: 15000 })
+
+  // Uncheck pickup if not wanted
+  if (!opts?.isPickup) {
+    const retiroCheckbox = page.getByRole('checkbox', { name: /Retiro en Chilibre/ })
+    if (await retiroCheckbox.isVisible().catch(() => false)) {
+      if (await retiroCheckbox.isChecked()) {
+        await retiroCheckbox.click()
+        await page.waitForTimeout(500)
+      }
+    }
+  }
+
+  // Date
+  await page.locator('input[type="date"]').first().fill(opts?.date ?? '2026-04-15')
+
+  // Conductor
+  if (!opts?.isPickup) {
+    await pick(page, /Conductor/, opts?.conductor ?? /Rafael|Conductor|Diaz/)
+    await pick(page, /Veh/, opts?.vehicle ?? /CAB|VOL|PIC/)
+  }
+
+  // Assign lines — click "Agregar" buttons
+  await page.waitForTimeout(1000)
+  const agregarBtns = page.getByRole('button', { name: 'Agregar' })
+  const btnCount = await agregarBtns.count()
+  const linesToAdd = opts?.lineCount ?? btnCount
+  for (let i = 0; i < Math.min(btnCount, linesToAdd); i++) {
+    await agregarBtns.first().click()
+    await page.waitForTimeout(500)
+  }
+
+  // Save
+  const guardarBtn = page.getByRole('button', { name: /Guardar Movilización/ })
+  await expect(guardarBtn).toBeEnabled({ timeout: 5000 })
+  await guardarBtn.click()
+  await page.waitForTimeout(3000)
+
+  // Get trip from BD
+  const { data } = await db
+    .from('trips')
+    .select('id, trip_id, confirmation_code')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  return {
+    dbId: data?.id ?? '',
+    displayId: data?.trip_id ?? '',
+    confirmationCode: data?.confirmation_code ?? '',
+  }
+}
+
+// --- Navigate to trip detail in mis-viajes ---
+export async function openTripDetail(page: Page, tripDbId: string) {
+  await page.goto(`${BASE}/mis-viajes/${tripDbId}`)
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(2000)
+}
+
+// --- Dispatch (Salida) ---
+export async function dispatch(page: Page) {
+  const salidaBtn = page.getByRole('button', { name: 'Registrar Salida' })
+  await expect(salidaBtn).toBeVisible({ timeout: 10000 })
+  await salidaBtn.click()
+  await page.waitForTimeout(1500)
+
+  const confirmBtn = page.getByRole('button', { name: 'Confirmar Despacho' })
+  await expect(confirmBtn).toBeVisible({ timeout: 5000 })
+  await confirmBtn.click()
+  await page.waitForTimeout(3000)
+}
+
+// --- Register Parada ---
+export async function registerParada(
+  page: Page,
+  opts: { location: string; stopType?: 'retiro' | 'entrega' | 'intercambio'; notes?: string },
+) {
+  await page.getByRole('button', { name: 'Registrar Parada' }).first().click()
+  await page.waitForTimeout(500)
+
+  // Fill location
+  await page.getByPlaceholder(/TUBOTEC/).fill(opts.location)
+
+  // Stop type radio (retiro is default)
+  if (opts.stopType === 'entrega') {
+    await page.getByText('Entrega de material').click()
+  } else if (opts.stopType === 'intercambio') {
+    await page.getByText('Intercambio').click()
+  }
+
+  // Notes
+  if (opts.notes) {
+    await page.locator('textarea').last().fill(opts.notes)
+  }
+
+  // Confirm — click the modal's confirm button (2nd "Registrar Parada")
+  await page.getByRole('button', { name: 'Registrar Parada' }).nth(1).click()
+  await page.waitForTimeout(3000)
+}
+
+// --- Register Entrega ---
+export async function registerEntrega(
+  page: Page,
+  opts: { receiverName?: string; confirmationCode?: string },
+) {
+  const entregaBtn = page.getByRole('button', { name: 'Registrar Entrega' })
+  await expect(entregaBtn).toBeVisible({ timeout: 5000 })
+  await entregaBtn.click()
+  await page.waitForTimeout(1500)
+
+  // Receiver fallback
+  const fallbackBtn = page.getByRole('button', { name: /No esta en la lista/ }).first()
+  if (await fallbackBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await fallbackBtn.click()
+    await page.waitForTimeout(300)
+    await page.locator('input[placeholder*="Escriba"]').last().fill(opts.receiverName ?? 'Ing. Test')
+    await page.waitForTimeout(300)
+  }
+
+  // Confirmation code
+  if (opts.confirmationCode) {
+    const codeInput = page.getByPlaceholder('0000')
+    if (await codeInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await codeInput.fill(opts.confirmationCode)
+      await page.waitForTimeout(500)
+    }
+  }
+
+  // Confirm
+  const confirmBtn = page.getByRole('button', { name: 'Confirmar Entrega' })
+  await expect(confirmBtn).toBeEnabled({ timeout: 5000 })
+  await confirmBtn.click()
+  await page.waitForTimeout(3000)
+}
+
+// --- Register Retorno ---
+export async function registerRetorno(page: Page) {
+  const retornoBtn = page.getByRole('button', { name: /Retorno/ })
+  if (await retornoBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await retornoBtn.click()
+    await page.waitForTimeout(1000)
+    const confirmBtn = page.getByRole('button', { name: /Confirmar|Registrar/ }).last()
+    if (await confirmBtn.isVisible().catch(() => false)) {
+      await confirmBtn.click()
+      await page.waitForTimeout(2000)
+    }
+  }
+}
+
+// --- Clean up test data by deleting a solicitud and its cascade ---
+export async function cleanupSolicitud(solicitudId: string) {
+  if (!solicitudId) return
+  // Get line IDs
+  const { data: lines } = await db
+    .from('sm_request_lines')
+    .select('id')
+    .eq('request_id', solicitudId)
+  const lineIds = (lines ?? []).map(l => l.id)
+
+  // Get trip assignments
+  if (lineIds.length > 0) {
+    const { data: assignments } = await db
+      .from('trip_line_assignments')
+      .select('trip_id')
+      .in('request_line_id', lineIds)
+    const tripIds = [...new Set((assignments ?? []).map(a => a.trip_id))]
+
+    // Delete trip data
+    for (const tripId of tripIds) {
+      await db.from('trip_event_lines').delete().eq('trip_event_id',
+        (await db.from('trip_events').select('id').eq('trip_id', tripId)).data?.map(e => e.id) ?? []
+      )
+      await db.from('trip_events').delete().eq('trip_id', tripId)
+      await db.from('trip_line_assignments').delete().eq('trip_id', tripId)
+      await db.from('trips').delete().eq('id', tripId)
+    }
+  }
+
+  // Delete lines and solicitud
+  await db.from('sm_request_lines').delete().eq('request_id', solicitudId)
+  await db.from('sm_requests').delete().eq('id', solicitudId)
+}
