@@ -5,7 +5,11 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-08
+- [fix] AD-4 — PM cannot see confirmation code on pickup trips (6b92458)
 - [fix] Remove pickup radio from solicitud form — decided at programming level (2faf6e2)
+- [chore] Finalize workflow — clean reference docs, simplify CLAUDE.md (0e759cb)
+- [chore] Simplify docs workflow — CHANGELOG + BACKLOG replace 4 stale files (e664838)
+- [bd-pending] Crear tabla custody_transfers (vacía, con función sin trigger activo). Ver prompt abajo.
 
 ## 2026-04-06
 - [docs] Audit cleanup — fix refs, reduce context bloat, sync 17 days of docs (f7e5683)
