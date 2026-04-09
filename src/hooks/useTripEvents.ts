@@ -102,13 +102,15 @@ export function useTripEvents(tripId: string) {
             for (const line of undelivered ?? []) {
               const { data: assignment } = await supabase
                 .from('trip_line_assignments')
-                .select('quantity_assigned')
+                .select('quantity_assigned, qty_dispatched')
                 .eq('trip_id', tripId)
                 .eq('request_line_id', line.id)
                 .single()
 
-              const qtyAssigned = assignment?.quantity_assigned ?? 0
-              const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - qtyAssigned)
+              // Usar qty_dispatched (lo que realmente se envió), no quantity_assigned (lo programado)
+              // Si dispatch redujo qty_scheduled, solo devolver lo que realmente salió
+              const qtyToReturn = assignment?.qty_dispatched ?? assignment?.quantity_assigned ?? 0
+              const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - qtyToReturn)
               const newStatus = (line.qty_delivered ?? 0) > 0 ? 'Parcial' : 'Pendiente'
 
               await supabase
