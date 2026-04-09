@@ -107,41 +107,43 @@ export default function ProgramacionPage() {
     return result
   }, [trips, tripProjectFilter, dateFilter])
 
-  // Inicializar expandido al cargar datos
+  // Inicializar colapsado al cargar datos
   useEffect(() => {
     if (!expandInitialized && filteredTrips.length > 0) {
-      setTripExpandedKeys(new Set(filteredTrips.map((t) => t.id)))
+      setTripExpandedKeys(new Set()) // default collapsed
       setExpandInitialized(true)
     }
   }, [expandInitialized, filteredTrips])
 
   const allTripsExpanded = tripExpandedKeys.size > 0
 
-  // --- MiniCalendar items (sin filtro de fecha para que el calendario siempre muestre todos los días) ---
-  const calendarItems = useMemo<CalendarItem[]>(() => {
-    const source = tripProjectFilter
-      ? trips.filter((trip) => trip.assignments.some((a) => a.line?.request?.project?.id === tripProjectFilter))
-      : trips
-    return source.map((t) => {
-      const a = t.assignments?.[0]?.line
-      let route: string | undefined
-      if (a) {
-        const from = a.from_location?.name ?? a.from_text ?? ''
-        const to = a.to_location?.name ?? a.to_text ?? ''
-        if (from && to) route = `${from} → ${to}`
-      }
-      return {
-        id: t.id,
-        date: t.scheduled_date,
-        label: t.trip_id ?? '—',
-        status: t.status,
-        badgeVariant: 'trip' as const,
-        subtitle: `${t.driver?.name ?? 'Sin conductor'} · ${t.assignments.length} lín.`,
-        route,
-        href: `/programacion/viaje/${t.id}`,
-      }
-    })
-  }, [trips, tripProjectFilter])
+  // --- MiniCalendar items — query separada sin paginación para TODAS las movilizaciones ---
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([])
+
+  useEffect(() => {
+    const fetchCalendarTrips = async () => {
+      let query = supabase
+        .from('trips')
+        .select('id, trip_id, scheduled_date, status, driver:people!driver_id(name)')
+        .not('status', 'in', '("Cancelado")')
+        .order('scheduled_date')
+
+      const { data } = await query
+      setCalendarItems((data ?? []).map((t: Record<string, unknown>) => {
+        const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
+        return {
+          id: t.id as string,
+          date: t.scheduled_date as string,
+          label: (t.trip_id as string) ?? '—',
+          status: t.status as string,
+          badgeVariant: 'trip' as const,
+          subtitle: `${(driver as { name: string } | null)?.name ?? 'Sin conductor'}`,
+          href: `/programacion/viaje/${t.id}`,
+        }
+      }))
+    }
+    fetchCalendarTrips()
+  }, [supabase, tripProjectFilter])
 
   // --- Handlers de filtro de fecha (client-side — no afecta server query ni calendario) ---
   const handleCalendarClick = useCallback((date: string | null) => {

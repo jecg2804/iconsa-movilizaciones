@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Search, Wrench, Package, ArrowRight, Paperclip, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
@@ -25,6 +26,7 @@ export default function SolicitudesPage() {
   const router = useRouter()
   const { role, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
+  const supabase = useMemo(() => createClient(), [])
 
   const {
     solicitudes,
@@ -59,10 +61,10 @@ export default function SolicitudesPage() {
     })
   }, [])
 
-  // Inicializar expandido al cargar datos
+  // Inicializar colapsado al cargar datos
   useEffect(() => {
     if (!expandInitialized && solicitudes.length > 0) {
-      setSolExpandedKeys(new Set(solicitudes.map((s) => s.id)))
+      setSolExpandedKeys(new Set()) // default collapsed
       setExpandInitialized(true)
     }
   }, [expandInitialized, solicitudes])
@@ -81,18 +83,39 @@ export default function SolicitudesPage() {
     [allProjects, filters.projectId],
   )
 
-  // calendarItems para MiniCalendar
-  const calendarItems = useMemo<CalendarItem[]>(() => {
-    return solicitudes.map((s) => ({
-      id: s.id,
-      date: s.date_required,
-      label: s.request_id ?? '—',
-      status: s.status,
-      badgeVariant: 'status' as const,
-      subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas${s.lines?.some((l: { notes?: string | null }) => l.notes) ? ' 📝' : ''}`,
-      href: `/solicitudes/${s.id}`,
-    }))
-  }, [solicitudes])
+  // calendarItems — query separada sin paginación para mostrar TODAS las solicitudes en el calendario
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([])
+
+  useEffect(() => {
+    const fetchCalendarData = async () => {
+      let query = supabase
+        .from('sm_requests')
+        .select('id, date_required, status, request_id, requester:people!requester_id(name), lines:sm_request_lines(id, notes)')
+        .not('status', 'in', '("Cancelada")')
+        .order('date_required')
+
+      // Aplicar filtro de proyecto si hay uno seleccionado
+      if (filters.projectId) {
+        query = query.eq('project_id', filters.projectId)
+      }
+
+      const { data } = await query
+      setCalendarItems((data ?? []).map((s: Record<string, unknown>) => {
+        const requester = Array.isArray(s.requester) ? s.requester[0] : s.requester
+        const lines = Array.isArray(s.lines) ? s.lines : []
+        return {
+          id: s.id as string,
+          date: s.date_required as string,
+          label: (s.request_id as string) ?? '—',
+          status: s.status as string,
+          badgeVariant: 'status' as const,
+          subtitle: `${(requester as { name: string } | null)?.name ?? '—'} · ${lines.length} líneas`,
+          href: `/solicitudes/${s.id}`,
+        }
+      }))
+    }
+    fetchCalendarData()
+  }, [supabase, filters.projectId, filters.statuses]) // re-fetch when project or status filter changes
 
   // Solicitudes filtradas por fecha (client-side) — la tabla usa esto, el calendario usa solicitudes sin filtro
   const displayedSolicitudes = useMemo(() => {
