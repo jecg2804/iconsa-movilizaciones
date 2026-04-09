@@ -180,6 +180,12 @@ test.describe.serial('Retorno — After Paradas (complete timeline)', () => {
     await dispatch(page)
     await registerParada(page, { location: 'PROVEEDOR X', stopType: 'retiro', notes: 'Pickup completo' })
     await registerParada(page, { location: 'Bodega Temp', stopType: 'entrega', notes: 'Drop temporal' })
+
+    // Get fresh confirmation code from BD in case helper didn't capture it
+    if (!confirmationCode) {
+      const { data: t } = await db.from('trips').select('confirmation_code').eq('id', tripDbId).single()
+      confirmationCode = t?.confirmation_code ?? ''
+    }
     await registerEntrega(page, { receiverName: 'Test Parada Retorno', confirmationCode })
   })
 

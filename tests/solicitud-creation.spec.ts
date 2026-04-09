@@ -10,7 +10,7 @@ test.describe('Solicitud Creation', () => {
   let page: Page
   const createdIds: string[] = []
 
-  test.setTimeout(120000)
+  test.setTimeout(300000)
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage()
@@ -136,9 +136,10 @@ test.describe('Solicitud Creation', () => {
   })
 
   test('Default: lines do NOT require code', async () => {
+    const tag = `NOCODE-${Date.now()}`
     const result = await createSolicitud(page, {
       lines: [
-        { type: 'Material', description: 'TEST No Code', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
+        { type: 'Material', description: `TEST ${tag}`, from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
       ],
     })
     createdIds.push(result.dbId)

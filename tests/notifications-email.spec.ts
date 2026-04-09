@@ -19,6 +19,8 @@ test.describe.serial('Notification Log Verification', () => {
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage()
     await login(page)
+    // Use a time 5 seconds from now to avoid picking up notifications from other tests
+    await page.waitForTimeout(2000)
     startTime = new Date().toISOString()
   })
 
