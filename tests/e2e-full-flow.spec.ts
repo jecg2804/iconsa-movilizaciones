@@ -572,7 +572,7 @@ test.describe.serial('Full Mobilization Lifecycle', () => {
     }
 
     // Enter confirmation code
-    const codeInput = page.getByPlaceholder('0000')
+    const codeInput = page.getByPlaceholder('4 dígitos')
     if (await codeInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await codeInput.fill(confirmationCode)
       await page.waitForTimeout(500)

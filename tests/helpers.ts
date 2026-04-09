@@ -337,18 +337,25 @@ export async function registerEntrega(
   await entregaBtn.click()
   await page.waitForTimeout(1500)
 
-  // Receiver fallback
-  const fallbackBtn = page.getByRole('button', { name: /No esta en la lista/ }).first()
-  if (await fallbackBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await fallbackBtn.click()
+  // Receiver — try fallback text first, then dropdown
+  const fallbackLink = page.getByText('No esta en la lista').first()
+  if (await fallbackLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await fallbackLink.click()
     await page.waitForTimeout(300)
-    await page.locator('input[placeholder*="Escriba"]').last().fill(opts.receiverName ?? 'Ing. Test')
-    await page.waitForTimeout(300)
+    // Fill the text input that appears after clicking fallback
+    const fallbackInput = page.locator('input[placeholder*="Escriba"]').last()
+    await fallbackInput.fill(opts.receiverName ?? 'Ing. Test')
+    // Trigger change event
+    await fallbackInput.press('Tab')
+    await page.waitForTimeout(500)
+  } else {
+    // Try selecting from dropdown
+    await pick(page, /Recibido por/, /Admin|Jacome/)
   }
 
-  // Confirmation code
+  // Confirmation code (placeholder is "4 dígitos")
   if (opts.confirmationCode) {
-    const codeInput = page.getByPlaceholder('0000')
+    const codeInput = page.getByPlaceholder('4 dígitos')
     if (await codeInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await codeInput.fill(opts.confirmationCode)
       await page.waitForTimeout(500)
