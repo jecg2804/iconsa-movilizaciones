@@ -263,28 +263,16 @@ export default function ProgramacionPage() {
         ),
       },
       {
-        key: 'trailer',
-        header: 'Remolque',
-        render: (row) => (
-          <span
-            className="max-w-[140px] truncate block text-sm text-gray-900"
-            title={row.trailer?.description ?? '—'}
-          >
-            {row.trailer?.description ?? '—'}
-          </span>
-        ),
-      },
-      {
         key: 'rate',
         header: 'Tarifa',
         render: (row) =>
           row.rate ? (
-            <div>
-              <div className="text-sm text-gray-900">{row.rate.code}</div>
-              <div className="text-xs text-iconsa-gray">
-                {formatCurrency(row.rate.rate)}
-              </div>
-            </div>
+            <span
+              className="text-sm text-gray-900"
+              title={row.rate.code}
+            >
+              {formatCurrency(row.rate.rate)}
+            </span>
           ) : (
             <span className="text-sm text-iconsa-gray">—</span>
           ),

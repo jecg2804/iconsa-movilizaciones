@@ -70,10 +70,7 @@ Conductor registra paradas intermedias en proveedores/almacenes. Tipo: retiro/en
 
 | Item | Detalle |
 |------|---------|
-| Andrés Solís y Lourdes Dominguez sin email | 2 PMs — notificaciones se skipean |
 | Verificar dominio iconsanet.com en Resend | Para emails de producción |
-| Tabla viajes: quitar columna REMOLQUE | Casi siempre vacía |
-| Tabla viajes: TARIFA solo mostrar precio | Código como tooltip |
 
 ---
 
