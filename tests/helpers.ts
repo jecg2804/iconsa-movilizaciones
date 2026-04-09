@@ -228,14 +228,17 @@ export async function createTrip(
   // Wait for form
   await expect(page.getByText('Cargando formulario')).not.toBeVisible({ timeout: 15000 })
 
-  // Uncheck pickup if not wanted
-  if (!opts?.isPickup) {
-    const retiroCheckbox = page.getByRole('checkbox', { name: /Retiro en Chilibre/ })
-    if (await retiroCheckbox.isVisible().catch(() => false)) {
-      if (await retiroCheckbox.isChecked()) {
-        await retiroCheckbox.click()
-        await page.waitForTimeout(500)
-      }
+  // Toggle pickup checkbox
+  const retiroLabel = page.getByText('Retiro en Chilibre')
+  if (await retiroLabel.isVisible().catch(() => false)) {
+    const retiroCheckbox = page.locator('input[type="checkbox"]').first()
+    const isChecked = await retiroCheckbox.isChecked()
+    if (opts?.isPickup && !isChecked) {
+      await retiroLabel.click()
+      await page.waitForTimeout(500)
+    } else if (!opts?.isPickup && isChecked) {
+      await retiroLabel.click()
+      await page.waitForTimeout(500)
     }
   }
 
