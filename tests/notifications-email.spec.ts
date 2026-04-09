@@ -52,7 +52,7 @@ test.describe.serial('Notification Log Verification', () => {
   })
 
   test('Dispatch trip → salida_registrada notification logged', async () => {
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     confirmationCode = trip.confirmationCode
 

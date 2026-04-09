@@ -26,7 +26,7 @@ test.describe.serial('Retorno — Normal flow (after full delivery)', () => {
     })
     solicitudId = sol.dbId
 
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     confirmationCode = trip.confirmationCode
 
@@ -99,7 +99,7 @@ test.describe.serial('Retorno — Without delivery (truck comes back empty)', ()
     })
     solicitudId = sol.dbId
 
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
 
     await openTripDetail(page, tripDbId)
@@ -172,7 +172,7 @@ test.describe.serial('Retorno — After Paradas (complete timeline)', () => {
     })
     solicitudId = sol.dbId
 
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     confirmationCode = trip.confirmationCode
 

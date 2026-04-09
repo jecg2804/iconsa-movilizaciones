@@ -59,7 +59,7 @@ test.describe.serial('Backlog Quantity Management', () => {
 
   test('Program trip assigning qty=6 → backlog shows 4 remaining', async () => {
     // Create trip with this line
-    const trip = await createTrip(page, { lineCount: 1 })
+    const trip = await createTrip(page, { lineCount: 1, solicitudId })
 
     // Verify in BD: qty_scheduled should be quantity assigned (not necessarily 6 — depends on what the form assigns)
     const { data: lines } = await db
@@ -107,7 +107,7 @@ test.describe.serial('Backlog Quantity Management', () => {
     })
 
     // Program trip (assigns all 5)
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId: bugResult.dbId })
 
     // Navigate to trip detail and dispatch
     await openTripDetail(page, trip.dbId)

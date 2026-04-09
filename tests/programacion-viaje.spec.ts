@@ -31,7 +31,7 @@ test.describe.serial('Trip Creation', () => {
   })
 
   test('Create trip → BD has correct data', async () => {
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId: sol.dbId })
     tripDbId = trip.dbId
 
     const { data } = await db
@@ -97,7 +97,7 @@ test.describe.serial('Trip Cancellation', () => {
       ],
     })
     solicitudId = sol.dbId
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId: sol.dbId })
     tripDbId = trip.dbId
   })
 
@@ -156,7 +156,7 @@ test.describe.serial('Pickup Trip', () => {
   })
 
   test.skip('Create pickup trip → is_self_pickup=true in BD (checkbox selector WIP)', async () => {
-    const trip = await createTrip(page, { isPickup: true })
+    const trip = await createTrip(page, { isPickup: true, solicitudId: sol.dbId })
 
     const { data } = await db
       .from('trips')

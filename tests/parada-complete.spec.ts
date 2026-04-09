@@ -27,7 +27,7 @@ test.describe.serial('Parada Intermediate Stop', () => {
     solicitudId = sol.dbId
 
     // Create and dispatch trip
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     await openTripDetail(page, tripDbId)
     await dispatch(page)

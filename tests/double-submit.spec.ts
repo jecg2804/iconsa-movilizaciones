@@ -89,7 +89,7 @@ test.describe.serial('Double Submit Prevention', () => {
         { type: 'Material', description: 'DOUBLE-DISPATCH-TEST', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
       ],
     })
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId: sol.dbId })
     tripDbId = trip.dbId
 
     await openTripDetail(page, trip.dbId)

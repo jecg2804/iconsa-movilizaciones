@@ -81,7 +81,7 @@ test.describe('Admin Event Button Visibility', () => {
       ],
     })
     solicitudId = sol.dbId
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     await openTripDetail(page, tripDbId)
     await dispatch(page)

@@ -36,7 +36,7 @@ test.describe.serial('Entrega Complete', () => {
     })
     solicitudId = sol.dbId
 
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId: sol.dbId })
     tripDbId = trip.dbId
     confirmationCode = trip.confirmationCode
 
@@ -146,7 +146,7 @@ test.describe.serial('Confirmation Code Verification', () => {
     })
     solicitudId = sol.dbId
 
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId: sol.dbId })
     tripDbId = trip.dbId
     confirmationCode = trip.confirmationCode
 

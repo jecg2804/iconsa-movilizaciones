@@ -41,7 +41,7 @@ test.describe.serial('Revert Salida', () => {
       ],
     })
     solicitudId = sol.dbId
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     await openTripDetail(page, tripDbId)
     await dispatch(page)
@@ -121,7 +121,7 @@ test.describe.serial('Revert Entrega', () => {
       ],
     })
     solicitudId = sol.dbId
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     confirmationCode = trip.confirmationCode
     await openTripDetail(page, tripDbId)
@@ -217,7 +217,7 @@ test.describe.serial('Revert Parada', () => {
       ],
     })
     solicitudId = sol.dbId
-    const trip = await createTrip(page)
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
     await openTripDetail(page, tripDbId)
     await dispatch(page)

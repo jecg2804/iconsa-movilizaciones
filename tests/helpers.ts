@@ -225,6 +225,7 @@ export async function createTrip(
     vehicle?: RegExp
     date?: string
     lineCount?: number // how many lines to add (default: all available)
+    solicitudId?: string // if provided, find trip linked to this solicitud (prevents data collision)
   },
 ): Promise<{ dbId: string; displayId: string; confirmationCode: string }> {
   await page.goto(`${BASE}/programacion`)
@@ -293,23 +294,46 @@ export async function createTrip(
   await guardarBtn.click()
   await page.waitForTimeout(3000)
 
-  // Get trip from BD — find the most recent Programado trip
-  // (safer than just "most recent" since completed trips from other tests exist)
-  const { data: programado } = await db
-    .from('trips')
-    .select('id, trip_id, confirmation_code')
-    .eq('status', 'Programado')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  // Get trip from BD
+  let data: { id: string; trip_id: string; confirmation_code: string | null } | null = null
 
-  // Fallback to most recent trip of any status
-  const data = programado ?? (await db
-    .from('trips')
-    .select('id, trip_id, confirmation_code')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()).data
+  // If solicitudId provided, find trip linked to that solicitud's lines
+  if (opts?.solicitudId) {
+    const { data: lines } = await db
+      .from('sm_request_lines')
+      .select('id')
+      .eq('request_id', opts.solicitudId)
+      .limit(1)
+    if (lines && lines.length > 0) {
+      const { data: assignment } = await db
+        .from('trip_line_assignments')
+        .select('trip_id')
+        .eq('request_line_id', lines[0].id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (assignment) {
+        const { data: trip } = await db
+          .from('trips')
+          .select('id, trip_id, confirmation_code')
+          .eq('id', assignment.trip_id)
+          .single()
+        data = trip
+      }
+    }
+  }
+
+  // Fallback: most recent Programado trip
+  if (!data) {
+    const { data: trip } = await db
+      .from('trips')
+      .select('id, trip_id, confirmation_code')
+      .eq('status', 'Programado')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    data = trip
+  }
 
   return {
     dbId: data?.id ?? '',
