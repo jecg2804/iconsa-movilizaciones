@@ -1,14 +1,46 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-08
+Última actualización: 2026-04-09
 
 ---
 
-## Próximo: Evento Parada (intermedia)
+## Próximo: Perfeccionar sistema de eventos
 
-Conductor registra paradas intermedias en proveedores/almacenes. Tipo: retiro/entrega/intercambio. Adjuntar factura/nota. Informacional — no cambia status de líneas.
-**Design spec:** `Docs/reference/EVENTS V2 issues.md` sección D12.
-**Feature spec modular:** `Docs/feature-specs/parada.md` (por crear).
+El sistema de eventos (Batches 5-11 + Parada Level 1) está funcional pero necesita pulido antes de producción. Prioridades:
+
+1. **Parada ya implementada** — Level 1 (informacional) listo. Level 2 (OC tracking + QR DGI) es futuro.
+2. **DispatchModal** — conductor puede cambiar cantidades al despachar (qty_dispatched). KNOWN BUG: backlog usa qty_scheduled en vez de qty_dispatched para calcular pendiente.
+3. **DeliveryModal** — entrega per-line con observaciones funciona. Falta: validar edge cases de entrega parcial multi-viaje.
+4. **Reversiones** — Salida/Entrega/Parada/Llegada/Retorno revertibles. Falta: verificar que revert de Entrega parcial recalcula correctamente.
+5. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
+
+---
+
+## Estado actual vs herramientas profesionales
+
+| Capacidad | MovimientOS | Tenna | HCSS | Procore | Visual Dispatch |
+|---|---|---|---|---|---|
+| Solicitudes de movilización | ✅ Completo | ❌ | ❌ | Parcial (RFIs) | ❌ |
+| Programación de viajes | ✅ Completo | ❌ | ✅ Dispatch | ❌ | ✅ Core |
+| Despacho con qty editable | ✅ DispatchModal | ❌ | ✅ | ❌ | ✅ |
+| Entrega per-line con observaciones | ✅ DeliveryModal | ❌ | Parcial | ❌ | ❌ |
+| Paradas intermedias | ✅ Level 1 | ❌ | ✅ Multi-stop | ❌ | ✅ |
+| Código de confirmación | ✅ 4 dígitos | ❌ | ❌ | ❌ | ❌ |
+| Entregas parciales | ✅ qty_delivered acumula | ❌ | ✅ | ❌ | ❌ |
+| Reversión de eventos | ✅ Con audit trail | ❌ | ❌ | ❌ | ❌ |
+| GPS tracking en vivo | ❌ Pendiente | ✅ Core | ✅ | ❌ | ✅ |
+| Inspecciones de equipo | ❌ Tablas listas | ✅ | ✅ | ❌ | ❌ |
+| Reportes PDF auto-generados | ❌ Pendiente | ✅ | ✅ | ✅ | Parcial |
+| Dashboards por rol | ❌ Dashboard genérico | ✅ | ✅ | ✅ | ✅ |
+| OC/Procurement | ❌ Tablas listas | ❌ | ❌ | ✅ Core | ❌ |
+| Work orders mantenimiento | ❌ Tablas listas | ✅ | ✅ | ❌ | ❌ |
+| Fuel tracking | ❌ Tablas listas | ✅ | ✅ | ❌ | ❌ |
+| Notificaciones email | ✅ 16 templates | Parcial | ✅ | ✅ | ✅ |
+| Mobile-first | ✅ Responsive | ✅ App nativa | ✅ App | ✅ App | ✅ App |
+
+**Ventaja MovimientOS:** Código de confirmación + entrega per-line + reversiones + paradas = workflow más completo que cualquiera individualmente. Personalizado a ICONSA.
+
+**Gaps principales:** GPS, Inspecciones, Reportes, Dashboards por rol.
 
 ---
 
@@ -16,10 +48,11 @@ Conductor registra paradas intermedias en proveedores/almacenes. Tipo: retiro/en
 
 | # | Item | Impacto | Status |
 |---|------|---------|--------|
-| AD-1 | Self-pickup forzado en Trip entity — debería ser PickupOrder separado | Semántica rota (Trip sin driver/vehicle) | ⏳ Deferred — hide pickup first |
-| AD-2 | No existe tabla custody_transfers — el primitivo fundamental falta | Trigger acoplado a trip_events, no extensible | ⏳ Hacer ANTES de más fulfillment methods |
-| AD-3 | Fulfillment a nivel Trip, no línea — bloquea hybrid fulfillment | PM que necesita 1 item por camión + 1 por pickup = 2 solicitudes | ⏳ Depende de AD-1 |
-| AD-4 | PM ve código de confirmación en pickup — debería no verlo | Rompe verificación (PM es receptor en pickup) | ✅ Fixed (6b92458) |
+| AD-1 | Self-pickup forzado en Trip entity — debería ser PickupOrder separado | Semántica rota (Trip sin driver/vehicle) | ⏳ Deferred |
+| AD-2 | custody_transfers table — tabla creada en staging, trigger no activo | Trigger acoplado a trip_events | ⏳ Tabla lista, falta conectar |
+| AD-3 | Fulfillment a nivel Trip, no línea — bloquea hybrid fulfillment | 2 solicitudes para fleet+pickup | ⏳ Depende de AD-1 |
+| AD-4 | PM ve código en pickup | Rompe verificación | ✅ Fixed |
+| BUG | qty_scheduled vs qty_dispatched en backlog | Pending qty incorrecto post-dispatch | 🔴 Known bug |
 
 ---
 
@@ -27,13 +60,16 @@ Conductor registra paradas intermedias en proveedores/almacenes. Tipo: retiro/en
 
 ### Tier 1: Perfeccionar movilizaciones
 
-| # | Feature | Detalle |
-|---|---------|---------|
-| F1 | ~~Sistema de eventos rediseñado~~ | ✅ Completado (Batches 5-11, Mar 23-24) |
-| F2 | Inspección de equipo (IC-EQ-F-01-02) | 6 tablas existen. Falta: UI walkthrough, foto en fail, firma digital |
-| F3 | Reporte facturación mensual | Auto-generado PDF. Tarifa × equipo, no × viaje. Human-in-the-loop |
-| F4 | Informe Valderrama semanal | Equipos por proyecto, pendientes. Auto-gen lunes 7AM |
-| F5 | Dashboards por rol | PM: costo/proyecto. Charris: dispatch board. Gerencia: KPIs |
+| # | Feature | Status |
+|---|---------|--------|
+| F1 | ~~Sistema de eventos rediseñado~~ | ✅ Completado (Batches 5-11) |
+| F1.1 | Parada Level 1 | ✅ Completado (446b0c7) |
+| F1.2 | Fix qty_dispatched bug en backlog | 🔴 Pendiente |
+| F1.3 | GPS Integration (Skydata API) | 🟡 Plan en desarrollo |
+| F2 | Inspección de equipo (IC-EQ-F-01-02) | ⏳ 6 tablas listas |
+| F3 | Reporte facturación mensual | ⏳ Pendiente |
+| F4 | Informe Valderrama semanal | ⏳ Pendiente |
+| F5 | Dashboards por rol | ⏳ Pendiente |
 
 ### Tier 2: Gestión de equipos
 
@@ -66,11 +102,13 @@ Conductor registra paradas intermedias en proveedores/almacenes. Tipo: retiro/en
 
 ---
 
-## Pendientes menores
+## Infraestructura reciente
 
-| Item | Detalle |
-|------|---------|
-| Verificar dominio iconsanet.com en Resend | Para emails de producción |
+- [x] Sentry error monitoring integrado
+- [x] E2E test framework con Playwright (100+ tests, 12 archivos)
+- [x] Calendar fix cherry-picked a producción
+- [x] custody_transfers tabla creada en staging
+- [x] Workflow simplificado (CHANGELOG + BACKLOG)
 
 ---
 

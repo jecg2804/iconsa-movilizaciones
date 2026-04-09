@@ -4,10 +4,17 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-09
+- [fix] Calendar shows ALL items independent of table pagination + default collapsed (20f98d6) — cherry-picked to main/production
+- [fix] Quitar columna Remolque + Tarifa solo precio con tooltip en tabla programación (b97a83d)
+- [feat] Sentry error monitoring con source maps y session replay (15d3a3e)
+- [feat] E2E test suite — 12 files, 100+ tests con Playwright (af9be5e → 638cf72)
+
 ## 2026-04-08
 - [feat] Parada Level 1 — intermediate stop event for supplier pickups (446b0c7)
 - [fix] AD-4 — PM cannot see confirmation code on pickup trips (6b92458)
 - [fix] Remove pickup radio from solicitud form — decided at programming level (2faf6e2)
+- [fix] 2 bugs found in code audit — Parada error handling + saveTrip busyRef (e936e5b)
 - [chore] Finalize workflow — clean reference docs, simplify CLAUDE.md (0e759cb)
 - [chore] Simplify docs workflow — CHANGELOG + BACKLOG replace 4 stale files (e664838)
 - [bd-pending] Crear tabla custody_transfers (vacía, con función sin trigger activo). Ver prompt abajo.
