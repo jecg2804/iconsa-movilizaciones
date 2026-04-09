@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.47.0",

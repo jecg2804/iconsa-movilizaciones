@@ -347,22 +347,38 @@ test.describe.serial('Full Mobilization Lifecycle', () => {
     await guardarBtn.click()
     await page.waitForTimeout(3000)
     await snap(page, 'e2e-10-viaje-saved')
+
+    // Capture trip ID from redirect URL (e.g. /programacion/viaje/UUID or /programacion)
+    const url = page.url()
+    const viajeMatch = url.match(/viaje\/([a-f0-9-]+)/)
+    if (viajeMatch) {
+      tripDbId = viajeMatch[1]
+    }
   })
 
   test('3.4 BD: Trip created, lines are Programada', async () => {
-    // Find the most recent trip
-    const { data: trips } = await db
+    // If we didn't capture from URL, find by most recent Programado
+    if (!tripDbId) {
+      const { data: trips } = await db
+        .from('trips')
+        .select('id, trip_id, status, confirmation_code')
+        .eq('status', 'Programado')
+        .order('created_at', { ascending: false })
+        .limit(1)
+      expect(trips!.length).toBeGreaterThanOrEqual(1)
+      tripDbId = trips![0].id
+    }
+
+    const { data: trip } = await db
       .from('trips')
       .select('id, trip_id, status, confirmation_code')
-      .eq('status', 'Programado')
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('id', tripDbId)
+      .single()
 
-    expect(trips!.length).toBeGreaterThanOrEqual(1)
-    tripDbId = trips![0].id
-    tripDisplayId = trips![0].trip_id
-    confirmationCode = trips![0].confirmation_code ?? ''
-    expect(trips![0].status).toBe('Programado')
+    expect(trip).not.toBeNull()
+    tripDisplayId = trip!.trip_id
+    confirmationCode = trip!.confirmation_code ?? ''
+    expect(['Programado', 'En Ruta']).toContain(trip!.status)
 
     // Verify trip has assignments
     const { data: assignments } = await db

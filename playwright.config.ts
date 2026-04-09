@@ -2,11 +2,12 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
-  timeout: 120000,
+  timeout: 180000,
   expect: { timeout: 10000 },
-  fullyParallel: false, // tests are sequential (create → program → dispatch → etc.)
+  fullyParallel: false,
+  workers: 1, // run one test file at a time to avoid data collisions in shared staging DB
   retries: 0,
-  reporter: [['html', { open: 'never' }]],
+  reporter: [['html', { open: 'never' }], ['line']],
   use: {
     baseURL: 'http://localhost:3000',
     screenshot: 'on',

@@ -179,13 +179,39 @@ export async function createSolicitud(
   }
   await page.waitForTimeout(2000)
 
-  // Get DB ID of the created solicitud
-  const { data } = await db
-    .from('sm_requests')
-    .select('id, request_id')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  // Get DB ID — find by unique description tag in lines
+  const firstLineDesc = opts.lines[0].description ?? opts.lines[0].equipmentSearch ?? ''
+  let data: { id: string; request_id: string } | null = null
+
+  if (firstLineDesc) {
+    // Find solicitud via its first line's description (unique per test)
+    const { data: lines } = await db
+      .from('sm_request_lines')
+      .select('request_id')
+      .ilike('description', `%${firstLineDesc}%`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (lines && lines.length > 0) {
+      const { data: req } = await db
+        .from('sm_requests')
+        .select('id, request_id')
+        .eq('id', lines[0].request_id)
+        .single()
+      data = req
+    }
+  }
+
+  // Fallback to most recent
+  if (!data) {
+    const { data: recent } = await db
+      .from('sm_requests')
+      .select('id, request_id')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    data = recent
+  }
 
   return { dbId: data?.id ?? '', displayId: data?.request_id ?? '' }
 }
@@ -267,13 +293,23 @@ export async function createTrip(
   await guardarBtn.click()
   await page.waitForTimeout(3000)
 
-  // Get trip from BD
-  const { data } = await db
+  // Get trip from BD — find the most recent Programado trip
+  // (safer than just "most recent" since completed trips from other tests exist)
+  const { data: programado } = await db
+    .from('trips')
+    .select('id, trip_id, confirmation_code')
+    .eq('status', 'Programado')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Fallback to most recent trip of any status
+  const data = programado ?? (await db
     .from('trips')
     .select('id, trip_id, confirmation_code')
     .order('created_at', { ascending: false })
     .limit(1)
-    .single()
+    .single()).data
 
   return {
     dbId: data?.id ?? '',
