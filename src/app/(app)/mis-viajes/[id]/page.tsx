@@ -568,12 +568,32 @@ export default function Page() {
         }
 
         // 3. UPDATE trip_line_assignments: qty_dispatched
+        // Si el conductor despacha menos de lo programado, devolver la diferencia al pool
         for (const line of data.lines) {
+          const assignment = trip.assignments.find(a => a.request_line_id === line.request_line_id)
+          const qtyAssigned = assignment?.quantity_assigned ?? line.qty_dispatched
+
           await supabase
             .from('trip_line_assignments')
             .update({ qty_dispatched: line.qty_dispatched })
             .eq('trip_id', trip.id)
             .eq('request_line_id', line.request_line_id)
+
+          // Si qty_dispatched < quantity_assigned, liberar la diferencia del pool
+          // quantity_assigned NO se modifica (preserva lo que Charris programó)
+          const notDispatched = qtyAssigned - line.qty_dispatched
+          if (notDispatched > 0) {
+            const { data: currentLine } = await supabase
+              .from('sm_request_lines')
+              .select('qty_scheduled')
+              .eq('id', line.request_line_id)
+              .single()
+            const newScheduled = Math.max(0, (currentLine?.qty_scheduled ?? 0) - notDispatched)
+            await supabase
+              .from('sm_request_lines')
+              .update({ qty_scheduled: newScheduled })
+              .eq('id', line.request_line_id)
+          }
         }
 
         // 4. INSERT evento de Salida
@@ -760,13 +780,31 @@ export default function Page() {
             .update({ status: 'Programado', actual_departure: null })
             .eq('id', trip.id)
 
-          // Lines → Programada
-          const lineIds = trip.assignments.map((a) => a.request_line_id)
-          if (lineIds.length > 0) {
+          // Lines → Programada + restore qty_scheduled if dispatch had reduced it
+          for (const a of trip.assignments) {
+            const dispatched = a.qty_dispatched ?? a.quantity_assigned
+            const assigned = a.quantity_assigned
+            const notDispatched = assigned - dispatched
+
+            const { data: currentLine } = await supabase
+              .from('sm_request_lines')
+              .select('qty_scheduled')
+              .eq('id', a.request_line_id)
+              .single()
+
+            // Restore the delta that was subtracted during dispatch
+            const restoredScheduled = (currentLine?.qty_scheduled ?? 0) + (notDispatched > 0 ? notDispatched : 0)
             await supabase
               .from('sm_request_lines')
-              .update({ status: 'Programada' })
-              .in('id', lineIds)
+              .update({ status: 'Programada', qty_scheduled: restoredScheduled })
+              .eq('id', a.request_line_id)
+
+            // Reset qty_dispatched
+            await supabase
+              .from('trip_line_assignments')
+              .update({ qty_dispatched: 0 })
+              .eq('trip_id', trip.id)
+              .eq('request_line_id', a.request_line_id)
           }
         }
 
