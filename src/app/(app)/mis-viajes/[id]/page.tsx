@@ -640,23 +640,27 @@ export default function Page() {
       try {
         const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
 
-        // 1. UPDATE sm_request_lines: qty_delivered += qty, status
+        // 1. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
         for (const line of accepted) {
           const { data: current } = await supabase
             .from('sm_request_lines')
-            .select('qty_delivered, quantity')
+            .select('qty_delivered, qty_scheduled, quantity')
             .eq('id', line.request_line_id)
             .single()
 
           const currentDelivered = current?.qty_delivered ?? 0
+          const currentScheduled = current?.qty_scheduled ?? 0
           const totalQty = current?.quantity ?? line.quantity
           const newDelivered = Math.min(totalQty, currentDelivered + line.quantity)
+          // Decrementar qty_scheduled por lo entregado (ya no está "en proceso")
+          const newScheduled = Math.max(0, currentScheduled - line.quantity)
           const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
 
           await supabase
             .from('sm_request_lines')
             .update({
               qty_delivered: newDelivered,
+              qty_scheduled: newScheduled,
               status: newStatus,
               ...(newStatus === 'Entregada' ? { delivered_at: new Date().toISOString() } : {}),
             })
@@ -826,17 +830,20 @@ export default function Page() {
           for (const el of eventLines ?? []) {
             const { data: current } = await supabase
               .from('sm_request_lines')
-              .select('qty_delivered')
+              .select('qty_delivered, qty_scheduled')
               .eq('id', el.request_line_id)
               .single()
 
             // Math.max(0, ...) — enforce_qty_integrity blocks negatives
-            const newQty = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
+            const newDelivered = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
+            // Restaurar qty_scheduled: la línea vuelve a estar "en proceso"
+            const newScheduled = (current?.qty_scheduled ?? 0) + el.quantity
 
             await supabase
               .from('sm_request_lines')
               .update({
-                qty_delivered: newQty,
+                qty_delivered: newDelivered,
+                qty_scheduled: newScheduled,
                 status: 'En Transito', // SIN acento — CRÍTICO
                 delivered_at: null,
               })
@@ -975,23 +982,26 @@ export default function Page() {
       try {
         const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
 
-        // 1. UPDATE sm_request_lines: qty_delivered, status
+        // 1. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
         for (const line of accepted) {
           const { data: current } = await supabase
             .from('sm_request_lines')
-            .select('qty_delivered, quantity')
+            .select('qty_delivered, qty_scheduled, quantity')
             .eq('id', line.request_line_id)
             .single()
 
           const currentDelivered = current?.qty_delivered ?? 0
+          const currentScheduled = current?.qty_scheduled ?? 0
           const totalQty = current?.quantity ?? line.quantity
           const newDelivered = Math.min(totalQty, currentDelivered + line.quantity)
+          const newScheduled = Math.max(0, currentScheduled - line.quantity)
           const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
 
           await supabase
             .from('sm_request_lines')
             .update({
               qty_delivered: newDelivered,
+              qty_scheduled: newScheduled,
               status: newStatus,
               ...(newStatus === 'Entregada' ? { delivered_at: new Date().toISOString() } : {}),
             })

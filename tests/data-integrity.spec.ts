@@ -33,6 +33,20 @@ test.describe('Data Integrity Checks', () => {
     expect(violations).toHaveLength(0)
   })
 
+  test('Invariant: qty_scheduled + qty_delivered <= quantity', async () => {
+    const { data } = await db
+      .from('sm_request_lines')
+      .select('id, quantity, qty_scheduled, qty_delivered')
+    const violations = (data ?? []).filter(l => {
+      const total = Number(l.qty_scheduled ?? 0) + Number(l.qty_delivered ?? 0)
+      return total > Number(l.quantity)
+    })
+    if (violations.length > 0) {
+      console.log('Violations:', violations)
+    }
+    expect(violations).toHaveLength(0)
+  })
+
   test('No Completado trips with En Transito lines', async () => {
     const { data: trips } = await db
       .from('trips')
