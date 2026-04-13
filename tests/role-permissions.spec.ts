@@ -151,5 +151,19 @@ test.describe('Campo Role Permissions', () => {
   test('Campo does NOT see Retorno', async () => {
     // Retorno is for logistica/admin only
   })
+
+  test('Campo opens DispatchModal with conductor/vehicle/trailer/qty disabled', async () => {
+    // Login as campo
+    // Create programmed trip (via admin, then switch user)
+    // Open trip detail → click Registrar Salida
+    // Verify driver Select is disabled
+    // Verify vehicle Select is disabled
+    // Verify trailer Select is disabled
+    // Verify line checkboxes are disabled
+    // Verify qty inputs are disabled
+    // Verify notes textarea is editable
+    // Verify button reads "Confirmar Salida" (not "Confirmar Despacho")
+    // Verify informative banner about pre-programmed values is shown
+  })
 })
 */

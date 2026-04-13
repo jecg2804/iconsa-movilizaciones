@@ -22,6 +22,7 @@ interface DispatchModalProps {
   onConfirm: (data: DispatchData) => Promise<void>
   onClose: () => void
   loading: boolean
+  role: string | null
 }
 
 interface LineState {
@@ -34,8 +35,11 @@ interface LineState {
   lineType: string
 }
 
-export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchModalProps) {
+export function DispatchModal({ trip, onConfirm, onClose, loading, role }: DispatchModalProps) {
   // --- ALL hooks at top, before any conditionals ---
+  // Solo logística/admin editan vehículo, conductor, líneas y cantidades al despachar.
+  // Conductores (campo) solo confirman lo pre-programado.
+  const canEdit = role === 'logistica' || role === 'admin'
   const supabase = useMemo(() => createClient(), [])
   const { vehicles: rawVehicles, trailers: rawTrailers, loading: vehiclesLoading } = useVehicles()
 
@@ -137,8 +141,14 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl">
         <h3 className="mb-4 text-lg font-semibold text-gray-900">
-          Despacho — {trip.trip_id}
+          {canEdit ? 'Despacho' : 'Confirmar Salida'} — {trip.trip_id}
         </h3>
+
+        {!canEdit && (
+          <div className="mb-4 rounded-lg border border-iconsa-blue/30 bg-iconsa-blue/5 p-3 text-xs text-iconsa-blue">
+            Registro de salida con lo pre-programado por Logística. Para cambios, contactar a Charris.
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
@@ -154,6 +164,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
               value={driverId}
               onChange={setDriverId}
               searchable
+              disabled={!canEdit}
             />
 
             {/* Vehículo */}
@@ -164,6 +175,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
               value={vehicleId}
               onChange={setVehicleId}
               searchable
+              disabled={!canEdit}
             />
 
             {/* Remolque (opcional) */}
@@ -174,6 +186,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
               value={trailerId}
               onChange={setTrailerId}
               searchable
+              disabled={!canEdit}
             />
 
             {/* Líneas / Carga */}
@@ -195,7 +208,8 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
                       type="checkbox"
                       checked={line.checked}
                       onChange={() => handleToggleLine(idx)}
-                      className="h-4 w-4 rounded border-gray-300 text-navy focus:ring-navy"
+                      disabled={!canEdit}
+                      className="h-4 w-4 rounded border-gray-300 text-navy focus:ring-navy disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     {line.lineType === 'Equipo' ? (
                       <Wrench className="h-3.5 w-3.5 flex-shrink-0 text-iconsa-blue" />
@@ -211,7 +225,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
                       max={line.maxQty}
                       step="1"
                       value={line.qty}
-                      disabled={!line.checked}
+                      disabled={!line.checked || !canEdit}
                       onChange={(e) =>
                         handleQtyChange(idx, parseFloat(e.target.value) || 0)
                       }
@@ -247,7 +261,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading }: DispatchMod
                 loading={loading}
                 disabled={loading || checkedCount === 0}
               >
-                Confirmar Despacho
+                {canEdit ? 'Confirmar Despacho' : 'Confirmar Salida'}
               </Button>
               <Button variant="ghost" onClick={onClose} disabled={loading}>
                 Cancelar

@@ -541,14 +541,30 @@ export default function Page() {
       setEventBusy(true)
       setEventError(null)
 
+      // Defensiva: conductor (campo) no puede editar — usar lo programado.
+      // Protege contra manipulación del cliente (DevTools) cuando el modal viene read-only.
+      const isReadOnly = role === 'campo'
+      const effectiveData: DispatchData = isReadOnly
+        ? {
+            driver_id: trip.driver_id ?? null,
+            vehicle_id: trip.vehicle_id ?? null,
+            trailer_id: trip.trailer_id ?? null,
+            lines: trip.assignments.map((a) => ({
+              request_line_id: a.request_line_id,
+              qty_dispatched: a.quantity_assigned,
+            })),
+            notes: data.notes,
+          }
+        : data
+
       try {
         // 1. UPDATE trip: conductor, vehículo, remolque, status, salida
         const { error: tripError } = await supabase
           .from('trips')
           .update({
-            driver_id: data.driver_id,
-            vehicle_id: data.vehicle_id,
-            trailer_id: data.trailer_id,
+            driver_id: effectiveData.driver_id,
+            vehicle_id: effectiveData.vehicle_id,
+            trailer_id: effectiveData.trailer_id,
             status: 'En Ruta',
             actual_departure: new Date().toISOString(),
           })
@@ -557,7 +573,7 @@ export default function Page() {
         if (tripError) throw tripError
 
         // 2. UPDATE líneas a 'En Transito' (SIN acento — CRÍTICO para cascade)
-        const lineIds = data.lines.map((l) => l.request_line_id)
+        const lineIds = effectiveData.lines.map((l) => l.request_line_id)
         if (lineIds.length > 0) {
           const { error: linesError } = await supabase
             .from('sm_request_lines')
@@ -569,7 +585,7 @@ export default function Page() {
 
         // 3. UPDATE trip_line_assignments: qty_dispatched
         // Si el conductor despacha menos de lo programado, devolver la diferencia al pool
-        for (const line of data.lines) {
+        for (const line of effectiveData.lines) {
           const assignment = trip.assignments.find(a => a.request_line_id === line.request_line_id)
           const qtyAssigned = assignment?.quantity_assigned ?? line.qty_dispatched
 
@@ -604,7 +620,7 @@ export default function Page() {
             event_type: 'Salida',
             event_timestamp: new Date().toISOString(),
             registered_by: person?.id ?? null,
-            notes: data.notes || null,
+            notes: effectiveData.notes || null,
           })
 
         if (insertEvtErr) throw insertEvtErr
@@ -625,7 +641,7 @@ export default function Page() {
         setEventBusy(false)
       }
     },
-    [supabase, trip, person, fetchTrip, id, loadEvents],
+    [supabase, trip, person, role, fetchTrip, id, loadEvents],
   )
 
   // --- Entrega con per-line status, trip_event_lines, delivery_observations ---
@@ -1319,6 +1335,7 @@ export default function Page() {
           onConfirm={handleDispatch}
           onClose={() => setActiveEvent(null)}
           loading={eventBusy}
+          role={role}
         />
       )}
 
