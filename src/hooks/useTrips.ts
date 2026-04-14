@@ -9,6 +9,7 @@ import {
   notifyViajeAsignadoConductor,
   notifyViajeCancelado,
 } from '@/lib/notifications/actions'
+import { todayStrInPanama } from '@/lib/utils/datetime'
 
 // --- Tipos exportados ---
 
@@ -758,6 +759,16 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       busyRef.current = true
       setSaving(true)
       setSaveError(null)
+
+      // Guard server-side: scheduled_date no puede ser en el pasado.
+      // El input HTML min={today} ya lo bloquea en UI, pero un user puede
+      // bypassarlo editando el DOM.
+      if (input.scheduled_date < todayStrInPanama()) {
+        setSaveError('La fecha programada no puede ser en el pasado')
+        busyRef.current = false
+        setSaving(false)
+        return null
+      }
 
       try {
         // 1. Insertar el viaje. Los triggers BD asignan trip_id y

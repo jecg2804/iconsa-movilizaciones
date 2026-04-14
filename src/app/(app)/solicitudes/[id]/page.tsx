@@ -344,6 +344,7 @@ export default function SolicitudDetailPage() {
 
   // --- Gestion de lineas ---
   const canAddLines = mode === 'edit' && solicitud?.status === 'Borrador'
+  const canDeleteLines = canAddLines
 
   const handleAddLine = useCallback((line: LineInput) => {
     setLines((prev) => [...prev, line])
@@ -363,6 +364,7 @@ export default function SolicitudDetailPage() {
   }, [editingLineIndex])
 
   const handleDeleteLine = useCallback((index: number) => {
+    if (!canDeleteLines) return
     const line = lines[index]
     // Si es linea programada, mostrar confirmacion
     const originalLine = solicitud?.lines.find((l) => l.id === line.id)
@@ -648,7 +650,7 @@ export default function SolicitudDetailPage() {
                   line={{ ...line, status: lineStatus }}
                   lineNumber={index + 1}
                   editable={mode === 'edit'}
-                  canDelete={mode === 'edit'}
+                  canDelete={canDeleteLines}
                   isScheduled={isScheduled}
                   onEdit={() => {
                     setShowLineEditor(false)

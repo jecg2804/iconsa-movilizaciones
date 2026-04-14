@@ -8,6 +8,7 @@ import FileUploader from '@/components/ui/FileUploader'
 import FileDisplay from '@/components/ui/FileDisplay'
 import type { TripInput } from '@/hooks/useTrips'
 import type { Attachment } from '@/lib/supabase/storage'
+import { todayStrInPanama } from '@/lib/utils/datetime'
 
 /** Genera opciones de hora de 4:00 AM a 8:00 PM cada 5 min */
 function generateTimeOptions(): SelectOption[] {
@@ -207,22 +208,41 @@ function TripForm({
 
   const handleRateChange = useCallback(
     (val: string | null) => {
-      setRateId(val)
-      // Auto-rellenar costo desde el amount de la opción seleccionada
+      // Auto-rellenar costo desde el amount de la opción seleccionada.
+      // Si el usuario ya ingresó un costo distinto, pedir confirmación
+      // antes de sobreescribirlo.
       if (val) {
         const selectedRate = rates.find((r) => r.value === val)
         if (selectedRate?.amount != null) {
           const newCost = String(selectedRate.amount)
+          const currentCostNum = parseFloat(cost)
+          const hasManualCost =
+            cost.trim() !== '' && !Number.isNaN(currentCostNum) && currentCostNum !== selectedRate.amount
+          if (hasManualCost) {
+            const ok = typeof window !== 'undefined' &&
+              window.confirm(
+                `Ya ingresaste un costo de B/. ${currentCostNum.toFixed(2)}. ` +
+                `¿Reemplazar con la tarifa seleccionada (B/. ${selectedRate.amount.toFixed(2)})?`,
+              )
+            if (!ok) {
+              setRateId(val)
+              onRateChange?.(val)
+              propagate({ rate_id: val })
+              return
+            }
+          }
+          setRateId(val)
           setCost(newCost)
           onRateChange?.(val)
           propagate({ rate_id: val, cost: selectedRate.amount })
           return
         }
       }
+      setRateId(val)
       onRateChange?.(val)
       propagate({ rate_id: val })
     },
-    [propagate, onRateChange, rates],
+    [propagate, onRateChange, rates, cost],
   )
 
   const handleCostChange = useCallback(
@@ -333,7 +353,19 @@ function TripForm({
           <input
             type="checkbox"
             checked={isPickup}
-            onChange={(e) => onPickupChange(e.target.checked)}
+            onChange={(e) => {
+              const next = e.target.checked
+              // Si al activar pickup hay driver/vehicle/trailer ingresados,
+              // pedir confirmación — el toggle los limpia arriba.
+              const willLoseData = next && (driverId || vehicleId || trailerId)
+              if (willLoseData && typeof window !== 'undefined') {
+                const ok = window.confirm(
+                  'Activar retiro en Chilibre quitará el conductor, vehículo y remolque seleccionados. ¿Continuar?',
+                )
+                if (!ok) return
+              }
+              onPickupChange(next)
+            }}
             className="accent-navy"
           />
           Retiro en Chilibre (sin conductor/vehículo)
@@ -341,13 +373,14 @@ function TripForm({
       )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Fecha Programada */}
+        {/* Fecha Programada — min = hoy Panamá (solo creación) */}
         <Input
           label="Fecha Programada"
           type="date"
           value={scheduledDate}
           onChange={handleDateChange}
           disabled={fieldsDisabled}
+          min={mode === 'create' ? todayStrInPanama() : undefined}
         />
 
         {/* Hora de Salida (opcional) — dropdown filtrable 12h */}
