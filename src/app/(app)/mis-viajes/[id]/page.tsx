@@ -933,6 +933,69 @@ export default function Page() {
             .eq('id', trip.id)
         }
 
+        if (eventType === 'Retiro') {
+          // Espejo de Entrega para los efectos de cantidades + rollback del trip
+          // que complete_pickup_trip habia marcado como Completado.
+          // TODO Fase B.0: verificar via Chat el body de complete_pickup_trip por si
+          // setea otros campos (date_cancelled, etc.) que tambien deban revertirse.
+          const { data: eventLines } = await supabase
+            .from('trip_event_lines')
+            .select('request_line_id, quantity')
+            .eq('trip_event_id', revertEvent.id)
+
+          // 1. Revertir cantidades en sm_request_lines (espejo Entrega)
+          for (const el of eventLines ?? []) {
+            const { data: current } = await supabase
+              .from('sm_request_lines')
+              .select('qty_delivered, qty_scheduled, quantity')
+              .eq('id', el.request_line_id)
+              .single()
+
+            const newDelivered = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
+            const newScheduled = (current?.qty_scheduled ?? 0) + el.quantity
+            const totalQty = current?.quantity ?? el.quantity
+            const newStatus =
+              newDelivered >= totalQty
+                ? 'Entregada'
+                : newDelivered > 0
+                  ? 'Parcial'
+                  : 'En Transito' // SIN acento — CRÍTICO
+
+            await supabase
+              .from('sm_request_lines')
+              .update({
+                qty_delivered: newDelivered,
+                qty_scheduled: newScheduled,
+                status: newStatus,
+                ...(newStatus !== 'Entregada' ? { delivered_at: null } : {}),
+              })
+              .eq('id', el.request_line_id)
+          }
+
+          // 2. Revertir trip_line_assignments.qty_delivered (fresh SELECT — fix C3)
+          for (const el of eventLines ?? []) {
+            const { data: tla } = await supabase
+              .from('trip_line_assignments')
+              .select('qty_delivered')
+              .eq('trip_id', trip.id)
+              .eq('request_line_id', el.request_line_id)
+              .single()
+
+            await supabase
+              .from('trip_line_assignments')
+              .update({ qty_delivered: Math.max(0, (tla?.qty_delivered ?? 0) - el.quantity) })
+              .eq('trip_id', trip.id)
+              .eq('request_line_id', el.request_line_id)
+          }
+
+          // 3. Rollback trip de Completado a En Ruta. complete_pickup_trip lo habia
+          // marcado como Completado; sin esto, el trip queda en estado inconsistente.
+          await supabase
+            .from('trips')
+            .update({ status: 'En Ruta' })
+            .eq('id', trip.id)
+        }
+
         // 3. Reload
         setRevertEvent(null)
         const tripData = await fetchTrip(id)
