@@ -90,17 +90,32 @@ export async function sendNotification(params: {
       continue
     }
 
-    // DEDUP: skip si mismo evento+recipient enviado en últimos 5 minutos
+    // DEDUP: skip si mismo evento+destinatario enviado en últimos 5 minutos.
+    // En TEST mode deduplicamos por recipient_email (targetEmail), no por
+    // recipient_id original — sin esto, probar un evento que notifica a
+    // varios PMs dispara N copias al mismo buzón de test.
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-    const { data: recent } = await supabase
+    const dedupQuery = supabase
       .from('notification_log')
       .select('id')
       .eq('event_type', params.eventType)
       .eq('reference_id', params.referenceId)
-      .eq('recipient_id', recipient.id)
       .eq('status', 'sent')
       .gte('created_at', fiveMinAgo)
       .limit(1)
+
+    const { data: recent, error: dedupErr } = TEST_EMAIL
+      ? await dedupQuery.eq('recipient_email', targetEmail)
+      : await dedupQuery.eq('recipient_id', recipient.id)
+
+    // Fail-closed: si la query de dedup falla, asumimos que podría haber
+    // duplicado y skipeamos. Evita tormenta de emails si Supabase tiene
+    // problemas y la query retorna error en vez de resultados.
+    if (dedupErr) {
+      console.error('[Notification] dedup query failed — skipping to fail closed:', dedupErr.message)
+      skipped++
+      continue
+    }
 
     if (recent && recent.length > 0) {
       skipped++

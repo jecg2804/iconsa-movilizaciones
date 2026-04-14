@@ -224,6 +224,10 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
     const supabase = createServiceClient()
     const req = await getRequestWithProject(requestId)
     if (!req) { console.warn('[Notify] solicitud_enviada: request not found'); return }
+    if (!['Enviada', 'En Proceso'].includes(req.status)) {
+      console.log('[Notify] solicitud_enviada: skipped, status =', req.status)
+      return
+    }
 
     const { data: lines } = await supabase
       .from('sm_request_lines')
@@ -301,6 +305,10 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
     console.log('[Notify] solicitud_cancelada called', { requestId, personId })
     const req = await getRequestWithProject(requestId)
     if (!req) { console.warn('[Notify] solicitud_cancelada: request not found'); return }
+    if (req.status !== 'Cancelada') {
+      console.log('[Notify] solicitud_cancelada: skipped, status =', req.status)
+      return
+    }
 
     const cancellerName = personId ? await getPersonName(personId) : 'Sistema'
     const charris = await getPeopleByRole('logistica')
@@ -368,11 +376,15 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, scheduled_date, confirmation_code, vehicle_id')
+      .select('id, trip_id, scheduled_date, confirmation_code, vehicle_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] lineas_programadas: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] lineas_programadas: skipped, trip cancelled')
+      return
+    }
 
     let vehicleDesc = 'No asignado'
     if (trip.vehicle_id) {
@@ -428,11 +440,15 @@ export async function notifyViajeCancelado(tripId: string): Promise<void> {
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_cancelado: trip not found'); return }
+    if (trip.status !== 'Cancelado') {
+      console.log('[Notify] viaje_cancelado: skipped, status =', trip.status)
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
     const pms = await getTripProjectPMs(tripId)
@@ -470,11 +486,15 @@ export async function notifyViajeReprogramado(
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_reprogramado: trip not found'); return }
+    if (trip.status === 'Cancelado' || trip.status === 'Completado') {
+      console.log('[Notify] viaje_reprogramado: skipped, status =', trip.status)
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
     const pms = await getTripProjectPMs(tripId)
@@ -513,11 +533,15 @@ export async function notifyViajeEditado(
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, scheduled_date')
+      .select('id, trip_id, scheduled_date, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_editado: trip not found'); return }
+    if (trip.status === 'Cancelado' || trip.status === 'Completado') {
+      console.log('[Notify] viaje_editado: skipped, status =', trip.status)
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
     const pms = await getTripProjectPMs(tripId)
@@ -553,11 +577,15 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, scheduled_date, vehicle_id')
+      .select('id, trip_id, scheduled_date, vehicle_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_asignado_conductor: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] viaje_asignado_conductor: skipped, trip cancelled')
+      return
+    }
 
     let vehicleDesc = 'No asignado'
     if (trip.vehicle_id) {
@@ -607,11 +635,15 @@ export async function notifyEntregaConfirmada(requestLineId: string, receivedByN
     const supabase = createServiceClient()
     const { data: line } = await supabase
       .from('sm_request_lines')
-      .select('id, description, quantity, qty_delivered, request_id')
+      .select('id, description, quantity, qty_delivered, request_id, status')
       .eq('id', requestLineId)
       .single()
 
     if (!line) { console.warn('[Notify] entrega_confirmada: line not found'); return }
+    if (line.status === 'Cancelada') {
+      console.log('[Notify] entrega_confirmada: skipped, line cancelled')
+      return
+    }
 
     const { data: req } = await supabase
       .from('sm_requests')
@@ -665,11 +697,15 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] salida_registrada: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] salida_registrada: skipped, trip cancelled')
+      return
+    }
 
     const { data: assignments } = await supabase
       .from('trip_line_assignments')
@@ -736,11 +772,15 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] incidencia_ruta: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] incidencia_ruta: skipped, trip cancelled')
+      return
+    }
 
     const charris = await getPeopleByRole('logistica')
     const receiveAll = await getReceiveAllUsers()
@@ -774,11 +814,15 @@ export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
 
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, actual_arrival')
+      .select('id, trip_id, actual_arrival, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] retorno_registrado: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] retorno_registrado: skipped, trip cancelled')
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
     const charris = await getPeopleByRole('logistica')
@@ -858,6 +902,10 @@ export async function notifySolicitudUrgenteNueva(requestId: string): Promise<vo
     const supabase = createServiceClient()
     const req = await getRequestWithProject(requestId)
     if (!req) { console.warn('[Notify] solicitud_urgente_nueva: request not found'); return }
+    if (!['Enviada', 'En Proceso'].includes(req.status)) {
+      console.log('[Notify] solicitud_urgente_nueva: skipped, status =', req.status)
+      return
+    }
 
     // Calcular urgencia
     const today = new Date()
@@ -1037,11 +1085,15 @@ export async function notifyMaterialPreparado(tripId: string): Promise<void> {
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] material_preparado: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] material_preparado: skipped, trip cancelled')
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
     const pms = await getTripProjectPMs(tripId)
@@ -1082,11 +1134,15 @@ export async function notifyReversionRegistrada(
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] reversion_registrada: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] reversion_registrada: skipped, trip cancelled')
+      return
+    }
 
     let revertedByName = ''
     if (revertedByPersonId) {
