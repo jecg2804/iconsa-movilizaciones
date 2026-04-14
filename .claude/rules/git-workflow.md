@@ -2,16 +2,17 @@
 
 Política completa de branches, commits, tags y releases para MovimientOS.
 Esta regla documenta lo que está permitido y denegado. El enforcement técnico
-está en `.claude/settings.json` (deny patterns para Claude Code), `.husky/`
-(hooks para commits manuales desde terminal), y la protección de branch en
-GitHub (backstop final, aplica a cualquier actor).
+está en `.claude/settings.json` (deny patterns para Claude Code) y `.husky/`
+(hooks para commits manuales desde terminal). **No hay enforcement server-side**
+en GitHub — ver sección "Enforcement layered" al final para el contexto.
 
 ## Branches
 
-- **`main`** — estable, solo código aprobado. Protegida en GitHub. Nunca recibe
-  pushes directos. Solo recibe merges via PR aprobado desde `jaime/dev`, o
-  cherry-picks específicos para hotfixes. Protected en GitHub: no force push,
-  no delete, requiere status check de Vercel en verde.
+- **`main`** — estable, solo código aprobado. Nunca recibe pushes directos.
+  Solo recibe merges via PR desde `jaime/dev`, o cherry-picks específicos
+  para hotfixes. La protección es 100% client-side (deny patterns + Husky)
+  porque GitHub requiere upgrade a Team para branch protection en repos
+  privados — ver nota abajo.
 - **`jaime/dev`** — branch de trabajo de James. Claude Code hace commits y push
   directamente aquí con cada paso completado. Es la fuente de verdad para
   desarrollo activo.
@@ -86,12 +87,30 @@ su terminal — yo no.
 
 ## Enforcement layered
 
-| Layer | Cubre | Tool |
-|---|---|---|
-| Documental | Claude razona | `.claude/rules/git-workflow.md` (este) |
-| Tool deny | Claude ejecuta | `.claude/settings.json` |
-| Git client | Cualquier commit local | `.husky/pre-commit`, `pre-push`, `post-commit` |
-| GitHub server | Cualquier push remoto | Branch protection en `main` |
+| Layer | Cubre | Tool | Estado |
+|---|---|---|---|
+| Documental | Claude razona | `.claude/rules/git-workflow.md` (este) | ✅ activo |
+| Tool deny | Claude ejecuta | `.claude/settings.json` | ✅ activo |
+| Git client | Cualquier commit local | `.husky/pre-commit`, `pre-push`, `post-commit` | ✅ activo |
+| GitHub server | Push remoto de cualquier actor | Branch protection / Rulesets en `main` | ❌ **no activo** |
 
-Sin los 4 layers siempre queda un hueco. Los 4 juntos hacen que sea
-imposible romper la política, incluso accidentalmente.
+### Por qué no hay layer 4
+
+Probado el 2026-04-14. Ninguno de los dos UIs de GitHub (classic Branch
+Protection Rules ni Rulesets) enforza en este repo privado bajo el plan
+gratuito de la organización. Rulesets muestra el banner explícito *"Your
+rulesets won't be enforced on this private repository until you upgrade
+this organization account to GitHub Team"*. Branch Protection Rules
+clásico tampoco aplica reglas en plan gratuito private.
+
+**Consecuencia práctica:** los layers 1–3 son la única protección real.
+Son fuertes en la práctica porque cubren a los dos únicos actores que
+tocan el repo: James (terminal local, atrapado por Husky) y Claude Code
+(atrapado por deny patterns + Husky). El hueco teórico sería un tercero
+con token de GitHub push-eando via API directo — no aplica en este
+contexto (James es el único con acceso write al repo).
+
+**Si algún día se agrega otro colaborador humano o agente con token**,
+upgrade a GitHub Team ($4/user/mes) y activar Rulesets con el config ya
+probado el 2026-04-14. Hasta entonces, los 3 layers client-side son
+suficientes.

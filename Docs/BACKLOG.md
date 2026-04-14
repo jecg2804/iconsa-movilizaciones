@@ -49,7 +49,7 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
 
 ### Parked (post-audit)
 
-- **Git/GitHub practices** — enforcement via rules + deny patterns + Husky + GitHub branch protection + skill `/release`. 3 preguntas pendientes. Retomar tras Fase F.
+- **Git/GitHub practices** — ✅ Cerrado 2026-04-14 (`cba86e3`). 3 capas client-side activas: deny patterns + Husky (pre-commit/pre-push/post-commit con build en background) + skill `/release`. Capa server-side (GitHub branch protection) no activa porque el plan gratuito no enforza reglas en repos privados — upgrade a GitHub Team pendiente si se agrega otro colaborador humano.
 
 ---
 
