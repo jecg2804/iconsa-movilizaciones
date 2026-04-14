@@ -988,11 +988,14 @@ export default function Page() {
               .eq('request_line_id', el.request_line_id)
           }
 
-          // 3. Rollback trip de Completado a En Ruta. complete_pickup_trip lo habia
-          // marcado como Completado; sin esto, el trip queda en estado inconsistente.
+          // 3. Rollback trip: complete_pickup_trip habia seteado status='Completado'
+          // Y actual_arrival=now(). Verificado con Fase B.0 prompt #1 (body del RPC).
+          // En flows pickup NO hay Llegada separada, asi que limpiar actual_arrival es
+          // correcto (distinto del caso Retorno fleet donde actual_arrival pertenece
+          // al evento Llegada y NO se debe tocar).
           await supabase
             .from('trips')
-            .update({ status: 'En Ruta' })
+            .update({ status: 'En Ruta', actual_arrival: null })
             .eq('id', trip.id)
         }
 
