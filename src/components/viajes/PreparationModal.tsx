@@ -29,7 +29,12 @@ export function PreparationModal({ trip, onConfirm, onClose, loading }: Preparat
   const eventIdRef = useRef<string>(crypto.randomUUID())
 
   const handleConfirm = useCallback(async () => {
-    await onConfirm({ event_id: eventIdRef.current, notes: notes.trim(), attachments })
+    try {
+      await onConfirm({ event_id: eventIdRef.current, notes: notes.trim(), attachments })
+    } catch (err) {
+      eventIdRef.current = crypto.randomUUID()
+      throw err
+    }
   }, [notes, attachments, onConfirm])
 
   return (

@@ -810,6 +810,25 @@ export default function Page() {
       try {
         const eventType = revertEvent.event_type
 
+        // Guard: no permitir revertir Llegada si hay Entrega/Retiro/Parada
+        // no-reverted registrada después de esta Llegada. Revertir Llegada
+        // en ese caso dejaría el trip inconsistente (sin actual_arrival pero
+        // con líneas ya marcadas Entregada).
+        if (eventType === 'Llegada') {
+          const llegadaTime = new Date(revertEvent.event_timestamp).getTime()
+          const laterBlocking = events.some(
+            (e) =>
+              !revertedIds.has(e.id) &&
+              ['Entrega', 'Retiro', 'Parada'].includes(e.event_type) &&
+              new Date(e.event_timestamp).getTime() > llegadaTime,
+          )
+          if (laterBlocking) {
+            setEventError('No se puede revertir Llegada porque existen eventos posteriores (Entrega/Retiro/Parada). Revierta esos primero.')
+            setReverting(false)
+            return
+          }
+        }
+
         // 1. INSERT Reversion event (eventos INMUTABLES — no DELETE/UPDATE)
         await supabase.from('trip_events').insert({
           trip_id: trip.id,

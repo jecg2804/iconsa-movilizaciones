@@ -173,21 +173,26 @@ export function DeliveryModal({
       ? receiverOptions.find((r) => r.value === receiver.id)?.label ?? ''
       : receiver.text?.trim() ?? ''
 
-    await onConfirm({
-      event_id: eventIdRef.current,
-      received_by_id: receiver.id,
-      received_by_name: receiverName,
-      confirmation_code: needsCode ? code : undefined,
-      lines: lines.map((l) => ({
-        request_line_id: l.request_line_id,
-        quantity: l.qty,
-        line_status: l.status,
-        observation_type: l.status === 'with_observations' ? l.observationType || undefined : undefined,
-        observation_notes: l.status === 'with_observations' ? l.observationNotes || undefined : undefined,
-      })),
-      notes: notes.trim(),
-      attachments,
-    })
+    try {
+      await onConfirm({
+        event_id: eventIdRef.current,
+        received_by_id: receiver.id,
+        received_by_name: receiverName,
+        confirmation_code: needsCode ? code : undefined,
+        lines: lines.map((l) => ({
+          request_line_id: l.request_line_id,
+          quantity: l.qty,
+          line_status: l.status,
+          observation_type: l.status === 'with_observations' ? l.observationType || undefined : undefined,
+          observation_notes: l.status === 'with_observations' ? l.observationNotes || undefined : undefined,
+        })),
+        notes: notes.trim(),
+        attachments,
+      })
+    } catch (err) {
+      eventIdRef.current = crypto.randomUUID()
+      throw err
+    }
   }, [receiver, receiverOptions, needsCode, code, lines, notes, attachments, onConfirm])
 
   // --- Render ---

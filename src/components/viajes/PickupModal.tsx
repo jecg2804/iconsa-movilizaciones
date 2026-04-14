@@ -123,21 +123,29 @@ export function PickupModal({ trip, onConfirm, onClose, loading, person }: Picku
   }, [])
 
   const handleConfirm = useCallback(async () => {
-    await onConfirm({
-      event_id: eventIdRef.current,
-      received_by_id: person?.id ?? null,
-      received_by_name: person?.name ?? '',
-      confirmation_code: code,
-      lines: lines.map((l) => ({
-        request_line_id: l.request_line_id,
-        quantity: l.qty,
-        line_status: l.status,
-        observation_type: l.status === 'with_observations' ? l.observationType || undefined : undefined,
-        observation_notes: l.status === 'with_observations' ? l.observationNotes || undefined : undefined,
-      })),
-      notes: notes.trim(),
-      attachments,
-    })
+    try {
+      await onConfirm({
+        event_id: eventIdRef.current,
+        received_by_id: person?.id ?? null,
+        received_by_name: person?.name ?? '',
+        confirmation_code: code,
+        lines: lines.map((l) => ({
+          request_line_id: l.request_line_id,
+          quantity: l.qty,
+          line_status: l.status,
+          observation_type: l.status === 'with_observations' ? l.observationType || undefined : undefined,
+          observation_notes: l.status === 'with_observations' ? l.observationNotes || undefined : undefined,
+        })),
+        notes: notes.trim(),
+        attachments,
+      })
+    } catch (err) {
+      // Si la operación falla, regenerar event_id para que el próximo
+      // intento NO sea bloqueado por el guard idempotente (23505 en el
+      // INSERT checkpoint asume que el mismo UUID = mismo intento).
+      eventIdRef.current = crypto.randomUUID()
+      throw err
+    }
   }, [person, code, lines, notes, attachments, onConfirm])
 
   // --- Render ---

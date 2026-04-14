@@ -125,17 +125,22 @@ export function DispatchModal({ trip, onConfirm, onClose, loading, role }: Dispa
     const checkedLines = lines.filter((l) => l.checked && l.qty > 0)
     if (checkedLines.length === 0) return
 
-    await onConfirm({
-      event_id: eventIdRef.current,
-      driver_id: driverId,
-      vehicle_id: vehicleId,
-      trailer_id: trailerId,
-      lines: checkedLines.map((l) => ({
-        request_line_id: l.request_line_id,
-        qty_dispatched: l.qty,
-      })),
-      notes: notes.trim(),
-    })
+    try {
+      await onConfirm({
+        event_id: eventIdRef.current,
+        driver_id: driverId,
+        vehicle_id: vehicleId,
+        trailer_id: trailerId,
+        lines: checkedLines.map((l) => ({
+          request_line_id: l.request_line_id,
+          qty_dispatched: l.qty,
+        })),
+        notes: notes.trim(),
+      })
+    } catch (err) {
+      eventIdRef.current = crypto.randomUUID()
+      throw err
+    }
   }, [lines, driverId, vehicleId, trailerId, notes, onConfirm])
 
   const checkedCount = lines.filter((l) => l.checked && l.qty > 0).length

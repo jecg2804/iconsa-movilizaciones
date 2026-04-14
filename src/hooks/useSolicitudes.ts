@@ -133,57 +133,6 @@ const DEFAULT_FILTER: SolicitudesFilter = {
   pageSize: 20,
 }
 
-const SEQUENCE_CONFLICT_ERROR =
-  'there is no unique or exclusion constraint matching the ON CONFLICT specification'
-
-function isSequenceConflictError(message: string | undefined): boolean {
-  if (!message) return false
-  return message.toLowerCase().includes(SEQUENCE_CONFLICT_ERROR)
-}
-
-/**
- * Fallback para generar request_id desde cliente si el trigger falla por ON CONFLICT.
- * Mantiene formato {project_code}-SM-{###} por proyecto.
- */
-async function generateRequestIdFallback(
-  supabase: SupabaseClient<Database>,
-  projectId: string,
-): Promise<string | null> {
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('code')
-    .eq('id', projectId)
-    .single()
-
-  if (projectError || !project?.code) {
-    return null
-  }
-
-  const { data: existingRows } = await supabase
-    .from('sm_requests')
-    .select('request_id')
-    .eq('project_id', projectId)
-    .not('request_id', 'is', null)
-
-  let maxSequence = 0
-  for (const row of existingRows ?? []) {
-    const requestId = row.request_id
-    if (!requestId) continue
-
-    const match = requestId.match(/-SM-(\d+)$/)
-    if (!match) continue
-
-    const parsed = Number(match[1])
-    if (!Number.isNaN(parsed)) {
-      maxSequence = Math.max(maxSequence, parsed)
-    }
-  }
-
-  const nextSequence = maxSequence + 1
-  const suffix = String(nextSequence).padStart(3, '0')
-  return `${project.code}-SM-${suffix}`
-}
-
 /**
  * Crea registros en la tabla suggestions para valores de fallback (texto libre).
  * Se ignoran errores silenciosamente — las sugerencias son best-effort.
@@ -528,31 +477,13 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           created_by: personId ?? null,
         }
 
-        // 1. Insertar el header
-        let { data: insertedRequest, error: headerError } = await supabase
+        // 1. Insertar el header. El trigger generate_request_id asigna
+        //    request_id atómicamente — confiamos solo en la BD.
+        const { data: insertedRequest, error: headerError } = await supabase
           .from('sm_requests')
           .insert(headerPayload)
           .select('id, request_id')
           .single()
-
-        // Fallback: si falla trigger por ON CONFLICT, reintentar enviando request_id manual.
-        if ((headerError || !insertedRequest) && isSequenceConflictError(headerError?.message)) {
-          const fallbackRequestId = await generateRequestIdFallback(supabase, header.project_id)
-
-          if (fallbackRequestId) {
-            const retry = await supabase
-              .from('sm_requests')
-              .insert({
-                ...headerPayload,
-                request_id: fallbackRequestId,
-              })
-              .select('id, request_id')
-              .single()
-
-            insertedRequest = retry.data
-            headerError = retry.error
-          }
-        }
 
         if (headerError || !insertedRequest) {
           setSaveError(headerError?.message ?? 'Error al crear la solicitud')
