@@ -1,19 +1,19 @@
-import { format, differenceInCalendarDays } from 'date-fns'
+import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { Priority } from './constants'
+import {
+  todayStrInPanama,
+  parseDateStrInPanama,
+  daysBetweenInPanama,
+} from './datetime'
 
 /**
- * Parsea un string de fecha como fecha LOCAL (no UTC).
- * "2026-03-10" → 10 de marzo local (no 9 de marzo por timezone).
+ * Parsea un string de fecha en timezone Panamá.
+ * Reemplaza el antiguo parseLocalDate que usaba timezone del runtime.
  */
 function parseLocalDate(date: string | Date): Date {
   if (date instanceof Date) return date
-  // Fechas tipo "YYYY-MM-DD" se parsean como UTC por JS.
-  // Agregar T00:00:00 fuerza interpretación como hora local.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return new Date(date + 'T00:00:00')
-  }
-  return new Date(date)
+  return parseDateStrInPanama(date)
 }
 
 /**
@@ -49,18 +49,14 @@ export function formatQty(n: number | null | undefined): string {
 }
 
 /**
- * Calcula prioridad basada en la fecha requerida vs hoy.
+ * Calcula prioridad basada en la fecha requerida vs hoy (en Panamá).
  * Vencida: fecha ya pasó
  * Urgente: 0-3 días
  * Próxima: 4-7 días
  * Normal: 8+ días
  */
 export function calculatePriority(dateRequired: string | Date): Priority {
-  const required = parseLocalDate(dateRequired)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const daysUntil = differenceInCalendarDays(required, today)
+  const daysUntil = daysBetweenInPanama(todayStrInPanama(), dateRequired)
 
   if (daysUntil < 0) return 'Vencida'
   if (daysUntil <= 3) return 'Urgente'
@@ -69,13 +65,10 @@ export function calculatePriority(dateRequired: string | Date): Priority {
 }
 
 /**
- * Días hasta la fecha requerida. Negativo = vencido.
+ * Días hasta la fecha requerida (en Panamá). Negativo = vencido.
  */
 export function daysUntilDue(dateRequired: string | Date): number {
-  const required = parseLocalDate(dateRequired)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return differenceInCalendarDays(required, today)
+  return daysBetweenInPanama(todayStrInPanama(), dateRequired)
 }
 
 /**
@@ -98,18 +91,20 @@ export function daysUntilDueColor(days: number): string {
 }
 
 /**
- * Delta entre fecha requerida y fecha completada.
+ * Delta entre fecha requerida y fecha completada (ambas en Panamá).
  * Positivo = completado antes de tiempo. Negativo = tarde.
+ *
+ * dateRequired es date-only ("YYYY-MM-DD"), dateCompleted es TIMESTAMPTZ.
+ * daysBetweenInPanama maneja ambos casos correctamente extrayendo la fecha
+ * en timezone Panamá antes de comparar.
  */
 export function formatCompletionDelta(
   dateRequired: string,
   dateCompleted: string
 ): { text: string; color: string } {
-  const required = parseLocalDate(dateRequired)
-  // dateCompleted es TIMESTAMPTZ — convertir a fecha local (no usar parseLocalDate que extrae YYYY-MM-DD del string)
-  const completedFull = new Date(dateCompleted)
-  const completed = new Date(completedFull.getFullYear(), completedFull.getMonth(), completedFull.getDate())
-  const days = differenceInCalendarDays(required, completed)
+  // daysBetweenInPanama: positivo si `to` es después de `from`.
+  // Aquí queremos: positivo = entregado antes (required - completed > 0).
+  const days = -daysBetweenInPanama(dateRequired, dateCompleted)
   if (days > 0) return { text: `${days}d antes`, color: 'text-iconsa-green' }
   if (days < 0) return { text: `${Math.abs(days)}d tarde`, color: 'text-iconsa-red' }
   return { text: 'a tiempo', color: 'text-iconsa-green' }
@@ -136,11 +131,13 @@ export function getOperationalSummary(lines: { status: string }[]): string {
 }
 
 /**
- * Formatea timestamp a hora local Panamá.
+ * Formatea timestamp a hora local Panamá. Retorna '—' si el input es inválido.
  */
 export function formatTimePanama(timestamp: string | null | undefined): string {
   if (!timestamp) return '—'
-  return new Date(timestamp).toLocaleTimeString('es-PA', {
+  const d = new Date(timestamp)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleTimeString('es-PA', {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'America/Panama',

@@ -3,6 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { sendNotification, getReceiveAllUsers } from './send'
 import * as templates from './templates'
+import { dayOfWeekInPanama, todayStrInPanama, parseDateStrInPanama, dateStrInPanama } from '@/lib/utils/datetime'
 
 // =============================================================================
 // HELPERS — resolución de destinatarios (usa service client, bypassa RLS)
@@ -919,9 +920,9 @@ export async function notifySolicitudUrgenteNueva(requestId: string): Promise<vo
 // =============================================================================
 export async function notifyAlertaDiariaUrgentes(): Promise<void> {
   try {
-    // No enviar los domingos (ICONSA no opera)
-    const now = new Date()
-    if (now.getUTCDay() === 0) {
+    // No enviar los domingos (ICONSA no opera) — timezone Panamá explícito
+    // para evitar off-by-one si el cron corre en horario no-panamá (cron Vercel en UTC).
+    if (dayOfWeekInPanama() === 0) {
       console.log('[Notify] alerta_diaria_urgentes skipped: domingo')
       return
     }
@@ -929,12 +930,12 @@ export async function notifyAlertaDiariaUrgentes(): Promise<void> {
     console.log('[Notify] alerta_diaria_urgentes called')
     const supabase = createServiceClient()
 
-    // Calcular fecha límite: hoy + 3 días
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const limitDate = new Date(today)
-    limitDate.setDate(limitDate.getDate() + 3)
-    const limitStr = limitDate.toISOString().split('T')[0]
+    // Calcular fecha límite: hoy + 3 días (en Panamá)
+    const todayStr = todayStrInPanama() // "YYYY-MM-DD"
+    const todayPanama = parseDateStrInPanama(todayStr)
+    const limitDate = new Date(todayPanama)
+    limitDate.setUTCDate(limitDate.getUTCDate() + 3)
+    const limitStr = dateStrInPanama(limitDate)
 
     // Solicitudes activas con fecha requerida ≤ hoy + 3 días
     const { data: requests, error: rErr } = await supabase
