@@ -1,6 +1,6 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-14 (audit cerrado modulo Fase F)
+Última actualización: 2026-04-14 (audit cerrado — Fase F descartada tras investigación con Chat, no-bloqueante)
 
 ---
 
@@ -35,7 +35,7 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
   - `tests/audit-gates.spec.ts` nuevo — 5 tests BD-first que validan gates de Fase B.1 sin UI (SEC2, BD-F7, BD-X1, N_R2_1, audit_log RLS). Todos verdes en staging. Cobertura total ahora: 14 archivos / 131 tests.
   - `CLAUDE.md` actualizado: 44 → 47 tablas, tsconfig ES2022, staging branch documentada.
   - Tests deferred (requieren credenciales pm/campo no disponibles en staging): role-permissions expansion DispatchModal campo-role, cost-code cascade, rate-autofill UI, notification dedup, RLS enforcement por rol. Levantar cuando se creen usuarios de prueba por rol.
-- **Fase F** — MIGRATIONS_FAILED investigation (pre-merge, no bloquea Fases A–E). ⏳ Pendiente
+- **Fase F** — MIGRATIONS_FAILED investigation. ❌ DESCARTADA 2026-04-14. James investigó el error cuando ocurrió con Claude Chat y determinó que es irrelevante para el merge staging → prod. No es bloqueante.
 
 ### Hallazgos post-refactor (pre-audit)
 
@@ -43,7 +43,7 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
 2. **Dashboard widget "Entregas pendientes en viajes cerrados"** — ✅ Completado. Listado accionable (Registrar Entrega tardía / Cancelar línea).
 3. **Idempotencia handleDispatch + handleDelivery** — ✅ Completado. INSERT trip_events como checkpoint, retry bajo red mala es seguro.
 4. **Idempotencia handlePickup** — ✅ Completado (2026-04-14, Fase A.1). Mismo pattern.
-5. **Reversiones** — Falta verificar que revert de Entrega parcial recalcula correctamente. Pendiente hasta Fase C.6.
+5. **Reversiones** — ✅ Verificado 2026-04-14 por análisis estático contra 4 escenarios (E1: parcial única revertida; E2: última de 2 parciales revertida; E3: entrega que completó la línea revertida; E4: entrega con observaciones revertida). `handleRevert` branch Entrega es correcto para qty/status/delivered_at/trip_line_assignments. Observaciones sobreviven al revert por diseño (evidencia histórica). Ver comentario JSDoc en `handleRevert` y CHANGELOG 2026-04-14 para detalle completo.
 6. **Reconciliación per-line al Retorno** — ⏳ Diferido hasta tener métricas reales de uso. El dashboard widget cubre el caso sin UX especulativa.
 7. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
 
@@ -89,6 +89,7 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
 | AD-2 | custody_transfers table — tabla creada en staging, trigger no activo | Trigger acoplado a trip_events | ⏳ Tabla lista, falta conectar |
 | AD-3 | Fulfillment a nivel Trip, no línea — bloquea hybrid fulfillment | 2 solicitudes para fleet+pickup | ⏳ Depende de AD-1 |
 | AD-4 | PM ve código en pickup | Rompe verificación | ✅ Fixed |
+| AD-5 | `createSolicitud`/`createTrip` helpers en `tests/helpers.ts` — createSolicitud falla silencioso al agregar líneas, deja solicitud vacía Enviada. `createTrip` derivado falla por `assignments.length===0`. **Rompe TODOS los tests E2E que crean data**. Detectado 2026-04-14 en Bloque 3 tras Fase C. No es una regresión reciente clara (selector drift sospechoso), requiere investigación con `--headed`. | E2E infra rota, no podemos escribir tests nuevos de flow completo | ⏳ Pendiente |
 | BUG | qty_scheduled vs qty_dispatched en backlog | Pending qty incorrecto post-dispatch | ✅ Fixed (2026-04-13) |
 
 ---

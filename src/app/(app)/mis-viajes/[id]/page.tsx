@@ -887,7 +887,22 @@ export default function Page() {
         }
 
         if (eventType === 'Entrega') {
-          // Get trip_event_lines para saber qué revertir
+          // Branch verificado 2026-04-14 contra 4 escenarios de entregas
+          // parciales (hallazgo #5 del audit pre-fase, cierre).
+          // - E1: Entrega parcial única (qty=6 de 10) revertida → línea vuelve
+          //   a En Transito con qty_scheduled=10, qty_delivered=0. Correcto.
+          // - E2: Última de 2 entregas parciales revertida (qty=3 tras qty=4) →
+          //   línea queda Parcial con qty_delivered=4, qty_scheduled=6.
+          //   Correcto — la primera entrega sobrevive.
+          // - E3: Entrega que completó la línea (qty=2 tras qty=3, total=5)
+          //   revertida → línea vuelve a Parcial con qty_delivered=3,
+          //   qty_scheduled=2, delivered_at=null. Correcto — vuelve a Parcial
+          //   porque aún queda delivered>0, el cascade_request_status trigger
+          //   lleva el parent sm_requests de Completada a En Proceso.
+          // - E4: Entrega con observaciones revertida → qty vuelve atrás como
+          //   E1. Las filas de delivery_observations sobreviven intactas — son
+          //   evidencia histórica inmutable del reporte original del conductor.
+          // Ver CHANGELOG 2026-04-14 para el detalle completo del análisis.
           const { data: eventLines } = await supabase
             .from('trip_event_lines')
             .select('request_line_id, quantity')
