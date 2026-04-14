@@ -1,6 +1,21 @@
 // Helpers para templates de email HTML con branding ICONSA
 // Todos los estilos inline (email clients no soportan <style> blocks)
 
+/**
+ * Escapa HTML para prevenir injection en templates. Todo input del usuario
+ * (nombres, descripciones, razones, notas) debe pasar por aquí antes de
+ * interpolarse en HTML.
+ */
+export function escapeHtml(input: string | number | null | undefined): string {
+  if (input == null) return ''
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 const NAVY = '#1B3A5C'
 const GOLD = '#F0A500'
 const GRAY_BG = '#F3F4F6'

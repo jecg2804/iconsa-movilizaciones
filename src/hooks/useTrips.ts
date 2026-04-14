@@ -760,9 +760,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       setSaveError(null)
 
       try {
-        // 1. Insertar el viaje. El trigger generate_trip_id() asigna trip_id.
-        //    confirmation_code se genera aquí (4 dígitos random).
-        const confirmationCode = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+        // 1. Insertar el viaje. Los triggers BD asignan trip_id y
+        //    confirmation_code (generate_confirmation_code). No generamos
+        //    el código en cliente para evitar doble-generación.
         const { data: insertedTrip, error: tripError } = await supabase
           .from('trips')
           .insert({
@@ -775,7 +775,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             cost: input.cost,
             att_permit: input.att_permit,
             escort: input.escort,
-            confirmation_code: confirmationCode,
             notes: input.notes,
             is_external: input.is_external,
             is_self_pickup: input.is_self_pickup ?? false,
