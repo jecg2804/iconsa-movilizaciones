@@ -25,31 +25,58 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 done
 
-# 3. Build gate — consultar status del background build
+# 3. Build gate — consultar status del background build lanzado por post-commit.
+# Si el post-commit background build sigue corriendo, esperarlo (poll) hasta
+# 120s antes de caer en el fallback sincrónico, para evitar colisión con el
+# lock de Next en .next/lock.
+
 HEAD=$(git rev-parse HEAD)
 STATUS_FILE=".build-status"
 
-if [ -f "$STATUS_FILE" ]; then
+check_status() {
+  [ -f "$STATUS_FILE" ] || return 1
   STATUS_LINE=$(cat "$STATUS_FILE")
   STATUS=$(echo "$STATUS_LINE" | awk '{print $1}')
   STATUS_SHA=$(echo "$STATUS_LINE" | awk '{print $2}')
+  [ "$STATUS_SHA" = "$HEAD" ] || return 1
+  return 0
+}
 
-  if [ "$STATUS_SHA" = "$HEAD" ]; then
-    if [ "$STATUS" = "ok" ]; then
-      echo "✅ Background build OK ($HEAD)"
-      exit 0
-    elif [ "$STATUS" = "fail" ]; then
-      echo "❌ Background build FAILED en HEAD. Ver /tmp/movimientos-build.log"
-      tail -20 /tmp/movimientos-build.log 2>/dev/null
-      echo ""
-      echo "   Arreglá el build antes de pushear."
-      exit 1
-    fi
+# Poll hasta 120s (24 x 5s) esperando al background build
+waited=0
+max_wait=120
+interval=5
+while [ $waited -lt $max_wait ]; do
+  if check_status; then
+    break
+  fi
+  if [ $waited -eq 0 ]; then
+    echo "⏳ Esperando background build (post-commit)..."
+  fi
+  sleep $interval
+  waited=$((waited + interval))
+done
+
+if check_status; then
+  if [ "$STATUS" = "ok" ]; then
+    echo "✅ Background build OK ($HEAD)"
+    exit 0
+  elif [ "$STATUS" = "fail" ]; then
+    echo "❌ Background build FAILED en HEAD. Ver /tmp/movimientos-build.log"
+    tail -20 /tmp/movimientos-build.log 2>/dev/null
+    echo ""
+    echo "   Arreglá el build antes de pushear."
+    exit 1
   fi
 fi
 
-# Status ausente, stale, o para otro SHA → correr sincrónico
-echo "⏳ Background build no listo — corriendo build sincrónico..."
+# Timeout — esto es raro (build normal ~30s). Correr sincrónico como fallback.
+echo "⚠️  Background build no terminó en ${max_wait}s — corriendo sincrónico."
+# Asegurarse de que no haya lock pendiente antes de lanzar
+if [ -f ".next/lock" ]; then
+  echo "   Lock .next/lock presente — esperar unos segundos más..."
+  sleep 10
+fi
 if ! npm run build > /tmp/movimientos-build.log 2>&1; then
   echo "❌ Build falló. Ver /tmp/movimientos-build.log"
   tail -20 /tmp/movimientos-build.log
