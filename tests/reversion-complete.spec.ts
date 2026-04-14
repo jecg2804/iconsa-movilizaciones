@@ -282,3 +282,55 @@ test.describe.serial('Revert Parada', () => {
     expect(original!.event_type).toBe('Parada')
   })
 })
+
+test.describe.serial('Revert Retorno — no toca actual_arrival (bug fix 2026-04-13)', () => {
+  let page: Page
+  let solicitudId: string
+  let tripDbId: string
+  let confirmationCode: string
+
+  test.setTimeout(180000)
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage()
+    await login(page)
+
+    const sol = await createSolicitud(page, {
+      lines: [
+        { type: 'Material', description: 'TEST-REVERT-RETORNO-ARRIVAL', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 3, unit: /und/ },
+      ],
+    })
+    solicitudId = sol.dbId
+    const trip = await createTrip(page, { solicitudId })
+    tripDbId = trip.dbId
+    confirmationCode = trip.confirmationCode
+    await openTripDetail(page, tripDbId)
+    await dispatch(page)
+    await registerEntrega(page, { receiverName: 'Test Revert Retorno Arrival', confirmationCode })
+    await registerRetorno(page)
+  })
+
+  test.afterAll(async () => {
+    if (solicitudId) await cleanupSolicitud(solicitudId).catch(() => {})
+    await page.close()
+  })
+
+  test('Set a mock actual_arrival via SQL then revert Retorno → arrival stays set', async () => {
+    // Simulate that Llegada había ocurrido y registrado hora
+    const mockArrival = new Date().toISOString()
+    await db.from('trips').update({ actual_arrival: mockArrival }).eq('id', tripDbId)
+
+    // Revert Retorno (debería volver a En Ruta sin tocar actual_arrival)
+    await revertLastEvent(page, 'Test: revert retorno preserva actual_arrival')
+
+    const { data: trip } = await db
+      .from('trips')
+      .select('status, actual_arrival')
+      .eq('id', tripDbId)
+      .single()
+
+    expect(trip!.status).toBe('En Ruta')
+    // actual_arrival NO debe haber sido limpiado por el revert
+    expect(trip!.actual_arrival).not.toBeNull()
+  })
+})

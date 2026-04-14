@@ -5,8 +5,11 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-13
+- [fix] handleRevert Entrega: status dinámico (Parcial si aún hay qty_delivered > 0, no hardcode 'En Transito'); delivered_at condicional.
+- [fix] handleRevert Retorno: NO limpia actual_arrival (era bug — ese campo pertenece a Llegada).
+- [feat] Dashboard widget "Entregas pendientes" visible para todos los roles (antes solo logistica/admin). Cancelar línea sigue gated a logistica/admin.
 - [refactor] Event system — Retorno no-op (no toca cantidades), guard dialog cuando hay líneas En Transito, ConfirmDialog component reusable.
-- [feat] Dashboard widget "Entregas pendientes en viajes cerrados" (logistica/admin) — listado accionable con Registrar Entrega tardía o Cancelar línea + razón.
+- [feat] Dashboard widget "Entregas pendientes en viajes cerrados" — listado accionable con Registrar Entrega tardía o Cancelar línea + razón.
 - [feat] Entrega tardía — mis-viajes/[id] soporta action=Entrega en URL y botón "Registrar Entrega Tardía" visible en trips Completados con líneas En Transito.
 - [fix] handleDispatch + handleDelivery idempotentes — INSERT trip_events con UUID pre-generado como checkpoint; retry bajo red mala retorna early sin duplicar cantidades.
 - [fix] (main/prod) Entrega parcial resta qtyThisTrip, no quantity_assigned — evita qty_scheduled inflada (b7ebf1a)

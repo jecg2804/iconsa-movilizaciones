@@ -26,7 +26,9 @@ export function PendingDeliveriesAlert() {
   const supabase = useMemo(() => createClient(), [])
   const { person, role } = useAuth()
 
-  const canSee = role === 'logistica' || role === 'admin'
+  // Visible para todos los roles — cualquiera que vea el dashboard tiene visibilidad del problema.
+  // Solo logistica/admin pueden cancelar líneas (enforcement abajo en el render de las acciones).
+  const canCancelLine = role === 'logistica' || role === 'admin'
 
   const [lines, setLines] = useState<PendingLine[]>([])
   const [loading, setLoading] = useState(true)
@@ -118,8 +120,8 @@ export function PendingDeliveriesAlert() {
   }, [supabase])
 
   useEffect(() => {
-    if (canSee) fetchPending()
-  }, [canSee, fetchPending])
+    fetchPending()
+  }, [fetchPending])
 
   const handleCancel = useCallback(async () => {
     if (!confirmLine || !reason.trim()) return
@@ -163,7 +165,6 @@ export function PendingDeliveriesAlert() {
     fetchPending()
   }, [confirmLine, reason, supabase, person, fetchPending])
 
-  if (!canSee) return null
   if (loading) return null
   if (lines.length === 0) return null
 
@@ -206,16 +207,18 @@ export function PendingDeliveriesAlert() {
                     Registrar Entrega
                     <ArrowUpRight className="h-3 w-3" />
                   </Link>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => {
-                      setConfirmLine(l)
-                      setReason('')
-                    }}
-                  >
-                    Cancelar línea
-                  </Button>
+                  {canCancelLine && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => {
+                        setConfirmLine(l)
+                        setReason('')
+                      }}
+                    >
+                      Cancelar línea
+                    </Button>
+                  )}
                 </div>
               </div>
             </li>

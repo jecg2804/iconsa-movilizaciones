@@ -869,7 +869,7 @@ export default function Page() {
           for (const el of eventLines ?? []) {
             const { data: current } = await supabase
               .from('sm_request_lines')
-              .select('qty_delivered, qty_scheduled')
+              .select('qty_delivered, qty_scheduled, quantity')
               .eq('id', el.request_line_id)
               .single()
 
@@ -877,14 +877,24 @@ export default function Page() {
             const newDelivered = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
             // Restaurar qty_scheduled: la línea vuelve a estar "en proceso"
             const newScheduled = (current?.qty_scheduled ?? 0) + el.quantity
+            // Calcular status dinámicamente: si aún quedan entregas previas (otras),
+            // la línea sigue Parcial; si newDelivered llega a 0, vuelve a En Transito.
+            const totalQty = current?.quantity ?? el.quantity
+            const newStatus =
+              newDelivered >= totalQty
+                ? 'Entregada'
+                : newDelivered > 0
+                  ? 'Parcial'
+                  : 'En Transito' // SIN acento — CRÍTICO
 
             await supabase
               .from('sm_request_lines')
               .update({
                 qty_delivered: newDelivered,
                 qty_scheduled: newScheduled,
-                status: 'En Transito', // SIN acento — CRÍTICO
-                delivered_at: null,
+                status: newStatus,
+                // Solo limpiar delivered_at si la línea ya no está Entregada
+                ...(newStatus !== 'Entregada' ? { delivered_at: null } : {}),
               })
               .eq('id', el.request_line_id)
           }
@@ -908,10 +918,10 @@ export default function Page() {
         }
 
         if (eventType === 'Retorno') {
-          // Trip → En Ruta
+          // Trip → En Ruta. NO tocar actual_arrival (pertenece a Llegada, no a Retorno).
           await supabase
             .from('trips')
-            .update({ status: 'En Ruta', actual_arrival: null })
+            .update({ status: 'En Ruta' })
             .eq('id', trip.id)
         }
 
