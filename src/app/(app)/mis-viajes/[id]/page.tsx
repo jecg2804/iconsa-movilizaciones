@@ -20,6 +20,7 @@ import { formatDate, formatQty } from '@/lib/utils/format'
 import { canRegisterEvent } from '@/lib/utils/roles'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Input } from '@/components/ui/Input'
 import { DispatchModal, type DispatchData } from '@/components/viajes/DispatchModal'
 import { DeliveryModal, type DeliveryData } from '@/components/viajes/DeliveryModal'
@@ -303,6 +304,7 @@ export default function Page() {
   const [eventError, setEventError] = useState<string | null>(null)
   const [revertEvent, setRevertEvent] = useState<TripEvent | null>(null)
   const [reverting, setReverting] = useState(false)
+  const [pendingRetornoWarning, setPendingRetornoWarning] = useState(false)
 
   // Opciones de receptor para entrega
   const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
@@ -546,6 +548,7 @@ export default function Page() {
       const isReadOnly = role === 'campo'
       const effectiveData: DispatchData = isReadOnly
         ? {
+            event_id: data.event_id,
             driver_id: trip.driver_id ?? null,
             vehicle_id: trip.vehicle_id ?? null,
             trailer_id: trip.trailer_id ?? null,
@@ -558,7 +561,33 @@ export default function Page() {
         : data
 
       try {
-        // 1. UPDATE trip: conductor, vehículo, remolque, status, salida
+        // 1. INSERT evento de Salida PRIMERO — checkpoint de idempotencia.
+        // Si el retry encuentra 23505, todo el handler ya corrió → early success.
+        // Protege los UPDATE read-modify-write de qty_scheduled contra double-decrement.
+        const { error: insertEvtErr } = await supabase
+          .from('trip_events')
+          .insert({
+            id: effectiveData.event_id,
+            trip_id: trip.id,
+            event_type: 'Salida',
+            event_timestamp: new Date().toISOString(),
+            registered_by: person?.id ?? null,
+            notes: effectiveData.notes || null,
+          })
+
+        if (insertEvtErr) {
+          if (insertEvtErr.code === '23505') {
+            console.warn('[Dispatch] Duplicate key — idempotent success, skipping all writes')
+            setActiveEvent(null)
+            const tripData = await fetchTrip(id)
+            setTrip(tripData)
+            await loadEvents()
+            return
+          }
+          throw insertEvtErr
+        }
+
+        // 2. UPDATE trip: conductor, vehículo, remolque, status, salida
         const { error: tripError } = await supabase
           .from('trips')
           .update({
@@ -572,7 +601,7 @@ export default function Page() {
 
         if (tripError) throw tripError
 
-        // 2. UPDATE líneas a 'En Transito' (SIN acento — CRÍTICO para cascade)
+        // 3. UPDATE líneas a 'En Transito' (SIN acento — CRÍTICO para cascade)
         const lineIds = effectiveData.lines.map((l) => l.request_line_id)
         if (lineIds.length > 0) {
           const { error: linesError } = await supabase
@@ -583,7 +612,7 @@ export default function Page() {
           if (linesError) throw linesError
         }
 
-        // 3. UPDATE trip_line_assignments: qty_dispatched
+        // 4. UPDATE trip_line_assignments: qty_dispatched
         // Si el conductor despacha menos de lo programado, devolver la diferencia al pool
         for (const line of effectiveData.lines) {
           const assignment = trip.assignments.find(a => a.request_line_id === line.request_line_id)
@@ -611,19 +640,6 @@ export default function Page() {
               .eq('id', line.request_line_id)
           }
         }
-
-        // 4. INSERT evento de Salida
-        const { error: insertEvtErr } = await supabase
-          .from('trip_events')
-          .insert({
-            trip_id: trip.id,
-            event_type: 'Salida',
-            event_timestamp: new Date().toISOString(),
-            registered_by: person?.id ?? null,
-            notes: effectiveData.notes || null,
-          })
-
-        if (insertEvtErr) throw insertEvtErr
 
         // 5. Notificación
         notifySalidaRegistrada(trip.id).catch(console.error)
@@ -656,7 +672,60 @@ export default function Page() {
       try {
         const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
 
-        // 1. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
+        // 1. INSERT trip_events PRIMERO — sirve de checkpoint de idempotencia.
+        // Si el retry encuentra 23505, significa que TODO el handler ya corrió antes → early success.
+        // Protege los UPDATE += qty de abajo contra double-count bajo retry de red.
+        const { error: eventError } = await supabase
+          .from('trip_events')
+          .insert({
+            id: data.event_id,
+            trip_id: trip.id,
+            event_type: 'Entrega',
+            event_timestamp: new Date().toISOString(),
+            registered_by: person?.id ?? null,
+            received_by_name: data.received_by_name,
+            received_by_id: data.received_by_id,
+            notes: data.notes || null,
+            attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
+            confirmation_code_used: data.confirmation_code || null,
+          })
+
+        if (eventError) {
+          if (eventError.code === '23505') {
+            console.warn('[Delivery] Duplicate key — idempotent success, skipping all writes')
+            setActiveEvent(null)
+            const tripData = await fetchTrip(id)
+            setTrip(tripData)
+            await loadEvents()
+            return
+          }
+          throw eventError
+        }
+
+        // 2. INSERT trip_event_lines (solo en primera pasada — el return de arriba protege retries)
+        const eventLines = data.lines.map((l) => ({
+          trip_event_id: data.event_id,
+          request_line_id: l.request_line_id,
+          quantity: l.quantity,
+          line_status: l.line_status,
+        }))
+        await supabase.from('trip_event_lines').insert(eventLines)
+
+        // 3. INSERT delivery_observations
+        const observations = data.lines
+          .filter((l) => l.line_status === 'with_observations' && l.observation_type)
+          .map((l) => ({
+            trip_event_id: data.event_id,
+            request_line_id: l.request_line_id,
+            observation_type: l.observation_type!,
+            notes: l.observation_notes || null,
+            reported_by: person?.id ?? null,
+          }))
+        if (observations.length > 0) {
+          await supabase.from('delivery_observations').insert(observations)
+        }
+
+        // 4. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
         for (const line of accepted) {
           const { data: current } = await supabase
             .from('sm_request_lines')
@@ -683,7 +752,7 @@ export default function Page() {
             .eq('id', line.request_line_id)
         }
 
-        // 2. UPDATE trip_line_assignments: qty_delivered
+        // 5. UPDATE trip_line_assignments: qty_delivered
         for (const line of accepted) {
           const assignment = trip.assignments.find((a) => a.request_line_id === line.request_line_id)
           if (assignment) {
@@ -692,52 +761,6 @@ export default function Page() {
               .update({ qty_delivered: (assignment.qty_delivered ?? 0) + line.quantity })
               .eq('trip_id', trip.id)
               .eq('request_line_id', line.request_line_id)
-          }
-        }
-
-        // 3. INSERT trip_events
-        const { data: event, error: eventError } = await supabase
-          .from('trip_events')
-          .insert({
-            trip_id: trip.id,
-            event_type: 'Entrega',
-            event_timestamp: new Date().toISOString(),
-            registered_by: person?.id ?? null,
-            received_by_name: data.received_by_name,
-            received_by_id: data.received_by_id,
-            notes: data.notes || null,
-            attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
-            confirmation_code_used: data.confirmation_code || null,
-          })
-          .select('id')
-          .single()
-
-        if (eventError) throw eventError
-
-        // 4. INSERT trip_event_lines
-        if (event) {
-          const eventLines = data.lines.map((l) => ({
-            trip_event_id: event.id,
-            request_line_id: l.request_line_id,
-            quantity: l.quantity,
-            line_status: l.line_status,
-          }))
-          await supabase.from('trip_event_lines').insert(eventLines)
-        }
-
-        // 5. INSERT delivery_observations
-        if (event) {
-          const observations = data.lines
-            .filter((l) => l.line_status === 'with_observations' && l.observation_type)
-            .map((l) => ({
-              trip_event_id: event.id,
-              request_line_id: l.request_line_id,
-              observation_type: l.observation_type!,
-              notes: l.observation_notes || null,
-              reported_by: person?.id ?? null,
-            }))
-          if (observations.length > 0) {
-            await supabase.from('delivery_observations').insert(observations)
           }
         }
 
@@ -1093,12 +1116,18 @@ export default function Page() {
     [supabase, trip, person, fetchTrip, id, loadEvents],
   )
 
-  // Auto-abrir modal desde URL params (?action=deliver o ?action=dispatch)
+  // Auto-abrir modal desde URL params (?action=deliver|dispatch|Entrega)
   useEffect(() => {
     if (actionHandled || !trip || pageLoading) return
     const urlParams = new URLSearchParams(window.location.search)
     const action = urlParams.get('action')
+    // Entrega tardía: permitido también en viajes Completados si hay líneas En Transito
+    // (caso: viaje cerró con Retorno pero la entrega real se registra después)
+    const hasEnTransito = trip.assignments.some((a) => a.line?.status === 'En Transito')
     if (action === 'deliver' && hasSalida && !tripDone) {
+      setActiveEvent('Entrega')
+      setActionHandled(true)
+    } else if (action === 'Entrega' && hasEnTransito) {
       setActiveEvent('Entrega')
       setActionHandled(true)
     } else if (action === 'dispatch' && !hasSalida && !tripDone) {
@@ -1139,6 +1168,22 @@ export default function Page() {
   const isPM = role === 'pm'
   // Retorno secundario: disponible después de Salida sin requerir Entrega
   const showRetornoSecondary = !isPickup && hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
+
+  // Líneas aún En Transito al momento del click de Retorno — alimentan el guard dialog
+  const enTransitoLines = trip.assignments
+    .filter((a) => a.line?.status === 'En Transito')
+    .map((a) => a.line?.description ?? 'Línea sin descripción')
+
+  // Entrega tardía: trip Completado pero líneas siguen En Transito (caso del widget del dashboard)
+  const showLateDelivery = tripDone && canRegisterEvents && !isPM && enTransitoLines.length > 0
+
+  const handleRetornoClick = () => {
+    if (enTransitoLines.length > 0) {
+      setPendingRetornoWarning(true)
+    } else {
+      setActiveEvent('Retorno')
+    }
+  }
 
   // Último evento revertible (solo Salida/Entrega/Retorno, no ya revertido)
   const canRevert = role === 'logistica' || role === 'admin'
@@ -1257,6 +1302,22 @@ export default function Page() {
         <EventTimeline events={events} />
       </div>
 
+      {/* Panel de entrega tardía — trip Completado con líneas En Transito */}
+      {showLateDelivery && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-900 mb-2">
+            Este viaje está Completado pero tiene {enTransitoLines.length} línea
+            {enTransitoLines.length !== 1 ? 's' : ''} sin entregar
+          </p>
+          <p className="text-xs text-red-800 mb-3">
+            Registra la entrega tardía ahora o cancela las líneas desde el dashboard.
+          </p>
+          <Button variant="primary" onClick={() => setActiveEvent('Entrega')}>
+            Registrar Entrega Tardía
+          </Button>
+        </div>
+      )}
+
       {/* Panel de acciones — sticky en mobile (PMs solo ven, no registran) */}
       {!tripDone && canRegisterEvents && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:static sm:inset-auto sm:z-auto sm:rounded-lg sm:border sm:shadow-sm sm:px-6 sm:py-4">
@@ -1272,7 +1333,11 @@ export default function Page() {
                 eventType={nextMainEvent}
                 loading={registering && activeEvent === nextMainEvent}
                 disabled={registering}
-                onClick={() => setActiveEvent(nextMainEvent)}
+                onClick={() =>
+                  nextMainEvent === 'Retorno'
+                    ? handleRetornoClick()
+                    : setActiveEvent(nextMainEvent)
+                }
               />
             )}
 
@@ -1302,7 +1367,7 @@ export default function Page() {
                 eventType="Retorno"
                 loading={registering && activeEvent === 'Retorno'}
                 disabled={registering}
-                onClick={() => setActiveEvent('Retorno')}
+                onClick={handleRetornoClick}
               />
             )}
 
@@ -1404,6 +1469,21 @@ export default function Page() {
           loading={reverting}
         />
       )}
+
+      {/* Guard: Retorno con líneas En Transito */}
+      <ConfirmDialog
+        open={pendingRetornoWarning}
+        title="Líneas sin entregar en este viaje"
+        description="Si registras Retorno ahora, estas líneas quedarán En Transito con el viaje Completado. Podrás registrar su Entrega tardía o cancelarlas desde el dashboard."
+        items={enTransitoLines}
+        confirmLabel="Sí, registrar Retorno"
+        variant="warning"
+        onCancel={() => setPendingRetornoWarning(false)}
+        onConfirm={() => {
+          setPendingRetornoWarning(false)
+          setActiveEvent('Retorno')
+        }}
+      />
     </div>
   )
 }

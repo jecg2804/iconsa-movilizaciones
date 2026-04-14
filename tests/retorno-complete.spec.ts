@@ -123,10 +123,12 @@ test.describe.serial('Retorno — Without delivery (truck comes back empty)', ()
     expect(trip!.status).toBe('Completado')
   })
 
-  test('BD: Undelivered lines return to Pendiente', async () => {
+  test('BD: Retorno puro — undelivered lines STAY En Transito (no-op)', async () => {
+    // Regla nueva: Retorno no toca cantidades. Las líneas siguen En Transito con el
+    // viaje Completado — visibles en el dashboard "Entregas pendientes en viajes cerrados".
     const { data: assignments } = await db
       .from('trip_line_assignments')
-      .select('request_line_id, qty_dispatched')
+      .select('request_line_id, qty_dispatched, quantity_assigned')
       .eq('trip_id', tripDbId)
 
     for (const a of assignments ?? []) {
@@ -135,20 +137,20 @@ test.describe.serial('Retorno — Without delivery (truck comes back empty)', ()
         .select('status, qty_scheduled, qty_delivered')
         .eq('id', a.request_line_id)
         .single()
-      // Lines should revert to Pendiente (no deliveries)
-      expect(line!.status).toBe('Pendiente')
+      expect(line!.status).toBe('En Transito')
       expect(Number(line!.qty_delivered)).toBe(0)
     }
   })
 
-  test('BD: qty_dispatched reset to 0 on undelivered lines', async () => {
+  test('BD: qty_dispatched preserved (NOT reset to 0)', async () => {
     const { data: assignments } = await db
       .from('trip_line_assignments')
-      .select('qty_dispatched')
+      .select('qty_dispatched, quantity_assigned')
       .eq('trip_id', tripDbId)
 
     for (const a of assignments ?? []) {
-      expect(Number(a.qty_dispatched)).toBe(0)
+      // Previamente el safety net reseteaba qty_dispatched a 0. Ahora debe quedar intacto.
+      expect(Number(a.qty_dispatched)).toBe(Number(a.quantity_assigned))
     }
   })
 })

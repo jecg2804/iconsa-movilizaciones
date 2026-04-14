@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { FileText, Package, Truck, CheckCircle, AlertTriangle } from 'lucide-react'
 import { ROLE_LABELS, type AppRole } from '@/lib/utils/constants'
 import { KpiCard } from '@/components/dashboard/KpiCard'
+import { PendingDeliveriesAlert } from '@/components/dashboard/PendingDeliveriesAlert'
 import { RecentActivity } from '@/components/dashboard/RecentActivity'
 import { SolicitudesByProjectChart, type ProjectData } from '@/components/dashboard/SolicitudesByProjectChart'
 import { formatDate } from '@/lib/utils/format'
@@ -279,6 +280,9 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Alerta: entregas pendientes en viajes cerrados (logistica/admin) */}
+      <PendingDeliveriesAlert />
 
       {/* Grid de KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

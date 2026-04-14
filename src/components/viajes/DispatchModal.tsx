@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Loader2, Wrench, Package } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useVehicles } from '@/hooks/useVehicles'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { formatQty } from '@/lib/utils/format'
 
 export interface DispatchData {
+  event_id: string // UUID pre-generado para idempotencia (retry de red)
   driver_id: string | null
   vehicle_id: string | null
   trailer_id: string | null
@@ -42,6 +43,9 @@ export function DispatchModal({ trip, onConfirm, onClose, loading, role }: Dispa
   const canEdit = role === 'logistica' || role === 'admin'
   const supabase = useMemo(() => createClient(), [])
   const { vehicles: rawVehicles, trailers: rawTrailers, loading: vehiclesLoading } = useVehicles()
+
+  // UUID estable del evento — mismo valor para retries del mismo modal (idempotencia)
+  const eventIdRef = useRef<string>(crypto.randomUUID())
 
   const [driverId, setDriverId] = useState<string | null>(trip.driver?.id ?? null)
   const [vehicleId, setVehicleId] = useState<string | null>(trip.vehicle?.id ?? null)
@@ -122,6 +126,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading, role }: Dispa
     if (checkedLines.length === 0) return
 
     await onConfirm({
+      event_id: eventIdRef.current,
       driver_id: driverId,
       vehicle_id: vehicleId,
       trailer_id: trailerId,

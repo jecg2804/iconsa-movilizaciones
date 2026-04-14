@@ -1,18 +1,19 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-09
+Última actualización: 2026-04-13
 
 ---
 
 ## Próximo: Perfeccionar sistema de eventos
 
-El sistema de eventos (Batches 5-11 + Parada Level 1) está funcional pero necesita pulido antes de producción. Prioridades:
+Refactor de 2026-04-13 ataca las tres debilidades principales: Retorno acoplado a cantidades, variance invisible al cierre, y handlers no idempotentes. Próximas prioridades:
 
-1. **Parada ya implementada** — Level 1 (informacional) listo. Level 2 (OC tracking + QR DGI) es futuro.
-2. **DispatchModal** — conductor puede cambiar cantidades al despachar (qty_dispatched). KNOWN BUG: backlog usa qty_scheduled en vez de qty_dispatched para calcular pendiente.
-3. **DeliveryModal** — entrega per-line con observaciones funciona. Falta: validar edge cases de entrega parcial multi-viaje.
-4. **Reversiones** — Salida/Entrega/Parada/Llegada/Retorno revertibles. Falta: verificar que revert de Entrega parcial recalcula correctamente.
-5. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
+1. **Retorno puro** — ✅ Completado. No toca cantidades; guard dialog cuando hay líneas En Transito.
+2. **Dashboard widget "Entregas pendientes en viajes cerrados"** — ✅ Completado. Listado accionable (Registrar Entrega tardía / Cancelar línea).
+3. **Idempotencia handleDispatch + handleDelivery** — ✅ Completado. INSERT trip_events como checkpoint, retry bajo red mala es seguro.
+4. **Reversiones** — Falta verificar que revert de Entrega parcial recalcula correctamente. Pendiente.
+5. **Reconciliación per-line al Retorno** — ⏳ Diferido hasta tener métricas reales de uso. El dashboard widget cubre el caso sin UX especulativa.
+6. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
 
 ---
 
@@ -52,7 +53,7 @@ El sistema de eventos (Batches 5-11 + Parada Level 1) está funcional pero neces
 | AD-2 | custody_transfers table — tabla creada en staging, trigger no activo | Trigger acoplado a trip_events | ⏳ Tabla lista, falta conectar |
 | AD-3 | Fulfillment a nivel Trip, no línea — bloquea hybrid fulfillment | 2 solicitudes para fleet+pickup | ⏳ Depende de AD-1 |
 | AD-4 | PM ve código en pickup | Rompe verificación | ✅ Fixed |
-| BUG | qty_scheduled vs qty_dispatched en backlog | Pending qty incorrecto post-dispatch | 🔴 Known bug |
+| BUG | qty_scheduled vs qty_dispatched en backlog | Pending qty incorrecto post-dispatch | ✅ Fixed (2026-04-13) |
 
 ---
 
@@ -64,8 +65,10 @@ El sistema de eventos (Batches 5-11 + Parada Level 1) está funcional pero neces
 |---|---------|--------|
 | F1 | ~~Sistema de eventos rediseñado~~ | ✅ Completado (Batches 5-11) |
 | F1.1 | Parada Level 1 | ✅ Completado (446b0c7) |
-| F1.2 | Fix qty_dispatched bug en backlog | 🔴 Pendiente |
-| F1.3 | GPS Integration (Skydata API) | 🟡 Plan en desarrollo |
+| F1.2 | Fix qty_dispatched bug en backlog | ✅ Completado |
+| F1.3 | Retorno no-op + guard + dashboard "Entregas pendientes en viajes cerrados" + idempotencia handlers | ✅ Completado (2026-04-13) |
+| F1.4 | Retorno reconciliación per-line (diferido — esperar métricas reales de uso antes de implementar) | ⏳ Deferred |
+| F1.5 | GPS Integration (Skydata API) | 🟡 Plan en desarrollo |
 | F2 | Inspección de equipo (IC-EQ-F-01-02) | ⏳ 6 tablas listas |
 | F3 | Reporte facturación mensual | ⏳ Pendiente |
 | F4 | Informe Valderrama semanal | ⏳ Pendiente |

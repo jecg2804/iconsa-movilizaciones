@@ -91,47 +91,9 @@ export function useTripEvents(tripId: string) {
             return false
           }
         } else if (input.event_type === 'Retorno') {
-          // Revertir líneas no entregadas: truck came back without delivering them
-          if (assignedLineIds.length > 0) {
-            const { data: undelivered } = await supabase
-              .from('sm_request_lines')
-              .select('id, qty_scheduled, quantity, qty_delivered')
-              .in('id', assignedLineIds)
-              .in('status', ['En Transito'])
-
-            for (const line of undelivered ?? []) {
-              const { data: assignment } = await supabase
-                .from('trip_line_assignments')
-                .select('quantity_assigned, qty_dispatched')
-                .eq('trip_id', tripId)
-                .eq('request_line_id', line.id)
-                .single()
-
-              // Usar qty_dispatched (lo que realmente se envió), no quantity_assigned (lo programado)
-              // Si dispatch redujo qty_scheduled, solo devolver lo que realmente salió
-              const qtyToReturn = assignment?.qty_dispatched ?? assignment?.quantity_assigned ?? 0
-              const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - qtyToReturn)
-              const newStatus = (line.qty_delivered ?? 0) > 0 ? 'Parcial' : 'Pendiente'
-
-              await supabase
-                .from('sm_request_lines')
-                .update({
-                  status: newStatus,
-                  qty_scheduled: newQtyScheduled,
-                  updated_by: person?.id ?? null,
-                })
-                .eq('id', line.id)
-
-              // Resetear qty_dispatched en la asignación (el camión regresó sin entregar)
-              await supabase
-                .from('trip_line_assignments')
-                .update({ qty_dispatched: 0 })
-                .eq('trip_id', tripId)
-                .eq('request_line_id', line.id)
-            }
-          }
-
-          // trips → Completado (truck came back regardless)
+          // Retorno es NO-OP para cantidades: solo marca el viaje Completado.
+          // Si hay líneas En Transito sin entregar, el guard en UI avisa — y quedan visibles
+          // en el dashboard "Entregas pendientes en viajes cerrados" para resolver después.
           const { error: tripError } = await supabase
             .from('trips')
             .update({ status: 'Completado' })

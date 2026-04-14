@@ -181,4 +181,38 @@ test.describe('Data Integrity Checks', () => {
       }
     }
   })
+
+  test('Retorno no-op: Completado trips with En Transito lines are allowed (visible in dashboard)', async () => {
+    // Después del refactor, Retorno puro permite este estado intencional.
+    // Este test documenta que NO lo consideramos una violación — pero cuenta cuántos hay
+    // para que el equipo tenga visibilidad del backlog de entregas tardías.
+    const { data: completedTrips } = await db
+      .from('trips')
+      .select('id')
+      .eq('status', 'Completado')
+
+    let pendingDeliveriesCount = 0
+    for (const trip of completedTrips ?? []) {
+      const { data: assignments } = await db
+        .from('trip_line_assignments')
+        .select('request_line_id, qty_dispatched, quantity_assigned')
+        .eq('trip_id', trip.id)
+
+      for (const a of assignments ?? []) {
+        const { data: line } = await db
+          .from('sm_request_lines')
+          .select('status')
+          .eq('id', a.request_line_id)
+          .single()
+        if (line?.status === 'En Transito') {
+          pendingDeliveriesCount++
+          // Verificar que qty_dispatched fue preservado (no reseteado por safety net viejo)
+          expect(Number(a.qty_dispatched)).toBeGreaterThan(0)
+        }
+      }
+    }
+
+    console.log(`[info] Pending late deliveries (Completado trips with En Transito lines): ${pendingDeliveriesCount}`)
+    // No assert sobre el count — es información diagnóstica
+  })
 })

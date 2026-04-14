@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { Wrench, Package } from 'lucide-react'
 import type { TripWithRelations } from '@/hooks/useTrips'
 import { Select, type SelectOption } from '@/components/ui/Select'
@@ -21,6 +21,7 @@ export interface DeliveryLineData {
 }
 
 export interface DeliveryData {
+  event_id: string // UUID pre-generado para idempotencia (retry de red)
   received_by_id: string | null
   received_by_name: string
   confirmation_code?: string
@@ -73,6 +74,9 @@ export function DeliveryModal({
   person,
 }: DeliveryModalProps) {
   // --- ALL hooks at top ---
+
+  // UUID estable del evento — mismo valor para retries del mismo modal (idempotencia)
+  const eventIdRef = useRef<string>(crypto.randomUUID())
 
   // Only show lines that are 'En Transito' (multi-delivery: already delivered lines hidden)
   const deliverableAssignments = useMemo(
@@ -170,6 +174,7 @@ export function DeliveryModal({
       : receiver.text?.trim() ?? ''
 
     await onConfirm({
+      event_id: eventIdRef.current,
       received_by_id: receiver.id,
       received_by_name: receiverName,
       confirmation_code: needsCode ? code : undefined,

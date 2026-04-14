@@ -5,6 +5,10 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-13
+- [refactor] Event system — Retorno no-op (no toca cantidades), guard dialog cuando hay líneas En Transito, ConfirmDialog component reusable.
+- [feat] Dashboard widget "Entregas pendientes en viajes cerrados" (logistica/admin) — listado accionable con Registrar Entrega tardía o Cancelar línea + razón.
+- [feat] Entrega tardía — mis-viajes/[id] soporta action=Entrega en URL y botón "Registrar Entrega Tardía" visible en trips Completados con líneas En Transito.
+- [fix] handleDispatch + handleDelivery idempotentes — INSERT trip_events con UUID pre-generado como checkpoint; retry bajo red mala retorna early sin duplicar cantidades.
 - [fix] (main/prod) Entrega parcial resta qtyThisTrip, no quantity_assigned — evita qty_scheduled inflada (b7ebf1a)
 - [feat] DispatchModal role-based editing — campo solo confirma, logistica/admin editan vehículo/conductor/líneas/cantidades. Defensive override en handleDispatch para rol campo.
 

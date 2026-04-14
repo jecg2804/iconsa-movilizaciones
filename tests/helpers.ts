@@ -437,7 +437,16 @@ export async function registerRetorno(page: Page) {
   const retornoBtn = page.getByRole('button', { name: /Retorno/ })
   if (await retornoBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await retornoBtn.click()
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(800)
+
+    // Guard dialog aparece si hay líneas En Transito — confirmar primero
+    const guardConfirmBtn = page.getByRole('button', { name: 'Sí, registrar Retorno' })
+    if (await guardConfirmBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await guardConfirmBtn.click()
+      await page.waitForTimeout(800)
+    }
+
+    // EventModal de Retorno
     const confirmBtn = page.getByRole('button', { name: /Confirmar|Registrar/ }).last()
     if (await confirmBtn.isVisible().catch(() => false)) {
       await confirmBtn.click()
