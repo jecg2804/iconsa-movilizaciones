@@ -473,15 +473,20 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           notes: header.notes ?? null,
           attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
           fulfillment_type: header.fulfillment_type ?? 'fleet',
-          status,
           created_by: personId ?? null,
         }
 
-        // 1. Insertar el header. El trigger generate_request_id asigna
-        //    request_id atómicamente — confiamos solo en la BD.
+        // 1. Insertar el header SIEMPRE como Borrador.
+        //    El trigger BD `enforce_line_add_delete_only_in_borrador` (Fase
+        //    B.1 Bloque 2.A) bloquea INSERT/DELETE de líneas mientras el
+        //    parent no esté en Borrador. Por eso el flow es: crear header
+        //    en Borrador → insertar líneas → promover a Enviada si aplica.
+        //    Antes del trigger, el código insertaba con status='Enviada'
+        //    directo y funcionaba por accidente; el trigger expuso que el
+        //    orden correcto es el que usa la UI de edición.
         const { data: insertedRequest, error: headerError } = await supabase
           .from('sm_requests')
-          .insert(headerPayload)
+          .insert({ ...headerPayload, status: 'Borrador' })
           .select('id, request_id')
           .single()
 
@@ -492,7 +497,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
 
         const newId = insertedRequest.id
 
-        // 2. Insertar lineas
+        // 2. Insertar lineas (parent en Borrador, trigger acepta)
         if (lines.length > 0) {
           const lineRows = lines.map((line, index) =>
             lineInputToRow(line, newId, index + 1),
@@ -511,7 +516,23 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         // 3. Crear sugerencias para valores de fallback
         await createSuggestions(supabase, lines, header.requester_id)
 
-        // 4. Re-fetch para obtener el request_id auto-generado por trigger
+        // 4. Promover a Enviada si el usuario eligió enviar directamente.
+        //    Ahora que las líneas están insertadas, el cambio de status pasa
+        //    los triggers (cascade_request_status no aplica a Borrador→Enviada,
+        //    y lifecycle_timestamps captura date_submitted=now() en el UPDATE).
+        if (status === 'Enviada') {
+          const { error: promoteError } = await supabase
+            .from('sm_requests')
+            .update({ status: 'Enviada' })
+            .eq('id', newId)
+
+          if (promoteError) {
+            setSaveError(`Líneas guardadas pero error al enviar: ${promoteError.message}`)
+            return null
+          }
+        }
+
+        // 5. Re-fetch para obtener el request_id auto-generado por trigger
         const { data: refreshed } = await supabase
           .from('sm_requests')
           .select('request_id')
