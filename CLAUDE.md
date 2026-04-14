@@ -31,7 +31,7 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 ├── rules/                        # Reglas que Claude Code debe seguir siempre
 │   ├── commit-after-step.md
 │   ├── cost-management.md
-│   ├── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza)
+│   ├── git-workflow.md            # Política branches/commits/releases + enforcement layers
 │   ├── supabase-readonly.md
 │   └── tool-usage.md             # MCPs, plugins, skills — cuándo y cómo usar cada herramienta
 ├── skills/                       # Patrones de implementación (cargan on-demand)
@@ -77,7 +77,7 @@ src/
 | Docs/reference/ | Research docs de Chat: Vision Roadmap, Self-Pickup, Vibecoder's Guide, Events V2 specs. |
 | Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 47 tablas con COMMENT ON TABLE/COLUMN. |
 
-**IMPORTANTE:** Para schema, siempre consultar Supabase MCP (no docs estáticos). Para reglas de negocio, FEATURE_SPEC.md es la fuente de verdad. Ver `.claude/rules/` para reglas de commit, supabase, y modificación de specs.
+**IMPORTANTE:** Para schema, siempre consultar Supabase MCP (no docs estáticos). Para reglas de negocio, FEATURE_SPEC.md es la fuente de verdad. Ver `.claude/rules/` para reglas de commit, supabase, git workflow, y cost management.
 
 ## Coding Conventions
 
