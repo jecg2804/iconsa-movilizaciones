@@ -326,24 +326,25 @@ export default function AdminMastersPage() {
   }, [])
 
   // --- Toggle status ---
-  const toggleStatus = useCallback(async (table: string, id: string, currentStatus: string | boolean | null) => {
-    let newStatus: string | boolean
-    if (typeof currentStatus === 'boolean' || currentStatus === null) {
-      newStatus = !(currentStatus ?? true)
-    } else {
-      newStatus = currentStatus === 'Activo' ? 'Inactivo' : 'Activo'
-    }
+  const toggleStatus = useCallback((table: string, id: string, currentStatus: string | boolean | null) => {
+    return guard(async () => {
+      let newStatus: string | boolean
+      if (typeof currentStatus === 'boolean' || currentStatus === null) {
+        newStatus = !(currentStatus ?? true)
+      } else {
+        newStatus = currentStatus === 'Activo' ? 'Inactivo' : 'Activo'
+      }
 
-    const field = typeof currentStatus === 'boolean' || currentStatus === null ? 'is_active' : 'status'
+      const field = typeof currentStatus === 'boolean' || currentStatus === null ? 'is_active' : 'status'
 
-    const fromAny = supabase.from.bind(supabase) as (t: string) => ReturnType<typeof supabase.from>
-    await fromAny(table).update({ [field]: newStatus }).eq('id', id)
-    fetchData()
-  }, [supabase, fetchData])
+      const fromAny = supabase.from.bind(supabase) as (t: string) => ReturnType<typeof supabase.from>
+      await fromAny(table).update({ [field]: newStatus }).eq('id', id)
+      fetchData()
+    })()
+  }, [supabase, fetchData, guard])
 
   // --- Guardar (crear o editar) ---
   const handleSave = guard(async (formData: Record<string, unknown>) => {
-    setSaving(true)
     const isNew = !formData.id
     const table = activeTab === 'proyectos' ? 'projects'
       : activeTab === 'personas' ? 'people'
@@ -352,6 +353,29 @@ export default function AdminMastersPage() {
       : activeTab === 'tarifas' ? 'mobilization_rates'
       : 'project_extras'
 
+    // Validación de campos requeridos por tabla — evita insert vacío
+    // que retorna error críptico de Postgres NOT NULL violation.
+    const str = (k: string) => {
+      const v = formData[k]
+      return typeof v === 'string' ? v.trim() : ''
+    }
+    const required: Record<string, string[]> = {
+      projects: ['code', 'name'],
+      people: ['name', 'app_role'],
+      equipment: ['description', 'type_code'],
+      locations: ['name'],
+      mobilization_rates: ['description'],
+      project_extras: ['project_id', 'extra_type'],
+    }
+    const missing = (required[table] ?? []).filter(f => !str(f))
+    if (missing.length > 0) {
+      if (typeof window !== 'undefined') {
+        window.alert(`Faltan campos requeridos: ${missing.join(', ')}`)
+      }
+      return
+    }
+
+    setSaving(true)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, ...payload } = formData
     const fromAny = supabase.from.bind(supabase) as (t: string) => ReturnType<typeof supabase.from>
@@ -368,18 +392,24 @@ export default function AdminMastersPage() {
   })
 
   // --- Agregar/quitar proyecto a persona ---
-  const addPersonProject = useCallback(async (personId: string, projectId: string) => {
-    await supabase.from('person_projects').insert({
-      person_id: personId,
-      project_id: projectId,
-    })
-    fetchPersonProjects(personId)
-  }, [supabase, fetchPersonProjects])
+  const addPersonProject = useCallback((personId: string, projectId: string) => {
+    if (!personId || !projectId) return Promise.resolve()
+    return guard(async () => {
+      await supabase.from('person_projects').insert({
+        person_id: personId,
+        project_id: projectId,
+      })
+      fetchPersonProjects(personId)
+    })()
+  }, [supabase, fetchPersonProjects, guard])
 
-  const removePersonProject = useCallback(async (assignmentId: string, personId: string) => {
-    await supabase.from('person_projects').delete().eq('id', assignmentId)
-    fetchPersonProjects(personId)
-  }, [supabase, fetchPersonProjects])
+  const removePersonProject = useCallback((assignmentId: string, personId: string) => {
+    if (!assignmentId || !personId) return Promise.resolve()
+    return guard(async () => {
+      await supabase.from('person_projects').delete().eq('id', assignmentId)
+      fetchPersonProjects(personId)
+    })()
+  }, [supabase, fetchPersonProjects, guard])
 
   // ============================================================
   // Render helpers por tab
