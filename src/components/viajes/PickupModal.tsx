@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { Wrench, Package } from 'lucide-react'
 import type { TripWithRelations } from '@/hooks/useTrips'
 import { Select, type SelectOption } from '@/components/ui/Select'
@@ -18,6 +18,7 @@ export interface PickupLineData {
 }
 
 export interface PickupData {
+  event_id: string // UUID pre-generado para idempotencia (retry de red)
   received_by_id: string | null
   received_by_name: string
   confirmation_code: string
@@ -61,6 +62,10 @@ const OBSERVATION_TYPES: SelectOption[] = [
 
 export function PickupModal({ trip, onConfirm, onClose, loading, person }: PickupModalProps) {
   // --- ALL hooks at top ---
+
+  // UUID estable del evento — mismo valor en retries del mismo modal (idempotencia)
+  const eventIdRef = useRef<string>(crypto.randomUUID())
+
   const deliverableAssignments = useMemo(
     () => trip.assignments.filter((a) => a.line?.status !== 'Entregada' && a.line?.status !== 'Cancelada'),
     [trip.assignments],
@@ -119,6 +124,7 @@ export function PickupModal({ trip, onConfirm, onClose, loading, person }: Picku
 
   const handleConfirm = useCallback(async () => {
     await onConfirm({
+      event_id: eventIdRef.current,
       received_by_id: person?.id ?? null,
       received_by_name: person?.name ?? '',
       confirmation_code: code,

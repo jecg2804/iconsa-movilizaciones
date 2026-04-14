@@ -1031,7 +1031,61 @@ export default function Page() {
       try {
         const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
 
-        // 1. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
+        // 1. INSERT trip_events PRIMERO — checkpoint de idempotencia.
+        // Si el retry encuentra 23505, significa que todo el handler ya corrió → early success.
+        // Protege los UPDATE += qty de abajo contra double-count bajo retry de red.
+        const { error: insertEvtErr } = await supabase
+          .from('trip_events')
+          .insert({
+            id: data.event_id,
+            trip_id: trip.id,
+            event_type: 'Retiro',
+            event_timestamp: new Date().toISOString(),
+            registered_by: person?.id ?? null,
+            received_by_id: data.received_by_id,
+            received_by_name: data.received_by_name,
+            notes: data.notes || null,
+            attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
+            confirmation_code_used: data.confirmation_code,
+          })
+
+        if (insertEvtErr) {
+          if (insertEvtErr.code === '23505') {
+            console.warn('[Pickup] Duplicate key — idempotent success, skipping all writes')
+            setActiveEvent(null)
+            const tripData = await fetchTrip(id)
+            setTrip(tripData)
+            await loadEvents()
+            return
+          }
+          throw insertEvtErr
+        }
+
+        // 2. INSERT trip_event_lines (throw on error, fix N8)
+        const eventLines = data.lines.map((l) => ({
+          trip_event_id: data.event_id,
+          request_line_id: l.request_line_id,
+          quantity: l.quantity,
+          line_status: l.line_status,
+        }))
+        const { error: linesErr } = await supabase.from('trip_event_lines').insert(eventLines)
+        if (linesErr) throw linesErr
+
+        // 3. INSERT delivery_observations
+        const observations = data.lines
+          .filter((l) => l.line_status === 'with_observations' && l.observation_type)
+          .map((l) => ({
+            trip_event_id: data.event_id,
+            request_line_id: l.request_line_id,
+            observation_type: l.observation_type!,
+            notes: l.observation_notes || null,
+            reported_by: person?.id ?? null,
+          }))
+        if (observations.length > 0) {
+          await supabase.from('delivery_observations').insert(observations)
+        }
+
+        // 4. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
         for (const line of accepted) {
           const { data: current } = await supabase
             .from('sm_request_lines')
@@ -1057,59 +1111,12 @@ export default function Page() {
             .eq('id', line.request_line_id)
         }
 
-        // 2. INSERT trip_events
-        const { data: event, error: eventError } = await supabase
-          .from('trip_events')
-          .insert({
-            trip_id: trip.id,
-            event_type: 'Retiro',
-            event_timestamp: new Date().toISOString(),
-            registered_by: person?.id ?? null,
-            received_by_id: data.received_by_id,
-            received_by_name: data.received_by_name,
-            notes: data.notes || null,
-            attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
-            confirmation_code_used: data.confirmation_code,
-          })
-          .select('id')
-          .single()
-
-        if (eventError) throw eventError
-
-        // 3. INSERT trip_event_lines
-        if (event) {
-          const eventLines = data.lines.map((l) => ({
-            trip_event_id: event.id,
-            request_line_id: l.request_line_id,
-            quantity: l.quantity,
-            line_status: l.line_status,
-          }))
-          await supabase.from('trip_event_lines').insert(eventLines)
-        }
-
-        // 4. INSERT delivery_observations
-        if (event) {
-          const observations = data.lines
-            .filter((l) => l.line_status === 'with_observations' && l.observation_type)
-            .map((l) => ({
-              trip_event_id: event.id,
-              request_line_id: l.request_line_id,
-              observation_type: l.observation_type!,
-              notes: l.observation_notes || null,
-              reported_by: person?.id ?? null,
-            }))
-          if (observations.length > 0) {
-            await supabase.from('delivery_observations').insert(observations)
-          }
-        }
-
         // 5. Complete trip via SECURITY DEFINER (PM can't UPDATE trips directly)
-        // SECURITY DEFINER function — PM can't UPDATE trips directly via RLS
         await (supabase.rpc as CallableFunction)('complete_pickup_trip', { p_trip_id: trip.id })
 
-        // 6. Notifications
-        if (accepted.length > 0) {
-          notifyEntregaConfirmada(accepted[0].request_line_id, data.received_by_name).catch(console.error)
+        // 6. Notifications (loop all accepted, fix M6)
+        for (const line of accepted) {
+          notifyEntregaConfirmada(line.request_line_id, data.received_by_name).catch(console.error)
         }
 
         // 7. Reload
