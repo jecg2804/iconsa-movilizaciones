@@ -1,19 +1,39 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-13
+Última actualización: 2026-04-14
 
 ---
 
-## Próximo: Perfeccionar sistema de eventos
+## En curso: Audit consolidado (plan en `~/.claude/plans/linked-sleeping-lighthouse.md`)
 
-Refactor de 2026-04-13 ataca las tres debilidades principales: Retorno acoplado a cantidades, variance invisible al cierre, y handlers no idempotentes. Próximas prioridades:
+Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos accionables. Plan de ejecución por fases:
 
-1. **Retorno puro** — ✅ Completado. No toca cantidades; guard dialog cuando hay líneas En Transito.
+- **Fase A — Hardening cantidades** (código). En progreso:
+  - A.1 ✅ `handlePickup` idempotencia + N8 (throw trip_event_lines) + M6 (notify loop). Commit `e232777`.
+  - A.2 ⏳ `handleDelivery` race fix (fresh SELECT de `assignment.qty_delivered`)
+  - A.3 ⏳ `handleRevert` branch Retiro (rollback qty + trip status)
+  - A.4 ⏳ `handleParada` throw + `handlePreparation` idempotency
+  - A.5 ⏳ Tests E2E pickup/retiro/revert
+- **Fase B.0** — Exploración BD via Chat (3 prompts SQL listos en plan)
+- **Fase B.1** — Fixes BD: enable RLS 20 tablas + search_path 7 funcs + triggers enforce_line_borrador + trip_immutable
+- **Fase C** — Defense-in-depth código: Sentry redact, XSS escape, notify filters, timezone unificado, UX polish
+- **Fase D** — Performance BD: índices FK core, rewrite RLS initplan
+- **Fase E** — Tests + docs (CLAUDE.md update 47 tablas)
+- **Fase F** — MIGRATIONS_FAILED investigation (pre-merge, no bloquea Fases A–E)
+
+### Hallazgos post-refactor (pre-audit)
+
+1. **Retorno puro** — ✅ Completado (2026-04-13). No toca cantidades; guard dialog cuando hay líneas En Transito.
 2. **Dashboard widget "Entregas pendientes en viajes cerrados"** — ✅ Completado. Listado accionable (Registrar Entrega tardía / Cancelar línea).
 3. **Idempotencia handleDispatch + handleDelivery** — ✅ Completado. INSERT trip_events como checkpoint, retry bajo red mala es seguro.
-4. **Reversiones** — Falta verificar que revert de Entrega parcial recalcula correctamente. Pendiente.
-5. **Reconciliación per-line al Retorno** — ⏳ Diferido hasta tener métricas reales de uso. El dashboard widget cubre el caso sin UX especulativa.
-6. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
+4. **Idempotencia handlePickup** — ✅ Completado (2026-04-14, Fase A.1). Mismo pattern.
+5. **Reversiones** — Falta verificar que revert de Entrega parcial recalcula correctamente. Pendiente hasta Fase C.6.
+6. **Reconciliación per-line al Retorno** — ⏳ Diferido hasta tener métricas reales de uso. El dashboard widget cubre el caso sin UX especulativa.
+7. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
+
+### Parked (post-audit)
+
+- **Git/GitHub practices** — enforcement via rules + deny patterns + Husky + GitHub branch protection + skill `/release`. 3 preguntas pendientes. Retomar tras Fase F.
 
 ---
 

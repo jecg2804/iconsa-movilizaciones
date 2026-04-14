@@ -4,6 +4,11 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-14
+- [audit] Audit extensivo consolidado (código + BD) — 3+ rondas de hallazgos, ~65 items accionables, fases A–F documentadas en plan. Nuevos hallazgos BD: 20 tablas con RLS disabled, 7 funciones con search_path mutable, 12 FKs sin índice en core tables. Plan guardado para ejecución por fases.
+- [chore] X0 (middleware huérfano) descartado — `proxy.ts` es la convención correcta en Next.js 16, `middleware.ts` deprecado. Verificado con build real.
+- [fix] Fase A.1 — handlePickup idempotencia + N8 + M6. INSERT trip_events como checkpoint con event_id pre-generado en PickupModal. Retry bajo red mala retorna early sin duplicar qty_delivered. Throw en trip_event_lines failure (no más silencioso). notifyEntregaConfirmada loop por cada línea entregada (no solo la primera). (e232777)
+
 ## 2026-04-13
 - [fix] handleRevert Entrega: status dinámico (Parcial si aún hay qty_delivered > 0, no hardcode 'En Transito'); delivered_at condicional.
 - [fix] handleRevert Retorno: NO limpia actual_arrival (era bug — ese campo pertenece a Llegada).
