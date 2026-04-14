@@ -1,9 +1,20 @@
 # MovimientOS — Visión del Sistema Final y Roadmap Secuencial
 
-**Fecha:** 20 de marzo de 2026  
-**Autor:** Claude Chat (Arquitecto de sistema) + James Cucalón  
-**Estado:** Propuesta para discusión  
+**Fecha:** 20 de marzo de 2026
+**Autor:** Claude Chat (Arquitecto de sistema) + James Cucalón
+**Estado:** Propuesta para discusión
 **Versión:** 1.0
+
+> **Nota post-audit 2026-04-14:** Este doc es una propuesta estratégica,
+> no un plan de ejecución vigente. Fase 0 (estabilización) está
+> mayormente completa. Sub-fase 1A (sistema de eventos rediseñado) fue
+> completada durante Batches 5-11 y consolidada en el audit de abril.
+> Los items específicos del Fase 0 section que mencionan tareas hoy
+> completadas (RLS, notificaciones, attachments) ya no aplican. El
+> resto de las fases (1B self-pickup, 1C inspecciones, 2+) siguen
+> vigentes como guía estratégica — **juzgar caso por caso** antes de
+> aplicar recomendaciones, porque el state del código cambió desde
+> marzo. Consultar CHANGELOG.md y BACKLOG.md para estado actual.
 
 ---
 
