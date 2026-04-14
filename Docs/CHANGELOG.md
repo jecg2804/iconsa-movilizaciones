@@ -5,7 +5,16 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-14
-- [audit] Audit extensivo consolidado (código + BD) — 3+ rondas de hallazgos, ~65 items accionables, fases A–F documentadas en plan. Nuevos hallazgos BD: 20 tablas con RLS disabled, 7 funciones con search_path mutable, 12 FKs sin índice en core tables. Plan guardado para ejecución por fases.
+- [bd] Fase B.1 completa (staging) — audit BD aplicado en 4 bloques vía Supabase SQL Editor:
+  - Bloque 1.A: RLS habilitada en 22 tablas (21 del subsystem equipment/workshop/procurement + `equipment_assemblies`) con policy `admin_all` baseline. BD-C1 cerrado.
+  - Bloque 1.B: `ALTER FUNCTION ... SET search_path` en 7 funciones flagged (`enforce_qty_integrity`, `cascade_request_status`, `complete_pickup_trip`, `update_equipment_location_on_delivery`, `update_equipment_location_on_custody_transfer`, `generate_internal_asset_tag`, `log_equipment_status_change`). BD-C3 cerrado.
+  - Bloque 1.C: `audit_log.read_all` reemplazada por `admin_read` — cierra leak de PII histórica. BD-F9 cerrado.
+  - Bloque 2.A: Trigger `enforce_line_add_delete_only_in_borrador` en `sm_request_lines` — enforza la regla "no add/delete líneas después de Enviada" a nivel BD. BD-F7 cerrado.
+  - Bloque 2.B: Trigger `enforce_trip_immutable_post_departure` en `trips` — bloquea cambios de vehicle/driver/trailer en trips En Ruta/Completado/Cancelado. N_R2_1 cerrado.
+  - Bloque 2.C: 4 CHECK constraints duros en `sm_request_lines` (`qty_positive`, `qty_delivered_nonneg`, `qty_scheduled_nonneg`, `qty_invariant`) — el invariante combinado qty_scheduled+qty_delivered<=quantity es nuevo a nivel BD (trigger enforce_qty_integrity lo validaba por columna pero no combinado). BD-X1 cerrado. Data repair pre-aplicado sin violaciones en staging.
+  - Bloque 3: 10 indexes FK en tablas core (`sm_request_lines`, `trips`, `trip_events`, `trip_event_lines`, `delivery_observations`). BD-H1 cerrado.
+  - Bloque 4: Storage `attachments` policies `authenticated_upload` y `authenticated_update` ahora validan MIME type + tamaño ≤ 10MB contra `metadata`. BD-S1 parcial cerrado (fix stretch path-ownership + delete via API queda para Fase C).
+- [audit] Audit extensivo consolidado (código + BD) — 3+ rondas de hallazgos, ~65 items accionables, fases A–F documentadas en plan. Nuevos hallazgos BD: 22 tablas con RLS disabled, 7 funciones con search_path mutable, 12 FKs sin índice en core tables. Plan guardado para ejecución por fases.
 - [chore] X0 (middleware huérfano) descartado — `proxy.ts` es la convención correcta en Next.js 16, `middleware.ts` deprecado. Verificado con build real.
 - [fix] Fase A.1 — handlePickup idempotencia + N8 + M6. INSERT trip_events como checkpoint con event_id pre-generado en PickupModal. Retry bajo red mala retorna early sin duplicar qty_delivered. Throw en trip_event_lines failure. notifyEntregaConfirmada loop por cada línea. (e232777)
 - [fix] Fase A.2 — handleDelivery race + M6. Fresh SELECT de `trip_line_assignments.qty_delivered` antes del UPDATE para reducir race window bajo entregas concurrentes. notifyEntregaConfirmada loop por cada línea (mismo fix M6). Race completo requiere RPC atómica en Fase B. (a384f99)

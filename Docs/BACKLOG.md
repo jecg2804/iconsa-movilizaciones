@@ -8,12 +8,20 @@
 
 Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos accionables. Plan de ejecución por fases:
 
-- **Fase A — Hardening cantidades** (código). ✅ COMPLETADA (5 commits):
+- **Fase A — Hardening cantidades** (código). ✅ COMPLETADA (6 commits):
   - A.1 ✅ `handlePickup` idempotencia + N8 (throw trip_event_lines) + M6 (notify loop). `e232777`
   - A.2 ✅ `handleDelivery` race fix (fresh SELECT de `assignment.qty_delivered`) + M6. `a384f99`
   - A.3 ✅ `handleRevert` branch Retiro (N1 fix — rollback qty + trip status). `328810e`
+  - A.3 fix-up ✅ `handleRevert` Retiro también limpia `actual_arrival` (confirmado en B.0 body de `complete_pickup_trip`). `cc69856`
   - A.4 ✅ `handleParada` throw (N7) + `handlePreparation` idempotency (N9). `5c3bdd0`
   - A.5 ✅ Tests E2E pickup-flow.spec.ts (happy path + revert Retiro). `760d785`
+- **Fase B.0 — Exploración BD** (via Supabase SQL Editor). ✅ COMPLETADA. Todos los function bodies, triggers, RLS policies, indexes, storage policies verificados. 5 hallazgos nuevos (BD-X1, BD-F9, BD-S1, BD-F1, BD-F6) documentados en plan.
+- **Fase B.1 — Fixes BD** (via Supabase SQL Editor en staging). ✅ COMPLETADA en 4 bloques:
+  - Bloque 1 (seguridad mayor): RLS en 22 tablas, search_path en 7 funcs, audit_log restringido, equipment_assemblies fix-up.
+  - Bloque 2 (business rules): 2 triggers nuevos + 4 CHECK constraints duros en cantidades.
+  - Bloque 3 (performance): 10 indexes FK en tablas core.
+  - Bloque 4 (storage mínimo): MIME + size validation en upload/update policies. Fix stretch (path-ownership + delete via API) queda para Fase C.
+  - Verificación final: security advisors muestran solo los 2 lints intencionales (`feedback` + `suggestions` con `WITH CHECK (true)` — working as intended).
 - **Fase B.0** — Exploración BD via Chat (3 prompts SQL listos en plan)
 - **Fase B.1** — Fixes BD: enable RLS 20 tablas + search_path 7 funcs + triggers enforce_line_borrador + trip_immutable
 - **Fase C** — Defense-in-depth código: Sentry redact, XSS escape, notify filters, timezone unificado, UX polish
