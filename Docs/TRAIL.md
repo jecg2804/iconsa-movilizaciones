@@ -18,23 +18,19 @@ Perfeccionar movilizaciones
  └─ Sistema de eventos y sus registros
      ├─ [✅] Audit consolidado (código + BD) — fases A, B, C, E cerradas
      ├─ [✅] Parking git/github practices (3 capas client-side + /release skill)
-     ├─ [✅] Higiene de docs + mejora manejo de contexto
-     │       ├─ A: cleanup no-modify-specs + 5 plans históricos + 2 duplicados (6ccd3fa)
-     │       ├─ B: review docs reference/archive con ranking (d2ae2d9)
-     │       └─ C: rule plan-lifecycle + TRAIL.md + CLAUDE.md reference section
-     └─ [⏳] Próxima dirección — sin definir (esperando input)
+     ├─ [✅] Higiene de docs + mejora manejo de contexto (6ccd3fa, d2ae2d9, 792a8a7)
+     └─ [⏸] Sin task activa — esperando próxima dirección
 ```
 
 ## Contexto mínimo
 
 El audit consolidado de abril está cerrado. Todos los hallazgos críticos
 del event system tienen fix o verificación. Git/GitHub practices cerradas
-con 3 capas client-side. Docs vivos al día. Esta tarea (higiene de docs)
-es meta-trabajo para evitar que el próximo task grande vuelva a acumular
-ruido como hizo el plan file del audit (que llegó a 1778 líneas).
+con 3 capas client-side. Docs vivos al día. Higiene de docs completa:
+plan file stub, rule plan-lifecycle vigente, TRAIL.md como auto-load.
 
-Cuando esta tarea cierre, estoy esperando dirección del usuario entre los
-candidatos ya identificados en BACKLOG:
+Sin task activa. Esperando dirección del usuario entre los candidatos ya
+identificados en BACKLOG:
 
 - Track A — Observaciones de entrega visibles (cerrar loop huérfano)
 - F2 — Inspecciones de equipo (IC-EQ-F-01-02)
