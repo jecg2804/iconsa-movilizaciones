@@ -5,6 +5,13 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-14
+- [feat] Fase C.7 — smells cleanup: storage.ts console.log gated a dev (B1), useAuth getUser().catch() previene loading colgado (B5), tsconfig target ES2017 → ES2022 (N_R3_11). `e247ce6`
+- [feat] Fase C.6 — event edges: revert Llegada bloqueado si hay Entrega/Retiro/Parada posteriores (N5); Pickup/Dispatch/Delivery/Preparation modals regeneran eventIdRef en catch (B2); generateRequestIdFallback eliminado — confiar en trigger BD (A3). `6a7ce94`
+- [feat] Fase C.5 — admin masters: toggleStatus, addPersonProject, removePersonProject wrapped en useSubmitGuard (N_R3_4); handleSave valida required fields por tabla antes de insert (N_R3_5). `3a8bea5`
+- [feat] Fase C.3 — forms UX: canDeleteLines gate explícito en solicitudes/[id] (N6/M2); scheduled_date Input min=hoy Panamá + guard server-side en saveTrip (N_R2_2); rate auto-fill pide confirmación si hay costo manual distinto (M1); pickup toggle pide confirmación si borra driver/vehicle/trailer (N_R2_7). `81ec148`
+- [feat] Fase C.2 — notificaciones: A4 status filter en 12 notify* functions (early-return si trip/request/line ya no aplica); N_R3_7 dedup por recipient_email en TEST_EMAIL mode; N_R3_8 fail-closed si dedup query falla. `89c5f87`
+- [feat] Fase C.1 — seguridad: SEC1 sentryBeforeSend redact hook (PII/tokens/headers/cookies) en server/edge/client; SEC2 eliminada generación client-side de confirmation_code — trigger BD única fuente; XSS1 escapeHtml() helper + wrap de 16 templates de notificación email. `ea0603c`
+- [feat] Fase C.4 — timezone unificado: nuevo `src/lib/utils/datetime.ts` con helpers Panamá-safe; refactor de format.ts, calendario/page.tsx, notifications/actions.ts. Cubre N_R2_3, N_R2_4, N_R3_1, N_R3_3, N_R3_14, N4. `28cdb4d`
 - [bd] Fase B.1 completa (staging) — audit BD aplicado en 4 bloques vía Supabase SQL Editor:
   - Bloque 1.A: RLS habilitada en 22 tablas (21 del subsystem equipment/workshop/procurement + `equipment_assemblies`) con policy `admin_all` baseline. BD-C1 cerrado.
   - Bloque 1.B: `ALTER FUNCTION ... SET search_path` en 7 funciones flagged (`enforce_qty_integrity`, `cascade_request_status`, `complete_pickup_trip`, `update_equipment_location_on_delivery`, `update_equipment_location_on_custody_transfer`, `generate_internal_asset_tag`, `log_equipment_status_change`). BD-C3 cerrado.

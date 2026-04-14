@@ -1,6 +1,6 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-14
+Última actualización: 2026-04-14 (Fase C completa)
 
 ---
 
@@ -22,12 +22,17 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
   - Bloque 3 (performance): 10 indexes FK en tablas core.
   - Bloque 4 (storage mínimo): MIME + size validation en upload/update policies. Fix stretch (path-ownership + delete via API) queda para Fase C.
   - Verificación final: security advisors muestran solo los 2 lints intencionales (`feedback` + `suggestions` con `WITH CHECK (true)` — working as intended).
-- **Fase B.0** — Exploración BD via Chat (3 prompts SQL listos en plan)
-- **Fase B.1** — Fixes BD: enable RLS 20 tablas + search_path 7 funcs + triggers enforce_line_borrador + trip_immutable
-- **Fase C** — Defense-in-depth código: Sentry redact, XSS escape, notify filters, timezone unificado, UX polish
-- **Fase D** — Performance BD: índices FK core, rewrite RLS initplan
-- **Fase E** — Tests + docs (CLAUDE.md update 47 tablas)
-- **Fase F** — MIGRATIONS_FAILED investigation (pre-merge, no bloquea Fases A–E)
+- **Fase C — Defense-in-depth código + UX polish**. ✅ COMPLETADA en 7 commits:
+  - C.4 ✅ Timezone unificado — nuevo datetime.ts helper Panamá-safe (N_R2_3, N_R2_4, N_R3_1, N_R3_3, N_R3_14, N4). `28cdb4d`
+  - C.1 ✅ Seguridad — SEC1 sentryBeforeSend redact, SEC2 eliminar Math.random() confirmation_code, XSS1 escapeHtml en 16 templates. `ea0603c`
+  - C.2 ✅ Notificaciones — A4 status filter en 12 notify* functions, N_R3_7 dedup por email en TEST mode, N_R3_8 fail-closed dedup. `89c5f87`
+  - C.3 ✅ Forms UX — canDeleteLines (N6/M2), scheduled_date min + server guard (N_R2_2), rate auto-fill confirm (M1), pickup toggle confirm (N_R2_7). `81ec148`
+  - C.5 ✅ Admin masters — useSubmitGuard en 3 handlers (N_R3_4), required-field validation (N_R3_5). `3a8bea5`
+  - C.6 ✅ Event edges — revert Llegada guard (N5), eventIdRef reset en catch (B2), generateRequestIdFallback eliminado (A3). `6a7ce94`
+  - C.7 ✅ Smells — storage.log gate dev (B1), useAuth catch (B5), tsconfig ES2022 (N_R3_11). `e247ce6`
+- **Fase D** — Performance BD: incorporada al Bloque 3 de B.1 (10 indexes FK). ~~D~~ ✅
+- **Fase E** — Tests + docs (CLAUDE.md update 47 tablas). ⏳ Pendiente
+- **Fase F** — MIGRATIONS_FAILED investigation (pre-merge, no bloquea Fases A–E). ⏳ Pendiente
 
 ### Hallazgos post-refactor (pre-audit)
 
