@@ -8,12 +8,12 @@
 
 Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos accionables. Plan de ejecución por fases:
 
-- **Fase A — Hardening cantidades** (código). En progreso:
-  - A.1 ✅ `handlePickup` idempotencia + N8 (throw trip_event_lines) + M6 (notify loop). Commit `e232777`.
-  - A.2 ⏳ `handleDelivery` race fix (fresh SELECT de `assignment.qty_delivered`)
-  - A.3 ⏳ `handleRevert` branch Retiro (rollback qty + trip status)
-  - A.4 ⏳ `handleParada` throw + `handlePreparation` idempotency
-  - A.5 ⏳ Tests E2E pickup/retiro/revert
+- **Fase A — Hardening cantidades** (código). ✅ COMPLETADA (5 commits):
+  - A.1 ✅ `handlePickup` idempotencia + N8 (throw trip_event_lines) + M6 (notify loop). `e232777`
+  - A.2 ✅ `handleDelivery` race fix (fresh SELECT de `assignment.qty_delivered`) + M6. `a384f99`
+  - A.3 ✅ `handleRevert` branch Retiro (N1 fix — rollback qty + trip status). `328810e`
+  - A.4 ✅ `handleParada` throw (N7) + `handlePreparation` idempotency (N9). `5c3bdd0`
+  - A.5 ✅ Tests E2E pickup-flow.spec.ts (happy path + revert Retiro). `760d785`
 - **Fase B.0** — Exploración BD via Chat (3 prompts SQL listos en plan)
 - **Fase B.1** — Fixes BD: enable RLS 20 tablas + search_path 7 funcs + triggers enforce_line_borrador + trip_immutable
 - **Fase C** — Defense-in-depth código: Sentry redact, XSS escape, notify filters, timezone unificado, UX polish

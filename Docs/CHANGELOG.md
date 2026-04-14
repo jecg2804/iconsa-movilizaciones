@@ -7,7 +7,11 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ## 2026-04-14
 - [audit] Audit extensivo consolidado (código + BD) — 3+ rondas de hallazgos, ~65 items accionables, fases A–F documentadas en plan. Nuevos hallazgos BD: 20 tablas con RLS disabled, 7 funciones con search_path mutable, 12 FKs sin índice en core tables. Plan guardado para ejecución por fases.
 - [chore] X0 (middleware huérfano) descartado — `proxy.ts` es la convención correcta en Next.js 16, `middleware.ts` deprecado. Verificado con build real.
-- [fix] Fase A.1 — handlePickup idempotencia + N8 + M6. INSERT trip_events como checkpoint con event_id pre-generado en PickupModal. Retry bajo red mala retorna early sin duplicar qty_delivered. Throw en trip_event_lines failure (no más silencioso). notifyEntregaConfirmada loop por cada línea entregada (no solo la primera). (e232777)
+- [fix] Fase A.1 — handlePickup idempotencia + N8 + M6. INSERT trip_events como checkpoint con event_id pre-generado en PickupModal. Retry bajo red mala retorna early sin duplicar qty_delivered. Throw en trip_event_lines failure. notifyEntregaConfirmada loop por cada línea. (e232777)
+- [fix] Fase A.2 — handleDelivery race + M6. Fresh SELECT de `trip_line_assignments.qty_delivered` antes del UPDATE para reducir race window bajo entregas concurrentes. notifyEntregaConfirmada loop por cada línea (mismo fix M6). Race completo requiere RPC atómica en Fase B. (a384f99)
+- [feat] Fase A.3 — handleRevert branch Retiro (N1 fix). Espejo de Entrega para revertir qty_delivered/qty_scheduled/status, más rollback del trip de Completado a En Ruta. Antes el revert solo insertaba el Reversion event sin tocar la BD — ahora deshace todo. TODO: verificar body de complete_pickup_trip en Fase B.0 por si setea otros campos. (328810e)
+- [fix] Fase A.4 — handleParada throw + handlePreparation idempotency (N7 + N9). Parada ahora throw en trip_event_lines failure (antes silencioso). PreparationModal expone event_id pre-generado; handlePreparation usa checkpoint pattern con 23505 early return. (5c3bdd0)
+- [test] Fase A.5 — pickup-flow.spec.ts. Tests E2E para validar A.1, A.3, A.4: happy path Preparación → Retiro completa el trip + qty actualizadas; revert Retiro recalcula qty_delivered + trip vuelve a En Ruta + Reversion event. Helpers nuevos: registerPreparation, registerRetiro. (760d785)
 
 ## 2026-04-13
 - [fix] handleRevert Entrega: status dinámico (Parcial si aún hay qty_delivered > 0, no hardcode 'En Transito'); delivered_at condicional.
