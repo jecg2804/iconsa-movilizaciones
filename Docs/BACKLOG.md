@@ -1,55 +1,15 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-14 (audit cerrado — Fase F descartada tras investigación con Chat, no-bloqueante)
+Última actualización: 2026-04-14 (sin task activa, audit cerrado)
 
 ---
 
-## En curso: Audit consolidado (plan en `~/.claude/plans/linked-sleeping-lighthouse.md`)
+## Completado recientemente (abril 2026)
 
-Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos accionables. Plan de ejecución por fases:
-
-- **Fase A — Hardening cantidades** (código). ✅ COMPLETADA (6 commits):
-  - A.1 ✅ `handlePickup` idempotencia + N8 (throw trip_event_lines) + M6 (notify loop). `e232777`
-  - A.2 ✅ `handleDelivery` race fix (fresh SELECT de `assignment.qty_delivered`) + M6. `a384f99`
-  - A.3 ✅ `handleRevert` branch Retiro (N1 fix — rollback qty + trip status). `328810e`
-  - A.3 fix-up ✅ `handleRevert` Retiro también limpia `actual_arrival` (confirmado en B.0 body de `complete_pickup_trip`). `cc69856`
-  - A.4 ✅ `handleParada` throw (N7) + `handlePreparation` idempotency (N9). `5c3bdd0`
-  - A.5 ✅ Tests E2E pickup-flow.spec.ts (happy path + revert Retiro). `760d785`
-- **Fase B.0 — Exploración BD** (via Supabase SQL Editor). ✅ COMPLETADA. Todos los function bodies, triggers, RLS policies, indexes, storage policies verificados. 5 hallazgos nuevos (BD-X1, BD-F9, BD-S1, BD-F1, BD-F6) documentados en plan.
-- **Fase B.1 — Fixes BD** (via Supabase SQL Editor en staging). ✅ COMPLETADA en 4 bloques:
-  - Bloque 1 (seguridad mayor): RLS en 22 tablas, search_path en 7 funcs, audit_log restringido, equipment_assemblies fix-up.
-  - Bloque 2 (business rules): 2 triggers nuevos + 4 CHECK constraints duros en cantidades.
-  - Bloque 3 (performance): 10 indexes FK en tablas core.
-  - Bloque 4 (storage mínimo): MIME + size validation en upload/update policies. Fix stretch (path-ownership + delete via API) queda para Fase C.
-  - Verificación final: security advisors muestran solo los 2 lints intencionales (`feedback` + `suggestions` con `WITH CHECK (true)` — working as intended).
-- **Fase C — Defense-in-depth código + UX polish**. ✅ COMPLETADA en 7 commits:
-  - C.4 ✅ Timezone unificado — nuevo datetime.ts helper Panamá-safe (N_R2_3, N_R2_4, N_R3_1, N_R3_3, N_R3_14, N4). `28cdb4d`
-  - C.1 ✅ Seguridad — SEC1 sentryBeforeSend redact, SEC2 eliminar Math.random() confirmation_code, XSS1 escapeHtml en 16 templates. `ea0603c`
-  - C.2 ✅ Notificaciones — A4 status filter en 12 notify* functions, N_R3_7 dedup por email en TEST mode, N_R3_8 fail-closed dedup. `89c5f87`
-  - C.3 ✅ Forms UX — canDeleteLines (N6/M2), scheduled_date min + server guard (N_R2_2), rate auto-fill confirm (M1), pickup toggle confirm (N_R2_7). `81ec148`
-  - C.5 ✅ Admin masters — useSubmitGuard en 3 handlers (N_R3_4), required-field validation (N_R3_5). `3a8bea5`
-  - C.6 ✅ Event edges — revert Llegada guard (N5), eventIdRef reset en catch (B2), generateRequestIdFallback eliminado (A3). `6a7ce94`
-  - C.7 ✅ Smells — storage.log gate dev (B1), useAuth catch (B5), tsconfig ES2022 (N_R3_11). `e247ce6`
-- **Fase D** — Performance BD: incorporada al Bloque 3 de B.1 (10 indexes FK). ~~D~~ ✅
-- **Fase E — Tests expansion + docs**. ✅ COMPLETADA:
-  - `tests/audit-gates.spec.ts` nuevo — 5 tests BD-first que validan gates de Fase B.1 sin UI (SEC2, BD-F7, BD-X1, N_R2_1, audit_log RLS). Todos verdes en staging. Cobertura total ahora: 14 archivos / 131 tests.
-  - `CLAUDE.md` actualizado: 44 → 47 tablas, tsconfig ES2022, staging branch documentada.
-  - Tests deferred (requieren credenciales pm/campo no disponibles en staging): role-permissions expansion DispatchModal campo-role, cost-code cascade, rate-autofill UI, notification dedup, RLS enforcement por rol. Levantar cuando se creen usuarios de prueba por rol.
-- **Fase F** — MIGRATIONS_FAILED investigation. ❌ DESCARTADA 2026-04-14. James investigó el error cuando ocurrió con Claude Chat y determinó que es irrelevante para el merge staging → prod. No es bloqueante.
-
-### Hallazgos post-refactor (pre-audit)
-
-1. **Retorno puro** — ✅ Completado (2026-04-13). No toca cantidades; guard dialog cuando hay líneas En Transito.
-2. **Dashboard widget "Entregas pendientes en viajes cerrados"** — ✅ Completado. Listado accionable (Registrar Entrega tardía / Cancelar línea).
-3. **Idempotencia handleDispatch + handleDelivery** — ✅ Completado. INSERT trip_events como checkpoint, retry bajo red mala es seguro.
-4. **Idempotencia handlePickup** — ✅ Completado (2026-04-14, Fase A.1). Mismo pattern.
-5. **Reversiones** — ✅ Verificado 2026-04-14 por análisis estático contra 4 escenarios (E1: parcial única revertida; E2: última de 2 parciales revertida; E3: entrega que completó la línea revertida; E4: entrega con observaciones revertida). `handleRevert` branch Entrega es correcto para qty/status/delivered_at/trip_line_assignments. Observaciones sobreviven al revert por diseño (evidencia histórica). Ver comentario JSDoc en `handleRevert` y CHANGELOG 2026-04-14 para detalle completo.
-6. **Reconciliación per-line al Retorno** — ⏳ Diferido hasta tener métricas reales de uso. El dashboard widget cubre el caso sin UX especulativa.
-7. **GPS Integration** — Plan en desarrollo (otro chat). API de Skydata disponible.
-
-### Parked (post-audit)
-
-- **Git/GitHub practices** — ✅ Cerrado 2026-04-14 (`cba86e3`). 3 capas client-side activas: deny patterns + Husky (pre-commit/pre-push/post-commit con build en background) + skill `/release`. Capa server-side (GitHub branch protection) no activa porque el plan gratuito no enforza reglas en repos privados — upgrade a GitHub Team pendiente si se agrega otro colaborador humano.
+- **Audit consolidado código + BD** — ~65 hallazgos de 3+ rondas, organizados en 6 fases (A: hardening cantidades, B.0/B.1: BD security + business rules + indexes, C: defense-in-depth código + UX polish, D: incorporado a B.1, E: tests + docs). Todos commiteados en `jaime/dev`. Detalle completo en `Docs/CHANGELOG.md` 2026-04-14. Fase F (MIGRATIONS_FAILED) descartada tras investigación — no-bloqueante.
+- **Git/GitHub practices** — 3 capas client-side activas: deny patterns, Husky hooks (pre-commit/pre-push/post-commit con build en background), skill `/release`. Capa server-side pendiente upgrade a GitHub Team.
+- **Higiene de docs + manejo de contexto** — rule `plan-lifecycle.md`, nuevo `Docs/TRAIL.md` auto-cargado, CLAUDE.md reference section con tabla de consulta, reference/archive reorganizados, `no-modify-specs` eliminada.
+- **Hallazgos pre-audit cerrados:** Retorno puro, dashboard widget entregas pendientes, idempotencia handleDispatch/handleDelivery/handlePickup, revert Entrega parcial verificado por análisis estático (4 escenarios, hallazgo #5).
 
 ---
 
@@ -106,6 +66,7 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
 | F1.3 | Retorno no-op + guard + dashboard "Entregas pendientes en viajes cerrados" + idempotencia handlers | ✅ Completado (2026-04-13) |
 | F1.4 | Retorno reconciliación per-line (diferido — esperar métricas reales de uso antes de implementar) | ⏳ Deferred |
 | F1.5 | GPS Integration (Skydata API) | 🟡 Plan en desarrollo |
+| F1.6 | Observaciones de entrega visibles — cerrar loop de `delivery_observations`. Conductor reporta damaged/wrong_qty/wrong_item/rejected + notas pero nadie lo ve después. Scope: mostrar en EventTimeline, sección en solicitud detail, dashboard widget, resolver con notas. Requiere 3 columnas BD nullables (`resolved_at`, `resolved_by`, `resolution_notes`). | ⏳ Nice-to-have, baja prioridad |
 | F2 | Inspección de equipo (IC-EQ-F-01-02) | ⏳ 6 tablas listas |
 | F3 | Reporte facturación mensual | ⏳ Pendiente |
 | F4 | Informe Valderrama semanal | ⏳ Pendiente |

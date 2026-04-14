@@ -16,27 +16,35 @@ Perfeccionar movilizaciones (Tier 1 — sistema core).
 ```
 Perfeccionar movilizaciones
  └─ Sistema de eventos y sus registros
-     ├─ [✅] Audit consolidado (código + BD) — fases A, B, C, E cerradas
-     ├─ [✅] Parking git/github practices (3 capas client-side + /release skill)
-     ├─ [✅] Higiene de docs + mejora manejo de contexto (6ccd3fa, d2ae2d9, 792a8a7)
-     └─ [⏸] Sin task activa — esperando próxima dirección
+     ├─ [✅] Audit consolidado (código + BD)
+     ├─ [✅] Parking git/github practices
+     ├─ [✅] Higiene de docs + manejo de contexto
+     └─ [▶] Perfeccionar event system con features nuevos (pre-prod)
+         ├─ AD-5 — Fix createSolicitud/createTrip helpers (desbloquea tests)
+         └─ Nuevas features de eventos (pickup cases, códigos opcionales,
+            nuevos eventos — pendiente de diseño)
 ```
 
 ## Contexto mínimo
 
-El audit consolidado de abril está cerrado. Todos los hallazgos críticos
-del event system tienen fix o verificación. Git/GitHub practices cerradas
-con 3 capas client-side. Docs vivos al día. Higiene de docs completa:
-plan file stub, rule plan-lifecycle vigente, TRAIL.md como auto-load.
+Audit cerrado. Docs y enforcement al día. Siguiente dirección aprobada:
+seguir perfeccionando el sistema de eventos agregando features que NO
+están en prod, antes de cortar un release.
 
-Sin task activa. Esperando dirección del usuario entre los candidatos ya
-identificados en BACKLOG:
+Orden inmediato:
 
-- Track A — Observaciones de entrega visibles (cerrar loop huérfano)
-- F2 — Inspecciones de equipo (IC-EQ-F-01-02)
-- F5 — Dashboards por rol
-- AD-5 — Fix `createSolicitud`/`createTrip` E2E helper regression
-- Primer `/release` a prod (lleva audit B.1 fixes a producción)
+1. Naming cleanup BACKLOG (en progreso)
+2. AD-5 — fix de `createSolicitud`/`createTrip` helpers — desbloquea tests
+3. Discusión + diseño de nuevas features del event system:
+   pickup cases, códigos de entrega opcionales, nuevos eventos
+
+Parked deliberadamente por James:
+
+- Primer `/release` a prod — esperando que las features nuevas estén
+  completas antes de tocar el app en producción
+- F5 Dashboards por rol, F2 Inspecciones — features grandes, no ahora
+- F1.4 Retorno reconciliación per-line — esperando métricas de uso
+- F1.6 Observaciones de entrega visibles — nice-to-have, baja prioridad
 
 ## Reglas de este doc
 
