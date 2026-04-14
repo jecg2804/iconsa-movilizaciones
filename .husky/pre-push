@@ -1,0 +1,59 @@
+#!/usr/bin/env sh
+# Bloquea push directo a main y cualquier force push.
+# También gatea el push con el build status: si el background build de
+# post-commit dejó "fail", bloquea. Si no terminó todavía o no hay status,
+# corre build sincrónico como fallback.
+
+protected_branch='main'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # 1. Bloquear push a main
+  if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+    echo "❌ Push directo a $protected_branch bloqueado."
+    echo "   Para promover a main usa el skill /release desde jaime/dev."
+    exit 1
+  fi
+
+  # 2. Detectar force push
+  zero='0000000000000000000000000000000000000000'
+  if [ "$remote_sha" != "$zero" ]; then
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+      echo "❌ Force push detectado hacia $remote_ref."
+      echo "   Investigá qué commits vas a perder antes de reintentar."
+      exit 1
+    fi
+  fi
+done
+
+# 3. Build gate — consultar status del background build
+HEAD=$(git rev-parse HEAD)
+STATUS_FILE=".build-status"
+
+if [ -f "$STATUS_FILE" ]; then
+  STATUS_LINE=$(cat "$STATUS_FILE")
+  STATUS=$(echo "$STATUS_LINE" | awk '{print $1}')
+  STATUS_SHA=$(echo "$STATUS_LINE" | awk '{print $2}')
+
+  if [ "$STATUS_SHA" = "$HEAD" ]; then
+    if [ "$STATUS" = "ok" ]; then
+      echo "✅ Background build OK ($HEAD)"
+      exit 0
+    elif [ "$STATUS" = "fail" ]; then
+      echo "❌ Background build FAILED en HEAD. Ver /tmp/movimientos-build.log"
+      tail -20 /tmp/movimientos-build.log 2>/dev/null
+      echo ""
+      echo "   Arreglá el build antes de pushear."
+      exit 1
+    fi
+  fi
+fi
+
+# Status ausente, stale, o para otro SHA → correr sincrónico
+echo "⏳ Background build no listo — corriendo build sincrónico..."
+if ! npm run build > /tmp/movimientos-build.log 2>&1; then
+  echo "❌ Build falló. Ver /tmp/movimientos-build.log"
+  tail -20 /tmp/movimientos-build.log
+  exit 1
+fi
+echo "✅ Build OK"
+exit 0

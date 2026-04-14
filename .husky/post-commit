@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+# Lanza npm run build en background tras cada commit para detectar TS errors
+# sin bloquear el flujo de trabajo. El resultado queda en .build-status y
+# /tmp/movimientos-build.log — el pre-push lo chequea antes de dejar pushear.
+#
+# Motivación: Fase C.4 rompió el build con una variable huérfana y no lo
+# notamos hasta 7 commits después via Vercel. Build en background + gate
+# en pre-push atrapa ese caso al primer commit.
+
+STATUS_FILE=".build-status"
+LOG_FILE="/tmp/movimientos-build.log"
+
+# Borrar status previo — se reescribe cuando termine el build
+rm -f "$STATUS_FILE"
+
+(
+  if npm run build > "$LOG_FILE" 2>&1; then
+    printf 'ok %s\n' "$(git rev-parse HEAD)" > "$STATUS_FILE"
+  else
+    printf 'fail %s\n' "$(git rev-parse HEAD)" > "$STATUS_FILE"
+  fi
+) &
+
+# Detach so git commit returns immediately
+disown 2>/dev/null || true
+exit 0

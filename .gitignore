@@ -42,3 +42,6 @@ next-env.d.ts
 .playwright-mcp/
 test-results/
 playwright-report/
+
+# Husky post-commit background build status
+.build-status
