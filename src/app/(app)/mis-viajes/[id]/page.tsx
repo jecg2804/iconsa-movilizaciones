@@ -752,21 +752,29 @@ export default function Page() {
             .eq('id', line.request_line_id)
         }
 
-        // 5. UPDATE trip_line_assignments: qty_delivered
+        // 5. UPDATE trip_line_assignments: qty_delivered (fresh SELECT para evitar race
+        // condition bajo entregas concurrentes desde dos dispositivos. El idempotency
+        // checkpoint de step 1 protege contra retries; este fresh SELECT protege contra
+        // concurrencia real. Fix completo seria una RPC atomica en Fase B.)
         for (const line of accepted) {
-          const assignment = trip.assignments.find((a) => a.request_line_id === line.request_line_id)
-          if (assignment) {
-            await supabase
-              .from('trip_line_assignments')
-              .update({ qty_delivered: (assignment.qty_delivered ?? 0) + line.quantity })
-              .eq('trip_id', trip.id)
-              .eq('request_line_id', line.request_line_id)
-          }
+          const { data: freshAssignment } = await supabase
+            .from('trip_line_assignments')
+            .select('qty_delivered')
+            .eq('trip_id', trip.id)
+            .eq('request_line_id', line.request_line_id)
+            .single()
+
+          const currentDelivered = freshAssignment?.qty_delivered ?? 0
+          await supabase
+            .from('trip_line_assignments')
+            .update({ qty_delivered: currentDelivered + line.quantity })
+            .eq('trip_id', trip.id)
+            .eq('request_line_id', line.request_line_id)
         }
 
-        // 6. Notifications
-        if (accepted.length > 0) {
-          notifyEntregaConfirmada(accepted[0].request_line_id, data.received_by_name).catch(console.error)
+        // 6. Notifications (loop all accepted, fix M6)
+        for (const line of accepted) {
+          notifyEntregaConfirmada(line.request_line_id, data.received_by_name).catch(console.error)
         }
         // Check if solicitudes completed
         const reqIds = [...new Set(
