@@ -70,14 +70,19 @@ export function useAuth() {
 
   useEffect(() => {
     // Obtener sesión actual
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setState((prev) => ({ ...prev, user }))
-        fetchPersonAndProjects(user.id)
-      } else {
+    supabase.auth.getUser()
+      .then(({ data: { user } }) => {
+        if (user) {
+          setState((prev) => ({ ...prev, user }))
+          fetchPersonAndProjects(user.id)
+        } else {
+          setState((prev) => ({ ...prev, loading: false }))
+        }
+      })
+      .catch((err) => {
+        console.error('[useAuth] getUser failed:', err)
         setState((prev) => ({ ...prev, loading: false }))
-      }
-    })
+      })
 
     // Escuchar cambios de autenticación
     const {
