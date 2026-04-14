@@ -1,6 +1,6 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-14 (Fase C completa)
+Última actualización: 2026-04-14 (audit cerrado modulo Fase F)
 
 ---
 

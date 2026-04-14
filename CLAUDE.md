@@ -174,19 +174,20 @@ Cascada (`cascade_request_status()`): cuando cambia una línea, re-evalúa la so
 3. Si toca eventos/fulfillment → leer `Docs/reference/Self-pickup.md`
 4. Si planifica feature nuevo → leer `Docs/reference/Vision Roadmap.md`
 5. Verifica schema via Supabase MCP si es necesario
-6. `npm run build` después de cada paso
+6. `git commit` + `git push origin jaime/dev`. Husky `post-commit` lanza `npm run build` en background automáticamente — no hace falta correrlo a mano; si falla, el siguiente `git push` lo bloquea (ver `.claude/rules/git-workflow.md` para el flujo completo).
 7. Commit → CHANGELOG.md entry (atómico, mismo commit)
 
 ### Cambios de BD
-- STOP. Agregar `[bd-pending]` en CHANGELOG.md. James → Chat ejecuta → cambiar a `[bd]`.
+- STOP. Agregar `[bd-pending]` en CHANGELOG.md. James ejecuta via Supabase SQL Editor en staging (y después en prod con `/release`) → cambiar a `[bd]`.
 
 ### NUNCA
-- No commits/push a `main`. Solo `jaime/dev`.
-- No ESCRIBIR en Supabase. Solo LEER via MCP.
+- No commits/push a `main`. Solo `jaime/dev`. Deny patterns + Husky lo bloquean técnicamente.
+- No ESCRIBIR en Supabase via MCP. Solo LEER. Las tools mutantes del plugin están denegadas en `.claude/settings.json`.
 
 ### Quién hace qué
-- **Code (yo):** Implementar, auditar, fix bugs, builds, commits a jaime/dev
-- **Chat:** Escribir a Supabase, web research, leer PDFs de ICONSA
+- **Code (yo):** Implementar, auditar, fix bugs, commits a jaime/dev. El `post-commit` hook ya dispara build para mí.
+- **James:** Ejecutar SQL en Supabase SQL Editor, decisiones finales, aprobar PRs de release, configurar external services (GitHub, Vercel).
+- **Chat:** Research web, leer PDFs de ICONSA, planificación estratégica de largo plazo.
 - **James:** Decisiones finales, input de negocio, aprobaciones
 
 ## Git
