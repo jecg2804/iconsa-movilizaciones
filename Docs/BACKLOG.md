@@ -31,7 +31,10 @@ Post-refactor de event system, 3+ rondas de auditoría produjeron ~65 hallazgos 
   - C.6 ✅ Event edges — revert Llegada guard (N5), eventIdRef reset en catch (B2), generateRequestIdFallback eliminado (A3). `6a7ce94`
   - C.7 ✅ Smells — storage.log gate dev (B1), useAuth catch (B5), tsconfig ES2022 (N_R3_11). `e247ce6`
 - **Fase D** — Performance BD: incorporada al Bloque 3 de B.1 (10 indexes FK). ~~D~~ ✅
-- **Fase E** — Tests + docs (CLAUDE.md update 47 tablas). ⏳ Pendiente
+- **Fase E — Tests expansion + docs**. ✅ COMPLETADA:
+  - `tests/audit-gates.spec.ts` nuevo — 5 tests BD-first que validan gates de Fase B.1 sin UI (SEC2, BD-F7, BD-X1, N_R2_1, audit_log RLS). Todos verdes en staging. Cobertura total ahora: 14 archivos / 131 tests.
+  - `CLAUDE.md` actualizado: 44 → 47 tablas, tsconfig ES2022, staging branch documentada.
+  - Tests deferred (requieren credenciales pm/campo no disponibles en staging): role-permissions expansion DispatchModal campo-role, cost-code cascade, rate-autofill UI, notification dedup, RLS enforcement por rol. Levantar cuando se creen usuarios de prueba por rol.
 - **Fase F** — MIGRATIONS_FAILED investigation (pre-merge, no bloquea Fases A–E). ⏳ Pendiente
 
 ### Hallazgos post-refactor (pre-audit)

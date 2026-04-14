@@ -4,7 +4,7 @@ Sistema de operaciones para ICONSA (constructora pesada, Panamá). Digitaliza pr
 
 ## Quick Reference
 
-- **44 tablas** en public schema (usar Supabase MCP para detalles)
+- **47 tablas** en public schema con RLS habilitada en todas (usar Supabase MCP para detalles)
 - **Stack:** Next.js 16 (App Router) + Supabase + Tailwind CSS → Vercel (`rein-eisenwerk.com`)
 - **Auth:** Supabase Auth con RLS en todas las tablas
 - **Patrón clave:** Operaciones a nivel de LÍNEA (logística programa LÍNEAS, no solicitudes)
@@ -12,8 +12,8 @@ Sistema de operaciones para ICONSA (constructora pesada, Panamá). Digitaliza pr
 
 ## Stack
 
-- **Frontend:** Next.js 16 (App Router) + TypeScript + Tailwind CSS → Vercel
-- **DB:** Supabase PostgreSQL + Auth + RLS + Storage (project `bzeoszympkkicwlfdtcn`, 44 tablas)
+- **Frontend:** Next.js 16 (App Router) + TypeScript (target ES2022) + Tailwind CSS → Vercel
+- **DB:** Supabase PostgreSQL + Auth + RLS + Storage (prod `bzeoszympkkicwlfdtcn`, staging `vonwkciosksqspyljzfy`, 47 tablas)
 
 ## Commands
 
@@ -75,7 +75,7 @@ src/
 | @Docs/BACKLOG.md | Lo que falta por hacer. Consultar cuando se planifica siguiente feature. |
 | Docs/FEATURE_SPEC.md | Reglas de negocio, pantallas, estados. Leer secciones relevantes (NO auto-cargar — 39K chars). |
 | Docs/reference/ | Research docs de Chat: Vision Roadmap, Self-Pickup, Vibecoder's Guide, Events V2 specs. |
-| Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 44 tablas con COMMENT ON TABLE/COLUMN. |
+| Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 47 tablas con COMMENT ON TABLE/COLUMN. |
 
 **IMPORTANTE:** Para schema, siempre consultar Supabase MCP (no docs estáticos). Para reglas de negocio, FEATURE_SPEC.md es la fuente de verdad. Ver `.claude/rules/` para reglas de commit, supabase, y modificación de specs.
 
@@ -98,7 +98,7 @@ src/
 - Todas las tablas tienen `created_at` y `updated_at` con trigger automático.
 - RLS habilitado en todas las tablas.
 - Tabla `equipment` es UNIFICADA (equipos + vehículos). Vehículos = `type_code IN ('VHL','VHP')`. Remolques = `spectrum_code LIKE 'REM%'`.
-- **44 tablas** en public schema. Consultar Supabase MCP para detalles de cada tabla.
+- **47 tablas** en public schema. Consultar Supabase MCP para detalles de cada tabla.
 - **user_app_roles** existe como fundación multi-app RBAC pero el código MVP usa `people.app_role`. No migrar todavía.
 - **cost_codes** filtrar por `project_id`. **cost_categories** filtrar via `cost_code_categories` por `cost_code_id` seleccionado.
 

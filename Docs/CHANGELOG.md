@@ -5,6 +5,9 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-14
+- [test] Fase E — `tests/audit-gates.spec.ts` nuevo: 5 tests BD-first para validar los gates de Fase B.1 sin depender de UI. SEC2 (trigger genera confirmation_code), BD-F7 (enforce_line_add_delete_only_in_borrador), BD-X1 (qty_invariant), N_R2_1 (enforce_trip_immutable_post_departure), audit_log RLS. Todos verdes en staging.
+- [docs] CLAUDE.md — 44 → 47 tablas, target tsconfig ES2022, staging branch `vonwkciosksqspyljzfy` añadida al header Stack.
+- [fix] `alerta_diaria_urgentes` referencia a variable local `today` eliminada en C.4 — causa del build rojo en Vercel en todos los commits de Fase C. Reemplazada por `daysBetweenInPanama(todayStr, req.date_required)`. `099fe17`
 - [feat] Fase C.7 — smells cleanup: storage.ts console.log gated a dev (B1), useAuth getUser().catch() previene loading colgado (B5), tsconfig target ES2017 → ES2022 (N_R3_11). `e247ce6`
 - [feat] Fase C.6 — event edges: revert Llegada bloqueado si hay Entrega/Retiro/Parada posteriores (N5); Pickup/Dispatch/Delivery/Preparation modals regeneran eventIdRef en catch (B2); generateRequestIdFallback eliminado — confiar en trigger BD (A3). `6a7ce94`
 - [feat] Fase C.5 — admin masters: toggleStatus, addPersonProject, removePersonProject wrapped en useSubmitGuard (N_R3_4); handleSave valida required fields por tabla antes de insert (N_R3_5). `3a8bea5`
