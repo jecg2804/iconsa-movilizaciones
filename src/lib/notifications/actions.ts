@@ -3,7 +3,7 @@
 import { createServiceClient } from '@/lib/supabase/service'
 import { sendNotification, getReceiveAllUsers } from './send'
 import * as templates from './templates'
-import { dayOfWeekInPanama, todayStrInPanama, parseDateStrInPanama, dateStrInPanama } from '@/lib/utils/datetime'
+import { dayOfWeekInPanama, todayStrInPanama, parseDateStrInPanama, dateStrInPanama, daysBetweenInPanama } from '@/lib/utils/datetime'
 
 // =============================================================================
 // HELPERS — resolución de destinatarios (usa service client, bypassa RLS)
@@ -1026,9 +1026,7 @@ export async function notifyAlertaDiariaUrgentes(): Promise<void> {
 
       const requesterName = await getPersonName(req.requester_id)
 
-      const target = new Date(req.date_required + 'T12:00:00')
-      target.setHours(0, 0, 0, 0)
-      const days = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      const days = daysBetweenInPanama(todayStr, req.date_required)
 
       items.push({
         requestId: req.request_id ?? req.id,
