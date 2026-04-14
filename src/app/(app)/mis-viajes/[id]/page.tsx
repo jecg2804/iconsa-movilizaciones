@@ -1014,12 +1014,14 @@ export default function Page() {
 
   // --- Preparación (pickup — informativo, no cambia estados) ---
   const handlePreparation = useCallback(
-    async (data: { notes: string; attachments: Attachment[] }) => {
+    async (data: { event_id: string; notes: string; attachments: Attachment[] }) => {
       if (!trip) return
       setEventBusy(true)
       setEventError(null)
       try {
-        await supabase.from('trip_events').insert({
+        // INSERT trip_events idempotente — event_id pre-generado en PreparationModal
+        const { error: insertErr } = await supabase.from('trip_events').insert({
+          id: data.event_id,
           trip_id: trip.id,
           event_type: 'Preparacion',
           event_timestamp: new Date().toISOString(),
@@ -1027,6 +1029,15 @@ export default function Page() {
           notes: data.notes || null,
           attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
         })
+
+        if (insertErr) {
+          if (insertErr.code === '23505') {
+            console.warn('[Preparation] Duplicate key — idempotent success')
+          } else {
+            throw insertErr
+          }
+        }
+
         // Notificar PMs que material está listo
         notifyMaterialPreparado(trip.id).catch(console.error)
         setActiveEvent(null)
@@ -1064,7 +1075,7 @@ export default function Page() {
         if (error) throw error
         if (!event?.id) throw new Error('Event ID missing after insert')
 
-        // 2. Si hay líneas afectadas, INSERT trip_event_lines
+        // 2. Si hay líneas afectadas, INSERT trip_event_lines (throw on error, fix N7)
         if (data.lines && data.lines.length > 0) {
           const { error: lineError } = await supabase.from('trip_event_lines').insert(
             data.lines.map((l) => ({
@@ -1074,7 +1085,7 @@ export default function Page() {
               line_status: l.line_status,
             }))
           )
-          if (lineError) console.error('[Parada] Error al insertar líneas:', lineError.message)
+          if (lineError) throw lineError
         }
 
         // NO cambiar status de trip ni líneas — Parada es informacional

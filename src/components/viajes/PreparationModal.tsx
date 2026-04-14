@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Wrench, Package } from 'lucide-react'
 import type { TripWithRelations } from '@/hooks/useTrips'
 import { Button } from '@/components/ui/Button'
@@ -8,9 +8,15 @@ import FileUploader from '@/components/ui/FileUploader'
 import { formatQty } from '@/lib/utils/format'
 import type { Attachment } from '@/lib/supabase/storage'
 
+export interface PreparationData {
+  event_id: string // UUID pre-generado para idempotencia (retry de red)
+  notes: string
+  attachments: Attachment[]
+}
+
 interface PreparationModalProps {
   trip: TripWithRelations
-  onConfirm: (data: { notes: string; attachments: Attachment[] }) => Promise<void>
+  onConfirm: (data: PreparationData) => Promise<void>
   onClose: () => void
   loading: boolean
 }
@@ -19,8 +25,11 @@ export function PreparationModal({ trip, onConfirm, onClose, loading }: Preparat
   const [notes, setNotes] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
 
+  // UUID estable del evento — mismo valor en retries del mismo modal (idempotencia)
+  const eventIdRef = useRef<string>(crypto.randomUUID())
+
   const handleConfirm = useCallback(async () => {
-    await onConfirm({ notes: notes.trim(), attachments })
+    await onConfirm({ event_id: eventIdRef.current, notes: notes.trim(), attachments })
   }, [notes, attachments, onConfirm])
 
   return (
