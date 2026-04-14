@@ -35,43 +35,43 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 
 ## Enforcement técnico (2026-04-13)
 
-Esta regla documental es la capa más blanda. Existen **tres vectores** de acceso a Supabase desde Claude Code y cada uno tiene su propio enforcement.
+### Arquitectura real (verificada via `/mcp` y `list_projects`)
 
-### Vector 1 — Servidores locales del `.mcp.json` (read-only duro)
+Existe **un solo vector** de acceso a Supabase desde Claude Code: el plugin built-in `plugin:supabase:supabase` del marketplace oficial. Este plugin expone sus tools bajo el namespace `mcp__claude_ai_Supabase__*` (naming confuso — el prefix `claude_ai_` sugiere una integración web pero en realidad es el plugin).
 
-Dos servidores separados declarados en `.mcp.json`:
+El `.mcp.json` del proyecto **no se usa** — Claude Code no lo lee en este setup. Intentos previos de declarar servidores locales ahí fueron código muerto.
 
-- `supabase-staging` → `vonwkciosksqspyljzfy` — **default** para queries exploratorias y auditoría
-- `supabase-prod` → `bzeoszympkkicwlfdtcn` — solo cuando se compara drift con producción
+### Branches de Supabase
 
-Ambos corren con flag `--read-only` del paquete `@supabase/mcp-server-supabase`. El servidor rechaza cualquier mutación a nivel protocolo — `execute_sql` corre como usuario Postgres read-only y las tools mutantes están deshabilitadas en el servidor mismo.
+El proyecto Supabase de MovimientOS usa el feature de **database branching**. Bajo el proyecto principal `bzeoszympkkicwlfdtcn` hay dos branches:
 
-**Convención de uso:** Staging es el default. Producción solo se consulta cuando Claude Code anuncia explícitamente en el chat: "voy a consultar prod para comparar X". James puede validar antes de que la query corra.
+- **main** (`is_default: true`, no persistente) — producción
+- **staging** (`is_default: false`, persistente, `project_ref: vonwkciosksqspyljzfy`) — donde corren los tests E2E
 
-### Vector 2 — Integración web `claude_ai_Supabase`
+Ambas branches se acceden con el **mismo plugin**, pasando el `project_id` correspondiente como parámetro. No hay servidores separados.
 
-James conectó Supabase en claude.ai web como integración OAuth. Esa integración aparece en Claude Code con prefix `mcp__claude_ai_Supabase__*`. **Claude Chat la usa para planificación, ejecución de migraciones, gestión de branches.** Claude Code NO debe mutar por este vector.
+**Convención de uso:** Staging (`vonwkciosksqspyljzfy`) es el default para queries exploratorias y auditoría. Producción (`bzeoszympkkicwlfdtcn`) solo cuando se compara drift y Claude Code anuncia explícitamente en el chat: "voy a consultar prod para comparar X".
 
-Como esta integración **no** respeta el `--read-only` flag (no viene de `.mcp.json`), la única defensa es el deny-list en `.claude/settings.json`.
+### Deny-list en `.claude/settings.json` (11 entries)
 
-### Vector 3 — Regla documental (este archivo)
+Claude Code bloquea las 11 tools mutantes del namespace `mcp__claude_ai_Supabase__*`:
 
-Es la capa más blanda. Sirve para recordarme la política cuando razono sobre un task, no solo cuando ejecuto una tool. Funciona incluso si las otras dos capas fallan — pero depende 100% de mi disciplina.
+`apply_migration`, `create_branch`, `create_project`, `delete_branch`, `deploy_edge_function`, `execute_sql`, `merge_branch`, `pause_project`, `rebase_branch`, `reset_branch`, `restore_project`.
 
-### Tools bloqueadas (33 entries en `.claude/settings.json`)
+**Enforcement verificado end-to-end:** estas tools desaparecen completamente del index de deferred tools — Claude Code no las expone ni permite cargar su schema. Intentar invocarlas retorna `InputValidationError` inmediatamente sin llegar al servidor. El deny por nombre de tool aplica a **todas las branches automáticamente** porque el bloqueo es a nivel de tool-name, no por project_id.
 
-**Vectores 1 (locales, 22 entries × 2 servidores × 11 tools):**
-`apply_migration`, `create_branch`, `delete_branch`, `merge_branch`, `reset_branch`, `rebase_branch`, `deploy_edge_function`, `create_project`, `pause_project`, `restore_project`, `update_storage_config`.
+`execute_sql` está en deny porque en este plugin corre con credenciales privilegiadas — un `DROP TABLE` arbitrario pasaría si no se bloqueara. Para SQL read-only ad-hoc, Claude Code no tiene alternativa — Claude Chat ejecuta las queries vía su propia integración Supabase con confirmación humana.
 
-**Vector 2 (`claude_ai_Supabase`, 11 entries):**
-Las mismas 10 mutantes menos `update_storage_config` (no expuesta en esa integración) **más `execute_sql`** — porque ese endpoint corre con credenciales privilegiadas y puede ejecutar DDL/DML si no se bloquea explícitamente. Para SQL read-only Claude Code usa los servidores locales (Vector 1).
-
-### Tools permitidas en `claude_ai_Supabase` (solo lectura)
+### Tools permitidas (lectura)
 
 `list_tables`, `list_migrations`, `list_extensions`, `list_branches`, `list_edge_functions`, `list_projects`, `list_organizations`, `get_project`, `get_project_url`, `get_organization`, `get_edge_function`, `get_publishable_keys`, `get_logs`, `get_advisors`, `get_cost`, `generate_typescript_types`, `search_docs`, `confirm_cost`.
 
-Útiles para auditar schema/migraciones/logs/advisories sin tocar nada. Para ejecutar SQL arbitrario de solo lectura, usar los servidores locales (Vector 1) donde el flag `--read-only` del servidor hace de backstop.
+Útiles para auditar schema / migraciones / logs / advisories sin tocar nada.
+
+### Regla documental (este archivo)
+
+Es la capa más blanda. Sirve para recordarme la política cuando razono sobre un task, no solo cuando ejecuto una tool. El deny-list técnico es el backstop real — pero esta regla evita que yo intente invocar tools denegadas pensando que están permitidas.
 
 ### Si Supabase añade tools mutantes nuevas
 
-Hay que actualizar `.claude/settings.json` manualmente. Para Vector 1, el flag `--read-only` del servidor sigue siendo el backstop. Para Vector 2, no hay backstop — solo el deny-list y mi disciplina.
+Hay que actualizar `.claude/settings.json` manualmente. No hay backstop del lado del plugin (no existe `--read-only` flag para este namespace) — solo el deny-list y mi disciplina.
