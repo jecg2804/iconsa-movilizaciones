@@ -153,6 +153,11 @@ export interface TripsFilter {
   status?: string | null
   dateFrom?: string | null
   dateTo?: string | null
+  /**
+   * J4-A: día seleccionado por click en el calendario. Filtra SOLO la tabla
+   * (no el calendario), ortogonal a dateFrom/dateTo.
+   */
+  singleDay?: string | null
   conductorId?: string | null
   projectId?: string | null
   search?: string | null
@@ -174,6 +179,7 @@ const DEFAULT_FILTER: TripsFilter = {
   status: null,
   dateFrom: null,
   dateTo: null,
+  singleDay: null,
   conductorId: null,
   projectId: null,
   search: null,
@@ -638,6 +644,11 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       }
       if (filters.dateTo) {
         query = query.lte('scheduled_date', filters.dateTo)
+      }
+      // J4-A: filtro de día único (click en calendario). Solo aplica a la
+      // tabla — la query del calendario NO incluye este filtro.
+      if (filters.singleDay) {
+        query = query.eq('scheduled_date', filters.singleDay)
       }
       if (filters.conductorId) {
         query = query.eq('driver_id', filters.conductorId)

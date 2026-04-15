@@ -45,26 +45,25 @@ export default function SolicitudesPage() {
     return () => clearTimeout(timer)
   }, [searchInput, setFilters])
 
-  // Fecha: filtros server-side via useSolicitudes. El calendario muestra un día
-  // único como seleccionado cuando dateFrom === dateTo (click en día). Rangos
-  // Desde/Hasta también se reflejan en el calendario (filtra los items visibles).
-  const calendarDate =
-    filters.dateFrom && filters.dateFrom === filters.dateTo ? filters.dateFrom : null
+  // Fecha: filtros server-side via useSolicitudes.
+  // J4-A: el click en día del calendario usa `singleDay` (filtra SOLO la tabla,
+  // no el calendario — para que se vean los otros días). Los inputs Desde/Hasta
+  // usan `dateFrom`/`dateTo` (filtran calendario + tabla).
+  const calendarDate = filters.singleDay
   const setCalendarDate = useCallback(
     (date: string | null) => {
       if (!date) {
-        setFilters({ dateFrom: null, dateTo: null, page: 0 })
+        setFilters({ singleDay: null, page: 0 })
         return
       }
       // Toggle: si es el mismo día que ya está seleccionado, des-seleccionar.
-      // Sino, sobreescribir cualquier rango previo con el día único (Duda 2).
-      if (filters.dateFrom === date && filters.dateTo === date) {
-        setFilters({ dateFrom: null, dateTo: null, page: 0 })
+      if (filters.singleDay === date) {
+        setFilters({ singleDay: null, page: 0 })
       } else {
-        setFilters({ dateFrom: date, dateTo: date, page: 0 })
+        setFilters({ singleDay: date, page: 0 })
       }
     },
-    [filters.dateFrom, filters.dateTo, setFilters],
+    [filters.singleDay, setFilters],
   )
 
   // Inicializar colapsado al cargar datos
@@ -170,29 +169,30 @@ export default function SolicitudesPage() {
         })
       }
     }
-    // Fechas: si dateFrom === dateTo es día único, sino es rango
-    if (filters.dateFrom && filters.dateFrom === filters.dateTo) {
-      const d = new Date(filters.dateFrom + 'T00:00:00')
+    // J4-A: día único del click calendario usa `singleDay`; rango Desde/Hasta
+    // usa `dateFrom`/`dateTo`. Pueden coexistir — se muestran como chips
+    // separados.
+    if (filters.singleDay) {
+      const d = new Date(filters.singleDay + 'T00:00:00')
       chips.push({
         key: 'date',
         label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setFilters({ dateFrom: null, dateTo: null, page: 0 }),
+        onRemove: () => setFilters({ singleDay: null, page: 0 }),
       })
-    } else {
-      if (filters.dateFrom) {
-        chips.push({
-          key: 'dateFrom',
-          label: `Desde ${formatDate(filters.dateFrom)}`,
-          onRemove: () => setFilters({ dateFrom: null, page: 0 }),
-        })
-      }
-      if (filters.dateTo) {
-        chips.push({
-          key: 'dateTo',
-          label: `Hasta ${formatDate(filters.dateTo)}`,
-          onRemove: () => setFilters({ dateTo: null, page: 0 }),
-        })
-      }
+    }
+    if (filters.dateFrom) {
+      chips.push({
+        key: 'dateFrom',
+        label: `Desde ${formatDate(filters.dateFrom)}`,
+        onRemove: () => setFilters({ dateFrom: null, page: 0 }),
+      })
+    }
+    if (filters.dateTo) {
+      chips.push({
+        key: 'dateTo',
+        label: `Hasta ${formatDate(filters.dateTo)}`,
+        onRemove: () => setFilters({ dateTo: null, page: 0 }),
+      })
     }
     if (filters.search) {
       chips.push({
@@ -213,6 +213,7 @@ export default function SolicitudesPage() {
       requesterId: null,
       dateFrom: null,
       dateTo: null,
+      singleDay: null,
       page: 0,
     })
     setSearchInput('')

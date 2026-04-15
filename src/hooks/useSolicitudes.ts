@@ -113,6 +113,13 @@ export interface SolicitudesFilter {
   priorities: string[]
   dateFrom: string | null
   dateTo: string | null
+  /**
+   * J4-A: día seleccionado por click en el calendario. Filtra SOLO la tabla
+   * (no el calendario, para que se puedan ver los otros días). Es ortogonal
+   * a dateFrom/dateTo — si ambos están seteados, la tabla muestra la
+   * intersección.
+   */
+  singleDay: string | null
   search: string
   requesterId: string | null
   page: number
@@ -127,6 +134,7 @@ const DEFAULT_FILTER: SolicitudesFilter = {
   priorities: [],
   dateFrom: null,
   dateTo: null,
+  singleDay: null,
   search: '',
   requesterId: null,
   page: 0,
@@ -274,6 +282,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       }
       if (filters.dateTo) {
         query = query.lte('date_required', filters.dateTo)
+      }
+      // J4-A: filtro de día único (click en calendario). Solo aplica a la
+      // tabla — la query del calendario NO incluye este filtro.
+      if (filters.singleDay) {
+        query = query.eq('date_required', filters.singleDay)
       }
       if (filters.search) {
         query = query.ilike('request_id', `%${filters.search}%`)

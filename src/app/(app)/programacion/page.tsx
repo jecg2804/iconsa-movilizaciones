@@ -171,21 +171,22 @@ export default function ProgramacionPage() {
   ])
 
   // --- Handlers de filtro de fecha (todos server-side via setTripFilters) ---
+  // J4-A: click en día del calendario usa `singleDay` (filtra solo la tabla,
+  // el calendario sigue mostrando otros días). Desde/Hasta usa dateFrom/dateTo.
   const handleCalendarClick = useCallback(
     (date: string | null) => {
       if (!date) {
-        setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
+        setTripFilters({ singleDay: null, page: 0 })
         return
       }
-      // Toggle: si es el mismo día único, des-seleccionar.
-      // Sobreescribir cualquier rango previo con el día único (Duda 2).
-      if (tripFilters.dateFrom === date && tripFilters.dateTo === date) {
-        setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
+      // Toggle: si es el mismo día ya seleccionado, des-seleccionar.
+      if (tripFilters.singleDay === date) {
+        setTripFilters({ singleDay: null, page: 0 })
       } else {
-        setTripFilters({ dateFrom: date, dateTo: date, page: 0 })
+        setTripFilters({ singleDay: date, page: 0 })
       }
     },
-    [tripFilters.dateFrom, tripFilters.dateTo, setTripFilters],
+    [tripFilters.singleDay, setTripFilters],
   )
 
   const handleDateFromChange = useCallback(
@@ -646,10 +647,10 @@ export default function ProgramacionPage() {
                 className={selectClass}
               />
             </div>
-            {(tripFilters.projectId || tripFilters.status || tripFilters.conductorId || tripFilters.search || tripFilters.dateFrom || tripFilters.dateTo) && (
+            {(tripFilters.projectId || tripFilters.status || tripFilters.conductorId || tripFilters.search || tripFilters.dateFrom || tripFilters.dateTo || tripFilters.singleDay) && (
               <button
                 type="button"
-                onClick={() => setTripFilters({ projectId: null, status: null, conductorId: null, search: null, dateFrom: null, dateTo: null, page: 0 })}
+                onClick={() => setTripFilters({ projectId: null, status: null, conductorId: null, search: null, dateFrom: null, dateTo: null, singleDay: null, page: 0 })}
                 className="text-xs text-iconsa-blue hover:underline"
               >
                 Limpiar
@@ -662,11 +663,7 @@ export default function ProgramacionPage() {
         <div className="px-4 pb-3">
           <MiniCalendar
             items={calendarItems}
-            selectedDate={
-              tripFilters.dateFrom && tripFilters.dateFrom === tripFilters.dateTo
-                ? tripFilters.dateFrom
-                : null
-            }
+            selectedDate={tripFilters.singleDay ?? null}
             onSelectDate={handleCalendarClick}
           />
         </div>
