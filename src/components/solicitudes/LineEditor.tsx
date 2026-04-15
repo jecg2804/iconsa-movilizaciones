@@ -391,9 +391,14 @@ function LineEditor({
       newErrors.to = 'Indique el destino'
     }
 
+    // J7: Código de costo (fase) requerido
+    if (!costCodeId) {
+      newErrors.cost_code = 'El código de costo es requerido'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
-  }, [description, quantity, fromValue, toValue])
+  }, [description, quantity, fromValue, toValue, costCodeId])
 
   // --- Guardar ---
   const handleSave = useCallback(async () => {
@@ -576,13 +581,14 @@ function LineEditor({
         )}
 
         <Select
-          label="Fase / Código de Costo"
+          label="Fase / Código de Costo *"
           placeholder={loadingCostCodes ? 'Cargando...' : (hasExtras && !selectedExtraId) ? 'Seleccione un extra primero' : 'Seleccionar fase...'}
           options={projectId ? filteredCostCodes : costCodes}
           value={costCodeId}
           onChange={handleCostCodeChange}
           searchable
           disabled={loadingCostCodes || (hasExtras && !selectedExtraId)}
+          error={errors.cost_code}
         />
 
         <Select
