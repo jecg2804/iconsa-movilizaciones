@@ -122,6 +122,12 @@ export interface SolicitudesFilter {
   singleDay: string | null
   search: string
   requesterId: string | null
+  /**
+   * J4-B: sort server-side. Columna de BD por la que ordenar (ej. 'date_required',
+   * 'request_id', 'status'). Si es null, usa el default por fecha requerida asc.
+   */
+  sortColumn: string | null
+  sortDirection: 'asc' | 'desc'
   page: number
   pageSize: number
 }
@@ -137,6 +143,8 @@ const DEFAULT_FILTER: SolicitudesFilter = {
   singleDay: null,
   search: '',
   requesterId: null,
+  sortColumn: null,
+  sortDirection: 'asc',
   page: 0,
   pageSize: 20,
 }
@@ -259,6 +267,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
     setListError(null)
 
     try {
+      // J4-B: sort server-side. Default: date_required asc si no hay sort explícito.
+      const sortCol = filters.sortColumn ?? 'date_required'
+      const sortAsc = filters.sortDirection !== 'desc'
       let query = supabase
         .from('sm_requests')
         .select(`
@@ -267,7 +278,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           requester:people!sm_requests_requester_id_fkey(id, name),
           lines:sm_request_lines(id, status, line_type, description, quantity, notes, from_text, to_text, unit_text, from_location:locations!sm_request_lines_from_location_id_fkey(name), to_location:locations!sm_request_lines_to_location_id_fkey(name), unit:units(code))
         `, { count: 'exact' })
-        .order('date_required', { ascending: true })
+        .order(sortCol, { ascending: sortAsc })
 
       // Aplicar filtros dinamicamente
       if (filters.projectId) {

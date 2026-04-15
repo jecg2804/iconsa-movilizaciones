@@ -252,6 +252,7 @@ export default function ProgramacionPage() {
         key: 'trip_id',
         header: 'ID',
         sortable: true,
+        serverSortKey: 'trip_id',
         className: 'w-[150px]',
         render: (row) => (
           <a
@@ -268,6 +269,7 @@ export default function ProgramacionPage() {
         key: 'scheduled_date',
         header: 'Fecha',
         sortable: true,
+        serverSortKey: 'scheduled_date',
         className: 'w-[120px]',
         render: (row) => (
           <span className="text-sm text-gray-900">
@@ -356,6 +358,7 @@ export default function ProgramacionPage() {
         key: 'status',
         header: 'Estado',
         sortable: true,
+        serverSortKey: 'status',
         className: 'w-[130px]',
         render: (row) => (
           <span className="flex items-center gap-1.5">
@@ -691,6 +694,11 @@ export default function ProgramacionPage() {
             currentPage={tripFilters.page}
             onPageChange={(page) => setTripFilters({ page })}
             onPageSizeChange={(size) => setTripFilters({ pageSize: size, page: 0 })}
+            externalSort={{
+              column: tripFilters.sortColumn ?? null,
+              direction: tripFilters.sortDirection ?? 'desc',
+              onSortChange: (column, direction) => setTripFilters({ sortColumn: column, sortDirection: direction, page: 0 }),
+            }}
             expandRender={(row) => {
               const assignments = row.assignments ?? []
               if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>

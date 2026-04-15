@@ -7,9 +7,29 @@ export interface Column<T> {
   key: string
   header: string
   sortable?: boolean
+  /**
+   * J4-B: nombre de la columna en la BD para server-side sort. Si se provee,
+   * esta columna se puede ordenar a nivel de query cuando DataTable está en
+   * modo `externalSort`. Si no se provee y externalSort está activo, esta
+   * columna no muestra indicador de sort (no-op).
+   */
+  serverSortKey?: string
   className?: string
   render: (row: T) => React.ReactNode
   sortValue?: (row: T) => string | number | Date
+}
+
+type SortDirection = 'asc' | 'desc'
+
+/**
+ * J4-B: contrato para sort controlado externamente (server-side).
+ * Cuando se provee, DataTable NO sortea client-side — delega al callback
+ * para que el parent actualice el query del hook.
+ */
+export interface ExternalSort {
+  column: string | null
+  direction: SortDirection
+  onSortChange: (column: string | null, direction: SortDirection) => void
 }
 
 interface DataTableProps<T> {
@@ -46,9 +66,14 @@ interface DataTableProps<T> {
   onPageChange?: (page: number) => void
   /** Callback cuando cambia el page size. Solo server mode. */
   onPageSizeChange?: (size: number) => void
+  /**
+   * J4-B: sort controlado externamente. Si se provee, DataTable delega el
+   * sort al parent (que lo pushea al query server-side). Sort client-side
+   * se desactiva. Requiere que los columns tengan `serverSortKey` para
+   * ser clickeables.
+   */
+  externalSort?: ExternalSort
 }
-
-type SortDirection = 'asc' | 'desc'
 
 function DataTable<T>({
   columns,
@@ -70,6 +95,7 @@ function DataTable<T>({
   currentPage,
   onPageChange,
   onPageSizeChange,
+  externalSort,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -91,6 +117,25 @@ function DataTable<T>({
 
   const handleSort = useCallback(
     (columnKey: string) => {
+      // J4-B: modo externalSort — delegar al parent para server-side sort
+      if (externalSort) {
+        const column = columns.find((c) => c.key === columnKey)
+        if (!column?.serverSortKey) return
+        const target = column.serverSortKey
+        if (externalSort.column === target) {
+          // Toggle: asc → desc → null (quitar sort)
+          if (externalSort.direction === 'asc') {
+            externalSort.onSortChange(target, 'desc')
+          } else {
+            externalSort.onSortChange(null, 'asc')
+          }
+        } else {
+          externalSort.onSortChange(target, 'asc')
+        }
+        return
+      }
+
+      // Modo interno (client-side sort)
       if (sortKey === columnKey) {
         if (sortDirection === 'asc') {
           setSortDirection('desc')
@@ -104,7 +149,7 @@ function DataTable<T>({
         setSortDirection('asc')
       }
     },
-    [sortKey, sortDirection],
+    [sortKey, sortDirection, externalSort, columns],
   )
 
   const toggleExpand = useCallback(
@@ -118,6 +163,9 @@ function DataTable<T>({
   )
 
   const sortedData = useMemo(() => {
+    // J4-B: en modo externalSort, data ya viene ordenada del server
+    if (externalSort) return data
+
     if (!sortKey) return data
 
     const column = columns.find((col) => col.key === sortKey)
@@ -149,7 +197,7 @@ function DataTable<T>({
     })
 
     return sortDirection === 'desc' ? sorted.reverse() : sorted
-  }, [data, sortKey, sortDirection, columns])
+  }, [data, sortKey, sortDirection, columns, externalSort])
 
   // --- Paginación ---
   const paginatedData = useMemo(() => {
@@ -212,6 +260,20 @@ function DataTable<T>({
   const renderSortIcon = (column: Column<T>) => {
     if (!column.sortable) return null
 
+    // J4-B: externalSort mode
+    if (externalSort) {
+      if (!column.serverSortKey) return null
+      if (externalSort.column !== column.serverSortKey) {
+        return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-gray-400" />
+      }
+      return externalSort.direction === 'asc' ? (
+        <ArrowUp className="ml-1 inline h-3.5 w-3.5 text-iconsa-blue" />
+      ) : (
+        <ArrowDown className="ml-1 inline h-3.5 w-3.5 text-iconsa-blue" />
+      )
+    }
+
+    // Modo interno
     if (sortKey !== column.key) {
       return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-gray-400" />
     }
@@ -279,20 +341,24 @@ function DataTable<T>({
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 {expandRender && <th className="w-8 px-2 py-3"><span className="sr-only">Expandir</span></th>}
-                {columns.map((column) => (
+                {columns.map((column) => {
+                  // J4-B: en externalSort, solo clickeable si la columna tiene serverSortKey
+                  const effectivelySortable = column.sortable && (!externalSort || !!column.serverSortKey)
+                  return (
                   <th
                     key={column.key}
                     className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-iconsa-gray ${
-                      column.sortable ? 'cursor-pointer select-none hover:text-navy' : ''
+                      effectivelySortable ? 'cursor-pointer select-none hover:text-navy' : ''
                     } ${column.className ?? ''}`}
-                    onClick={column.sortable ? () => handleSort(column.key) : undefined}
+                    onClick={effectivelySortable ? () => handleSort(column.key) : undefined}
                   >
                     <span className="inline-flex items-center">
                       {column.header}
                       {renderSortIcon(column)}
                     </span>
                   </th>
-                ))}
+                  )
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

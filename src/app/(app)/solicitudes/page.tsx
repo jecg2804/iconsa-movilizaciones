@@ -246,6 +246,7 @@ export default function SolicitudesPage() {
         key: 'request_id',
         header: 'ID',
         sortable: true,
+        serverSortKey: 'request_id',
         className: 'w-[160px]',
         render: (row) => {
           const hasAttachments = Array.isArray(row.attachments) && row.attachments.length > 0
@@ -302,6 +303,7 @@ export default function SolicitudesPage() {
         key: 'date_required',
         header: 'Fecha Req.',
         sortable: true,
+        serverSortKey: 'date_required',
         className: 'w-[120px]',
         render: (row) => (
           <span className="text-sm text-gray-900">{formatDate(row.date_required)}</span>
@@ -312,6 +314,7 @@ export default function SolicitudesPage() {
         key: 'date_submitted',
         header: 'Fecha Enviada',
         sortable: true,
+        serverSortKey: 'date_submitted',
         className: 'w-[120px]',
         render: (row) => (
           <span className="text-sm text-gray-900">{row.date_submitted ? formatDate(row.date_submitted) : '—'}</span>
@@ -322,6 +325,7 @@ export default function SolicitudesPage() {
         key: 'status',
         header: 'Estado',
         sortable: true,
+        serverSortKey: 'status',
         className: 'w-[130px]',
         render: (row) => (
           <div>
@@ -553,6 +557,11 @@ export default function SolicitudesPage() {
         onPageSizeChange={(size) => setFilters({ pageSize: size, page: 0 })}
         expandedKeys={solExpandedKeys}
         onExpandedKeysChange={setSolExpandedKeys}
+        externalSort={{
+          column: filters.sortColumn,
+          direction: filters.sortDirection,
+          onSortChange: (column, direction) => setFilters({ sortColumn: column, sortDirection: direction, page: 0 }),
+        }}
         expandRender={(row) => {
           const lines = row.lines ?? []
           if (lines.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas</p>

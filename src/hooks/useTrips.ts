@@ -161,6 +161,12 @@ export interface TripsFilter {
   conductorId?: string | null
   projectId?: string | null
   search?: string | null
+  /**
+   * J4-B: sort server-side. Columna de BD para ordenar (ej. 'scheduled_date',
+   * 'trip_id', 'status'). Si es null, usa default scheduled_date desc.
+   */
+  sortColumn?: string | null
+  sortDirection?: 'asc' | 'desc'
   page: number
   pageSize: number
 }
@@ -183,6 +189,8 @@ const DEFAULT_FILTER: TripsFilter = {
   conductorId: null,
   projectId: null,
   search: null,
+  sortColumn: null,
+  sortDirection: 'desc',
   page: 0,
   pageSize: 20,
 }
@@ -585,6 +593,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         }
       }
 
+      // J4-B: sort server-side. Default: scheduled_date desc si no hay sort explícito.
+      const sortCol = filters.sortColumn ?? 'scheduled_date'
+      const sortAsc = filters.sortDirection === 'asc'
       let query = supabase
         .from('trips')
         .select(`
@@ -630,7 +641,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             )
           )
         `, { count: 'exact' })
-        .order('scheduled_date', { ascending: false })
+        .order(sortCol, { ascending: sortAsc })
 
       // Aplicar filtros dinámicamente
       if (projectTripIds) {
