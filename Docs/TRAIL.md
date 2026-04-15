@@ -21,8 +21,8 @@ Perfeccionar movilizaciones
      ├─ [✅] Higiene de docs + manejo de contexto
      ├─ [✅] Consolidar EVENTS V2 master + issues → reference/EVENTS_V2.md
      ├─ [▶] Sprint prod cherry-pick (Abril 15)
-     │   ├─ [✅] J3 RBAC conductores (security)
-     │   ├─ [⏸] J4 Calendarios paginación (pausado, 4 preguntas a James)
+     │   ├─ [✅] J3 RBAC conductores (security) — test manual ✅
+     │   ├─ [✅] J4 Calendarios y filtros unificados (rediseño)
      │   ├─ [✅] J6 Tarifa no editable
      │   ├─ [✅] J7 Código costos requerido
      │   ├─ [✅] J8a Scroll/zoom modales en mobile
