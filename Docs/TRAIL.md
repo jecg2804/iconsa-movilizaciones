@@ -5,7 +5,7 @@
 > autocargo al inicio de cada sesión para recuperar el hilo sin leer
 > todo el plan file.
 
-**Última actualización:** 2026-04-15
+**Última actualización:** 2026-04-15 (sprint prod cherry-pick cerrado)
 
 ## Root task
 
@@ -20,46 +20,67 @@ Perfeccionar movilizaciones
      ├─ [✅] Parking git/github practices
      ├─ [✅] Higiene de docs + manejo de contexto
      ├─ [✅] Consolidar EVENTS V2 master + issues → reference/EVENTS_V2.md
-     ├─ [▶] Sprint prod cherry-pick (Abril 15)
-     │   ├─ [✅] J3 RBAC conductores (security) — test manual ✅
-     │   ├─ [✅] J4 Calendarios y filtros unificados (rediseño)
-     │   ├─ [✅] J6 Tarifa no editable
-     │   ├─ [✅] J7 Código costos requerido
-     │   ├─ [✅] J8a Scroll/zoom modales en mobile
-     │   ├─ [✅] J8b Duplicar líneas
-     │   └─ [⏸] Push a main + tag release (manual por James)
-     └─ [⏳] Sprint staging-track Events V2 polish (siguiente plan)
-         ├─ J1 Pickup bloqueado + design AD-1
-         ├─ J2 Códigos entrega opcionales (default + PickupModal)
-         ├─ J5 Seguir diseñando eventos
-         ├─ J9 Cost code a nivel solicitud (refactor grande)
-         ├─ G-items sobrevivientes (G1, G4, G5, G10, G11)
+     ├─ [✅] Sprint prod cherry-pick (Abril 15, 2 releases en prod)
+     │   ├─ v2026.04.15-1 (870a8f6): J3 + J4 + J6 + J7 + J8a + J8b
+     │   └─ v2026.04.15-2 (1425cae): hotfix J4-A + J4-B + J7-ext
+     └─ [⏳] Siguiente: staging-track Events V2 polish
+         ├─ J1 Pickup bloqueado + design discussion AD-1
+         ├─ J2 Códigos entrega opcionales + decisión default
+         ├─ J5 Overarching event design
+         ├─ J9 Cost code a nivel solicitud (refactor estructural)
+         ├─ G-items sobrevivientes (G1 reversion guard, G4
+         │   notifyLineaRechazada, G5 timeline per-line, G10 Incidencia
+         │   min, G11 DeliveryModal partial warning)
          └─ G17-G20 doc cleanup EVENTS_V2.md
 ```
 
 ## Contexto mínimo
 
-Sprint prod cherry-pick ejecutado single-shot: 5 fixes commiteados en
-jaime/dev y aplicados en el worktree `../mo-main` (J3 literal cherry-
-pick, J6/J7/J8a/J8b commits paralelos adaptados a main). J4 pausado
-esperando respuesta de James a 4 preguntas de reproducción (el código
-de calendarItems usa query separada sin paginación — el síntoma que ve
-James no es reproducible por grep, necesita debug runtime).
+Sprint prod cherry-pick **cerrado exitosamente** el 2026-04-15 con 2
+releases tagged en producción y verificados funcionalmente por James:
 
-Pendiente de James:
-1. Test manual J3 con user real de rol `campo` antes del push
-2. Push + tag release v2026.04.15-N (comandos en reporte final)
-3. Reproducción de J4 en dev server (4 preguntas pendientes)
+**v2026.04.15-1** (`870a8f6`, tag pusheado) — 6 fixes base:
+- J3 RBAC conductores (security, test manual OK)
+- J4 Calendarios y filtros unificados (rediseño)
+- J6 Tarifa no editable cuando hay rate seleccionada
+- J7 Código de costo requerido
+- J8a Scroll/zoom modales en mobile
+- J8b Duplicar líneas en solicitud
 
-Siguiente dirección (tras cerrar prod track): **staging-track Events V2
-polish**. Plan file nuevo tras este sprint — incluye design discussions
-de J1-arch/AD-1, J2 requires_code default, J9 cost code refactor.
+**v2026.04.15-2** (`1425cae`, tag pusheado) — 3 hotfixes:
+- J4-A Regresión click-día (singleDay separado de dateFrom/dateTo, el
+  calendario sigue mostrando otros días al clickear uno)
+- J4-B Sort server-side (DataTable externalSort contrato, sort re-fetchea
+  toda la data en BD en vez de solo la página actual)
+- J7-ext Código costo 3 campos (extra/sección + fase + categoría, los 3
+  requeridos cuando el proyecto los tiene)
+
+Ambos worktrees cerrados. Vercel prod verde en `1425cae` (requirió
+empty-commit trick para destrabar webhook). Detalle completo de todos
+los fixes en `Docs/CHANGELOG.md` entries 2026-04-15.
+
+## Siguiente dirección: staging-track Events V2 polish
+
+Plan file se abrirá fresh en la próxima sesión cuando James decida
+qué arrancar primero. Hay **3 design discussions pre-requisito** que
+no bloquean el resto pero deben happen antes de los items relacionados:
+
+1. **AD-1 Pickup architecture** — ¿PickupOrder entity separada (como
+   dice `Docs/reference/Self-pickup.md`) vs fix rápido en Trip entity?
+   Prerequisito para J1.
+2. **J2 requires_code default** — ¿true/false? ¿visible sin expandir
+   "Opciones avanzadas"? ¿PickupModal debe respetar el flag?
+3. **J9 cost code refactor** — ¿mover cost_code de `sm_request_lines`
+   a `sm_requests`? Requiere data analysis primero (cuántas solicitudes
+   tienen líneas con cost_codes distintos, si es lossy la migración).
 
 Parked deliberadamente por James:
 
 - F5 Dashboards por rol, F2 Inspecciones — features grandes, no ahora
 - F1.4 Retorno reconciliación per-line — esperando métricas de uso
 - F1.6 Observaciones de entrega visibles — nice-to-have, baja prioridad
+- Primer `/release` completo de jaime/dev → main — sigue parked, se
+  harán hotfixes puntuales hasta que Events V2 esté completo
 
 ## Reglas de este doc
 
@@ -72,7 +93,9 @@ Parked deliberadamente por James:
 
 ## Links
 
-- **Plan file activo:** `~/.claude/plans/linked-sleeping-lighthouse.md` (stub tras cierre)
+- **Plan file activo:** ninguno (sprint cerrado, abrir nuevo al arrancar staging-track)
 - **BACKLOG completo:** `Docs/BACKLOG.md`
 - **CHANGELOG:** `Docs/CHANGELOG.md`
+- **EVENTS V2 reference:** `Docs/reference/EVENTS_V2.md`
+- **Self-pickup reference:** `Docs/reference/Self-pickup.md`
 - **Regla de ciclo de vida de plans:** `.claude/rules/plan-lifecycle.md`

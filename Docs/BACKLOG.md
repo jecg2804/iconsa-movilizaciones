@@ -1,11 +1,79 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-14 (sin task activa, audit cerrado)
+Última actualización: 2026-04-15 (sprint prod cherry-pick cerrado, staging-track siguiente)
+
+---
+
+## Siguiente sprint — Staging-track Events V2 polish
+
+Items confirmados para el próximo sprint en `jaime/dev`. Se arranca en
+próxima sesión cuando James elija por dónde empezar. **Plan file:**
+ninguno activo — se abre fresh.
+
+**Design discussions pre-requisito (no bloquean todo pero cada una
+gatea su item correspondiente):**
+
+- **AD-1 Pickup architecture** — ¿PickupOrder entity separada (como
+  recomienda `Docs/reference/Self-pickup.md`) vs fix rápido en Trip
+  entity? Prerequisito para J1. La semántica actual de forzar pickup
+  dentro de Trip genera edge cases (vehicle_id null, driver_id null,
+  custody transfer coupling).
+- **J2 requires_code default** — ¿`true` o `false`? ¿visible sin
+  expandir "Opciones avanzadas"? ¿PickupModal debe respetar el flag
+  (hoy siempre pide código) o mantener hardcoded?
+- **J9 cost code architectural** — ¿mover `cost_code_id` /
+  `cost_category_id` / extra de `sm_request_lines` a `sm_requests`?
+  Requiere data analysis primero: contar cuántas solicitudes tienen
+  líneas con cost_codes distintos. Si <5% de las solicitudes tienen
+  split, migración forzada viable. Si >20%, hay que mantener ambos
+  niveles o decidir merge strategy.
+
+**Items de implementación (tras design discussion correspondiente):**
+
+- **J1 Pickup flow bloqueado** — TripForm valida `driver_id` y
+  `vehicle_id` como required incluso cuando `is_self_pickup=true`
+  (el toggle los limpia en UI pero `validate()` en
+  `nuevo/page.tsx:200-213` no los hace opcionales). Fix corto o
+  profundo depende de AD-1.
+- **J2 Códigos entrega opcionales** — arreglar default + UX + PickupModal
+  según decisión de design discussion.
+- **J5 Overarching event design** — seguir refinando el rediseño de
+  EVENTS V2 con features que no existen en prod.
+- **J9 Cost code refactor** — solo después del data analysis.
+- **G1 Reversion guard** — `handleRevert` en `mis-viajes/[id]/page.tsx`
+  NO valida que `registered_by === current_user.id`. Gate actual solo
+  por rol. Un logistica puede revertir eventos de OTRO logistica.
+- **G4 `notifyLineaRechazada`** — líneas rechazadas en DeliveryModal
+  (`status='rejected'`) no disparan notificación específica al PM.
+- **G5 Timeline per-line detail** — EventTimeline muestra solo summary
+  a nivel trip. Per-line detail de Entrega (qty por línea, observación)
+  no se ve.
+- **G10 Incidencia min length** — IncidenciaModal sin validación de
+  longitud mínima de descripción.
+- **G11 DeliveryModal partial-previous warning** — DeliveryModal no
+  advierte cuando una línea ya tiene entrega parcial previa. La BD
+  atrapa por qty_invariant pero UX pobre.
+- **G17–G20 EVENTS_V2.md doc cleanup** — mismatches entre el doc y
+  el código (ej. doc menciona columna `stop_location`, real es
+  `trip_events.location`; orden de operaciones en handleDelivery
+  distinto al descrito; conteo de notificaciones; botón multi-entrega
+  verificar).
+
+**Notas del contexto previo:**
+
+Algunos G-items pueden haber sido resueltos tangencialmente en el
+sprint v1/v2 — re-verificar contra `CHANGELOG.md` 2026-04-15 antes de
+asignar a implementación. En particular G3 (notifyEntregaConObservaciones)
+y G8 (pickup badges) fueron marcados como resueltos en el triaje
+original, cross-checkear G6 (dashboard links) y otros.
 
 ---
 
 ## Completado recientemente (abril 2026)
 
+- **Sprint prod cherry-pick 2026-04-15 — 2 releases tagged y verificados en prod.**
+  - **v2026.04.15-1** (`870a8f6`): **J3** RBAC conductores (security, redirect hard para `campo`, filter driver_id server-side en useMyTrips, ownership guard en mis-viajes/[id], test manual con user real ✅), **J4** calendarios y filtros unificados (rediseño — consolidar `dateFilter` local en `useSolicitudes`/`useTrips`, añadir `projectId` server-side a TripsFilter con 2-step query via trip_line_assignments, calendario y tabla comparten mismo set de filtros), **J6** tarifa no editable (cost disabled cuando rateId seleccionado), **J7** código costo requerido (validación Fase en LineEditor), **J8a** scroll/zoom modales en mobile (max-h + overflow-y-auto + p-4 sm:p-6 en 6 modales jaime/dev + EventModal main), **J8b** duplicar líneas (botón Copy en LineRow, handler en SolicitudForm + [id] gated por canAddLines). Detalle completo en `Docs/CHANGELOG.md` 2026-04-15.
+  - **v2026.04.15-2 hotfix** (`1425cae`): **J4-A** regresión click-día (fix original de J4 unificó demasiado `dateFrom=dateTo=día` → colapsaba calendario. Fix: nuevo campo `singleDay` ortogonal en `SolicitudesFilter`/`TripsFilter`, filtra solo la tabla, calendario sigue mostrando otros días), **J4-B** sort server-side (bug preexistente — sort de columnas operaba client-side sobre página actual. Fix: contrato `externalSort` en DataTable + `serverSortKey` en Column, hooks aplican `.order(col, { ascending })` server-side. Columnas marcadas: request_id/date_required/date_submitted/status en solicitudes; trip_id/scheduled_date/status en programación), **J7-ext** código costo 3 campos (el fix previo solo validaba Fase; James aclaró que "código de costo" son 3 campos: extra + fase + categoría. Los 3 requeridos).
 - **Audit consolidado código + BD** — ~65 hallazgos de 3+ rondas, organizados en 6 fases (A: hardening cantidades, B.0/B.1: BD security + business rules + indexes, C: defense-in-depth código + UX polish, D: incorporado a B.1, E: tests + docs). Todos commiteados en `jaime/dev`. Detalle completo en `Docs/CHANGELOG.md` 2026-04-14. Fase F (MIGRATIONS_FAILED) descartada tras investigación — no-bloqueante.
 - **Git/GitHub practices** — 3 capas client-side activas: deny patterns, Husky hooks (pre-commit/pre-push/post-commit con build en background), skill `/release`. Capa server-side pendiente upgrade a GitHub Team.
 - **Higiene de docs + manejo de contexto** — rule `plan-lifecycle.md`, nuevo `Docs/TRAIL.md` auto-cargado, CLAUDE.md reference section con tabla de consulta, reference/archive reorganizados, `no-modify-specs` eliminada.
