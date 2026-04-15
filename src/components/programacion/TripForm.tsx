@@ -208,31 +208,15 @@ function TripForm({
 
   const handleRateChange = useCallback(
     (val: string | null) => {
-      // Auto-rellenar costo desde el amount de la opción seleccionada.
-      // Si el usuario ya ingresó un costo distinto, pedir confirmación
-      // antes de sobreescribirlo.
+      // J6: si hay tarifa seleccionada, costo siempre se auto-rellena y queda
+      // read-only. Si el usuario quiere un costo custom, debe deseleccionar la
+      // tarifa primero. Sin confirmación — el campo no es editable mientras
+      // haya rate.
       if (val) {
         const selectedRate = rates.find((r) => r.value === val)
         if (selectedRate?.amount != null) {
-          const newCost = String(selectedRate.amount)
-          const currentCostNum = parseFloat(cost)
-          const hasManualCost =
-            cost.trim() !== '' && !Number.isNaN(currentCostNum) && currentCostNum !== selectedRate.amount
-          if (hasManualCost) {
-            const ok = typeof window !== 'undefined' &&
-              window.confirm(
-                `Ya ingresaste un costo de B/. ${currentCostNum.toFixed(2)}. ` +
-                `¿Reemplazar con la tarifa seleccionada (B/. ${selectedRate.amount.toFixed(2)})?`,
-              )
-            if (!ok) {
-              setRateId(val)
-              onRateChange?.(val)
-              propagate({ rate_id: val })
-              return
-            }
-          }
           setRateId(val)
-          setCost(newCost)
+          setCost(String(selectedRate.amount))
           onRateChange?.(val)
           propagate({ rate_id: val, cost: selectedRate.amount })
           return
@@ -242,7 +226,7 @@ function TripForm({
       onRateChange?.(val)
       propagate({ rate_id: val })
     },
-    [propagate, onRateChange, rates, cost],
+    [propagate, onRateChange, rates],
   )
 
   const handleCostChange = useCallback(
@@ -450,7 +434,7 @@ function TripForm({
           searchable
         />
 
-        {/* Costo */}
+        {/* Costo — read-only cuando hay tarifa seleccionada (J6) */}
         <Input
           label="Costo (B/.)"
           type="number"
@@ -458,7 +442,7 @@ function TripForm({
           min="0"
           value={cost}
           onChange={handleCostChange}
-          disabled={fieldsDisabled}
+          disabled={fieldsDisabled || !!rateId}
           placeholder="0.00"
         />
 
