@@ -22,8 +22,11 @@ export default function MisViajesPage() {
   const [driverFilter, setDriverFilter] = useState<string | null>(null)
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([])
 
-  // Fetch conductores (campo) para filtro
+  // Fetch conductores (campo) para filtro — solo relevante para roles que ven múltiples conductores
+  const showDriverFilter = role !== 'campo'
+
   useEffect(() => {
+    if (!showDriverFilter) return
     supabase
       .from('people')
       .select('id, name')
@@ -31,7 +34,7 @@ export default function MisViajesPage() {
       .eq('app_role', 'campo')
       .order('name')
       .then(({ data }) => setDrivers(data ?? []))
-  }, [supabase])
+  }, [supabase, showDriverFilter])
 
   const statusOptions: SelectOption[] = [
     { value: 'Programado', label: 'Programado' },
@@ -92,12 +95,14 @@ export default function MisViajesPage() {
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           title="Fecha hasta"
         />
-        <Select
-          placeholder="Todos los conductores"
-          options={driverOptions}
-          value={driverFilter}
-          onChange={setDriverFilter}
-        />
+        {showDriverFilter && (
+          <Select
+            placeholder="Todos los conductores"
+            options={driverOptions}
+            value={driverFilter}
+            onChange={setDriverFilter}
+          />
+        )}
       </div>
 
       {error && (

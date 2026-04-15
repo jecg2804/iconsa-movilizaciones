@@ -101,7 +101,6 @@ export const ROLE_ROUTES: Record<AppRole, string[]> = {
     '/mis-viajes',
   ],
   campo: [
-    '/dashboard',
     '/mis-viajes',
   ],
   almacen: [

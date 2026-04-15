@@ -462,6 +462,16 @@ export default function Page() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Seguridad: conductor (campo) solo puede ver SUS viajes asignados.
+  // Si intentó entrar por URL directa a uno ajeno, redirigir.
+  useEffect(() => {
+    if (authLoading || pageLoading) return
+    if (!trip || !person) return
+    if (role === 'campo' && trip.driver?.id !== person.id) {
+      router.replace('/mis-viajes')
+    }
+  }, [authLoading, pageLoading, trip, person, role, router])
+
   // --- Logica de secuencia de eventos ---
   // Eventos revertidos no cuentan (inmutables pero anulados por Reversion)
   const revertedIds = new Set(

@@ -66,10 +66,33 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Si hay sesión y está en /login o raíz, redirigir a /dashboard
+    // Consultar rol del usuario para enforcement de RBAC
+    // (Seguridad: conductores solo pueden acceder a /mis-viajes)
+    const { data: personData } = await supabase
+      .from('people')
+      .select('app_role')
+      .eq('auth_id', user.id)
+      .single()
+
+    const role = personData?.app_role as string | null
+
+    // Rol campo: solo puede acceder a /mis-viajes y /change-password
+    if (role === 'campo') {
+      const isAllowedForCampo =
+        pathname.startsWith('/mis-viajes') ||
+        pathname === '/change-password'
+
+      if (!isAllowedForCampo) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/mis-viajes'
+        return NextResponse.redirect(url)
+      }
+    }
+
+    // Si hay sesión y está en /login o raíz, redirigir al home del rol
     if (pathname === '/login' || pathname === '/') {
       const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
+      url.pathname = role === 'campo' ? '/mis-viajes' : '/dashboard'
       return NextResponse.redirect(url)
     }
 
