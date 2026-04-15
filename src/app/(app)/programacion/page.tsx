@@ -20,12 +20,6 @@ import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 const LINE_TYPES = ['Todos', 'Equipo', 'Material'] as const
 type LineTypeFilter = (typeof LINE_TYPES)[number]
 
-// Filtro de fecha: single-day click del calendario O rango desde/hasta
-type DateFilter =
-  | { type: 'single'; date: string }
-  | { type: 'range'; from: string | null; to: string | null }
-  | null
-
 export default function ProgramacionPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -42,12 +36,11 @@ export default function ProgramacionPage() {
     setFilters: setTripFilters,
   } = useTrips()
 
-  // Filtro de proyecto se mantiene client-side (requiere filtrar por assignments anidados)
-  const [tripProjectFilter, setTripProjectFilter] = useState<string | null>(null)
-  // Estado local de fecha para el calendario (single-day click)
-  const [dateFilter, setDateFilter] = useState<DateFilter>(null)
+  // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
+  // Project filter usa 2-step query (trips no tiene project_id directo).
+  // El calendario y la tabla son una sola "vista de datos" con filtros unificados.
 
-  // --- Filtros del backlog (independientes) ---
+  // --- Filtros del backlog (independientes del trip filter) ---
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
   const [backlogProjectFilter, setBacklogProjectFilter] = useState<string | null>(null)
   const [backlogSearch, setBacklogSearch] = useState('')
@@ -87,46 +80,70 @@ export default function ProgramacionPage() {
     })
   }, [backlog, backlogProjectFilter, typeFilter, backlogSearch])
 
-  // Viajes filtrados por proyecto y fecha (client-side)
-  // Status, conductor, search son server-side via el hook
-  const filteredTrips = useMemo(() => {
-    let result = trips
-    if (tripProjectFilter) {
-      result = result.filter((trip) =>
-        trip.assignments.some((a) => a.line?.request?.project?.id === tripProjectFilter)
-      )
-    }
-    if (dateFilter) {
-      if (dateFilter.type === 'single') {
-        result = result.filter((t) => t.scheduled_date === dateFilter.date)
-      } else if (dateFilter.type === 'range') {
-        if (dateFilter.from) result = result.filter((t) => t.scheduled_date >= dateFilter.from!)
-        if (dateFilter.to) result = result.filter((t) => t.scheduled_date <= dateFilter.to!)
-      }
-    }
-    return result
-  }, [trips, tripProjectFilter, dateFilter])
-
-  // Inicializar colapsado al cargar datos
+  // Inicializar colapsado al cargar datos. trips ya viene filtrado server-side
+  // por el hook según tripFilters (status, conductor, search, projectId,
+  // dateFrom, dateTo) — no hay capa de filter client-side.
   useEffect(() => {
-    if (!expandInitialized && filteredTrips.length > 0) {
+    if (!expandInitialized && trips.length > 0) {
       setTripExpandedKeys(new Set()) // default collapsed
       setExpandInitialized(true)
     }
-  }, [expandInitialized, filteredTrips])
+  }, [expandInitialized, trips])
 
   const allTripsExpanded = tripExpandedKeys.size > 0
 
-  // --- MiniCalendar items — query separada sin paginación para TODAS las movilizaciones ---
+  // --- MiniCalendar items — query SIN paginación pero CON los mismos filtros que la tabla.
+  // J4: calendario y tabla son una sola "vista de datos" con un set de filtros
+  // unificado. Cualquier filtro activo (proyecto, status, conductor, fechas,
+  // search) aplica por igual.
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([])
 
   useEffect(() => {
     const fetchCalendarTrips = async () => {
+      // Resolver projectId via 2-step (trips no tiene project_id directo)
+      let projectTripIds: string[] | null = null
+      if (tripFilters.projectId) {
+        const { data: linkData } = await supabase
+          .from('trip_line_assignments')
+          .select('trip_id, line:request_line_id!inner(request:request_id!inner(project_id))')
+          .eq('line.request.project_id', tripFilters.projectId)
+        const ids = new Set<string>()
+        for (const row of linkData ?? []) {
+          const tripId = (row as { trip_id: string | null }).trip_id
+          if (tripId) ids.add(tripId)
+        }
+        projectTripIds = Array.from(ids)
+        if (projectTripIds.length === 0) {
+          setCalendarItems([])
+          return
+        }
+      }
+
       let query = supabase
         .from('trips')
         .select('id, trip_id, scheduled_date, status, driver:people!driver_id(name)')
-        .not('status', 'in', '("Cancelado")')
         .order('scheduled_date')
+
+      if (projectTripIds) {
+        query = query.in('id', projectTripIds)
+      }
+      if (tripFilters.status) {
+        query = query.eq('status', tripFilters.status)
+      } else {
+        query = query.not('status', 'in', '("Cancelado")')
+      }
+      if (tripFilters.conductorId) {
+        query = query.eq('driver_id', tripFilters.conductorId)
+      }
+      if (tripFilters.dateFrom) {
+        query = query.gte('scheduled_date', tripFilters.dateFrom)
+      }
+      if (tripFilters.dateTo) {
+        query = query.lte('scheduled_date', tripFilters.dateTo)
+      }
+      if (tripFilters.search) {
+        query = query.ilike('trip_id', `%${tripFilters.search}%`)
+      }
 
       const { data } = await query
       setCalendarItems((data ?? []).map((t: Record<string, unknown>) => {
@@ -143,30 +160,47 @@ export default function ProgramacionPage() {
       }))
     }
     fetchCalendarTrips()
-  }, [supabase, tripProjectFilter])
+  }, [
+    supabase,
+    tripFilters.projectId,
+    tripFilters.status,
+    tripFilters.conductorId,
+    tripFilters.dateFrom,
+    tripFilters.dateTo,
+    tripFilters.search,
+  ])
 
-  // --- Handlers de filtro de fecha (client-side — no afecta server query ni calendario) ---
-  const handleCalendarClick = useCallback((date: string | null) => {
-    if (!date) { setDateFilter(null); return }
-    setDateFilter((prev) => {
-      if (prev?.type === 'single' && prev.date === date) return null
-      return { type: 'single', date }
-    })
-  }, [])
+  // --- Handlers de filtro de fecha (todos server-side via setTripFilters) ---
+  const handleCalendarClick = useCallback(
+    (date: string | null) => {
+      if (!date) {
+        setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
+        return
+      }
+      // Toggle: si es el mismo día único, des-seleccionar.
+      // Sobreescribir cualquier rango previo con el día único (Duda 2).
+      if (tripFilters.dateFrom === date && tripFilters.dateTo === date) {
+        setTripFilters({ dateFrom: null, dateTo: null, page: 0 })
+      } else {
+        setTripFilters({ dateFrom: date, dateTo: date, page: 0 })
+      }
+    },
+    [tripFilters.dateFrom, tripFilters.dateTo, setTripFilters],
+  )
 
-  const handleDateFromChange = useCallback((from: string | null) => {
-    setDateFilter((prev) => {
-      const to = prev?.type === 'range' ? prev.to : null
-      return { type: 'range', from, to }
-    })
-  }, [])
+  const handleDateFromChange = useCallback(
+    (from: string | null) => {
+      setTripFilters({ dateFrom: from, page: 0 })
+    },
+    [setTripFilters],
+  )
 
-  const handleDateToChange = useCallback((to: string | null) => {
-    setDateFilter((prev) => {
-      const from = prev?.type === 'range' ? prev.from : null
-      return { type: 'range', from, to }
-    })
-  }, [])
+  const handleDateToChange = useCallback(
+    (to: string | null) => {
+      setTripFilters({ dateTo: to, page: 0 })
+    },
+    [setTripFilters],
+  )
 
   // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
@@ -533,11 +567,11 @@ export default function ProgramacionPage() {
           {/* Header */}
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold text-gray-900">Movilizaciones</h2>
-            {filteredTrips.length > 0 && (
+            {trips.length > 0 && (
               <button
                 type="button"
                 onClick={() => setTripExpandedKeys((prev) =>
-                  prev.size > 0 ? new Set() : new Set(filteredTrips.map((t) => t.id))
+                  prev.size > 0 ? new Set() : new Set(trips.map((t) => t.id))
                 )}
                 className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
               >
@@ -551,8 +585,8 @@ export default function ProgramacionPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <select
               title="Filtrar por proyecto"
-              value={tripProjectFilter ?? ''}
-              onChange={(e) => setTripProjectFilter(e.target.value || null)}
+              value={tripFilters.projectId ?? ''}
+              onChange={(e) => setTripFilters({ projectId: e.target.value || null, page: 0 })}
               className={selectClass}
               disabled={projectsLoading}
             >
@@ -599,7 +633,7 @@ export default function ProgramacionPage() {
               <input
                 type="date"
                 title="Fecha desde"
-                value={dateFilter?.type === 'range' ? (dateFilter.from ?? '') : ''}
+                value={tripFilters.dateFrom ?? ''}
                 onChange={(e) => handleDateFromChange(e.target.value || null)}
                 className={selectClass}
               />
@@ -607,15 +641,15 @@ export default function ProgramacionPage() {
               <input
                 type="date"
                 title="Fecha hasta"
-                value={dateFilter?.type === 'range' ? (dateFilter.to ?? '') : ''}
+                value={tripFilters.dateTo ?? ''}
                 onChange={(e) => handleDateToChange(e.target.value || null)}
                 className={selectClass}
               />
             </div>
-            {(tripProjectFilter || tripFilters.status || tripFilters.conductorId || tripFilters.search || dateFilter) && (
+            {(tripFilters.projectId || tripFilters.status || tripFilters.conductorId || tripFilters.search || tripFilters.dateFrom || tripFilters.dateTo) && (
               <button
                 type="button"
-                onClick={() => { setTripProjectFilter(null); setTripFilters({ status: null, conductorId: null, search: null, dateFrom: null, dateTo: null, page: 0 }); setDateFilter(null) }}
+                onClick={() => setTripFilters({ projectId: null, status: null, conductorId: null, search: null, dateFrom: null, dateTo: null, page: 0 })}
                 className="text-xs text-iconsa-blue hover:underline"
               >
                 Limpiar
@@ -628,7 +662,11 @@ export default function ProgramacionPage() {
         <div className="px-4 pb-3">
           <MiniCalendar
             items={calendarItems}
-            selectedDate={dateFilter?.type === 'single' ? dateFilter.date : null}
+            selectedDate={
+              tripFilters.dateFrom && tripFilters.dateFrom === tripFilters.dateTo
+                ? tripFilters.dateFrom
+                : null
+            }
             onSelectDate={handleCalendarClick}
           />
         </div>
@@ -643,7 +681,7 @@ export default function ProgramacionPage() {
 
           <DataTable<TripWithRelations>
             columns={columns}
-            data={filteredTrips}
+            data={trips}
             keyExtractor={(row) => row.id}
             loading={listLoading}
             emptyMessage="No hay movilizaciones para mostrar"

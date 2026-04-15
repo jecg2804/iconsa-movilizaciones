@@ -154,6 +154,7 @@ export interface TripsFilter {
   dateFrom?: string | null
   dateTo?: string | null
   conductorId?: string | null
+  projectId?: string | null
   search?: string | null
   page: number
   pageSize: number
@@ -174,6 +175,7 @@ const DEFAULT_FILTER: TripsFilter = {
   dateFrom: null,
   dateTo: null,
   conductorId: null,
+  projectId: null,
   search: null,
   page: 0,
   pageSize: 20,
@@ -550,6 +552,33 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
     setListError(null)
 
     try {
+      // J4 — project filter requiere 2-step porque trips.project_id no existe
+      // directamente (el proyecto vive en assignments → line → request → project).
+      // Paso 1: resolver trip_ids que tienen assignments cuya línea padre pertenece
+      // al proyecto filtrado.
+      let projectTripIds: string[] | null = null
+      if (filters.projectId) {
+        const { data: linkData, error: linkError } = await supabase
+          .from('trip_line_assignments')
+          .select('trip_id, line:request_line_id!inner(request:request_id!inner(project_id))')
+          .eq('line.request.project_id', filters.projectId)
+        if (linkError) {
+          setListError(linkError.message)
+          return
+        }
+        const ids = new Set<string>()
+        for (const row of linkData ?? []) {
+          const tripId = (row as { trip_id: string | null }).trip_id
+          if (tripId) ids.add(tripId)
+        }
+        projectTripIds = Array.from(ids)
+        if (projectTripIds.length === 0) {
+          setTrips([])
+          setTripsTotalCount(0)
+          return
+        }
+      }
+
       let query = supabase
         .from('trips')
         .select(`
@@ -598,6 +627,9 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         .order('scheduled_date', { ascending: false })
 
       // Aplicar filtros dinámicamente
+      if (projectTripIds) {
+        query = query.in('id', projectTripIds)
+      }
       if (filters.status) {
         query = query.eq('status', filters.status)
       }

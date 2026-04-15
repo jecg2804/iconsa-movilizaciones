@@ -17,11 +17,6 @@ import { Select, type SelectOption } from '@/components/ui/Select'
 import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
 import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
-type DateFilter =
-  | { type: 'single'; date: string }
-  | { type: 'range'; from: string | null; to: string | null }
-  | null
-
 export default function SolicitudesPage() {
   const router = useRouter()
   const { role, loading: authLoading } = useAuth()
@@ -50,16 +45,27 @@ export default function SolicitudesPage() {
     return () => clearTimeout(timer)
   }, [searchInput, setFilters])
 
-  // Fecha: filtro client-side para no vaciar el calendario al seleccionar un día
-  const [dateFilter, setDateFilter] = useState<DateFilter>(null)
-  const calendarDate = dateFilter?.type === 'single' ? dateFilter.date : null
-  const setCalendarDate = useCallback((date: string | null) => {
-    if (!date) { setDateFilter(null); return }
-    setDateFilter((prev) => {
-      if (prev?.type === 'single' && prev.date === date) return null
-      return { type: 'single', date }
-    })
-  }, [])
+  // Fecha: filtros server-side via useSolicitudes. El calendario muestra un día
+  // único como seleccionado cuando dateFrom === dateTo (click en día). Rangos
+  // Desde/Hasta también se reflejan en el calendario (filtra los items visibles).
+  const calendarDate =
+    filters.dateFrom && filters.dateFrom === filters.dateTo ? filters.dateFrom : null
+  const setCalendarDate = useCallback(
+    (date: string | null) => {
+      if (!date) {
+        setFilters({ dateFrom: null, dateTo: null, page: 0 })
+        return
+      }
+      // Toggle: si es el mismo día que ya está seleccionado, des-seleccionar.
+      // Sino, sobreescribir cualquier rango previo con el día único (Duda 2).
+      if (filters.dateFrom === date && filters.dateTo === date) {
+        setFilters({ dateFrom: null, dateTo: null, page: 0 })
+      } else {
+        setFilters({ dateFrom: date, dateTo: date, page: 0 })
+      }
+    },
+    [filters.dateFrom, filters.dateTo, setFilters],
+  )
 
   // Inicializar colapsado al cargar datos
   useEffect(() => {
@@ -83,7 +89,10 @@ export default function SolicitudesPage() {
     [allProjects, filters.projectId],
   )
 
-  // calendarItems — query separada sin paginación para mostrar TODAS las solicitudes en el calendario
+  // calendarItems — query SIN paginación pero CON los mismos filtros que la tabla.
+  // J4: calendario y tabla son una sola "vista de datos" con un set de filtros
+  // unificado. Cualquier filtro activo (proyecto, status, search, fecha,
+  // requester) aplica por igual al calendario y a la tabla.
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([])
 
   useEffect(() => {
@@ -91,12 +100,28 @@ export default function SolicitudesPage() {
       let query = supabase
         .from('sm_requests')
         .select('id, date_required, status, request_id, requester:people!requester_id(name), lines:sm_request_lines(id, notes)')
-        .not('status', 'in', '("Cancelada")')
         .order('date_required')
 
-      // Aplicar filtro de proyecto si hay uno seleccionado
       if (filters.projectId) {
         query = query.eq('project_id', filters.projectId)
+      }
+      if (filters.statuses.length > 0) {
+        query = query.in('status', filters.statuses)
+      } else {
+        // Si no hay status seleccionados, al menos excluir Canceladas
+        query = query.not('status', 'in', '("Cancelada")')
+      }
+      if (filters.dateFrom) {
+        query = query.gte('date_required', filters.dateFrom)
+      }
+      if (filters.dateTo) {
+        query = query.lte('date_required', filters.dateTo)
+      }
+      if (filters.search) {
+        query = query.ilike('request_id', `%${filters.search}%`)
+      }
+      if (filters.requesterId) {
+        query = query.eq('requester_id', filters.requesterId)
       }
 
       const { data } = await query
@@ -115,19 +140,15 @@ export default function SolicitudesPage() {
       }))
     }
     fetchCalendarData()
-  }, [supabase, filters.projectId, filters.statuses]) // re-fetch when project or status filter changes
-
-  // Solicitudes filtradas por fecha (client-side) — la tabla usa esto, el calendario usa solicitudes sin filtro
-  const displayedSolicitudes = useMemo(() => {
-    if (!dateFilter) return solicitudes
-    if (dateFilter.type === 'single') {
-      return solicitudes.filter((s) => s.date_required === dateFilter.date)
-    }
-    let result = solicitudes
-    if (dateFilter.from) result = result.filter((s) => s.date_required >= dateFilter.from!)
-    if (dateFilter.to) result = result.filter((s) => s.date_required <= dateFilter.to!)
-    return result
-  }, [solicitudes, dateFilter])
+  }, [
+    supabase,
+    filters.projectId,
+    filters.statuses,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.search,
+    filters.requesterId,
+  ])
 
   // --- Chips de filtros activos ---
   const filterChips = useMemo<FilterChip[]>(() => {
@@ -149,26 +170,27 @@ export default function SolicitudesPage() {
         })
       }
     }
-    if (dateFilter?.type === 'single') {
-      const d = new Date(dateFilter.date + 'T00:00:00')
+    // Fechas: si dateFrom === dateTo es día único, sino es rango
+    if (filters.dateFrom && filters.dateFrom === filters.dateTo) {
+      const d = new Date(filters.dateFrom + 'T00:00:00')
       chips.push({
         key: 'date',
         label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setDateFilter(null),
+        onRemove: () => setFilters({ dateFrom: null, dateTo: null, page: 0 }),
       })
-    } else if (dateFilter?.type === 'range') {
-      if (dateFilter.from) {
+    } else {
+      if (filters.dateFrom) {
         chips.push({
           key: 'dateFrom',
-          label: `Desde ${formatDate(dateFilter.from)}`,
-          onRemove: () => setDateFilter((prev) => prev?.type === 'range' ? { ...prev, from: null } : null),
+          label: `Desde ${formatDate(filters.dateFrom)}`,
+          onRemove: () => setFilters({ dateFrom: null, page: 0 }),
         })
       }
-      if (dateFilter.to) {
+      if (filters.dateTo) {
         chips.push({
           key: 'dateTo',
-          label: `Hasta ${formatDate(dateFilter.to)}`,
-          onRemove: () => setDateFilter((prev) => prev?.type === 'range' ? { ...prev, to: null } : null),
+          label: `Hasta ${formatDate(filters.dateTo)}`,
+          onRemove: () => setFilters({ dateTo: null, page: 0 }),
         })
       }
     }
@@ -180,16 +202,17 @@ export default function SolicitudesPage() {
       })
     }
     return chips
-  }, [filters, projectName, dateFilter, setFilters])
+  }, [filters, projectName, setFilters])
 
   const clearAllFilters = useCallback(() => {
-    setDateFilter(null)
     setFilters({
       projectId: null,
       statuses: [],
       priorities: [],
       search: '',
       requesterId: null,
+      dateFrom: null,
+      dateTo: null,
       page: 0,
     })
     setSearchInput('')
@@ -457,10 +480,10 @@ export default function SolicitudesPage() {
           <input
             type="date"
             title="Fecha desde"
-            value={(dateFilter?.type === 'range' ? dateFilter.from : null) ?? ''}
+            value={filters.dateFrom ?? ''}
             onChange={(e) => {
               const from = e.target.value || null
-              setDateFilter((prev) => ({ type: 'range', from, to: prev?.type === 'range' ? prev.to : null }))
+              setFilters({ dateFrom: from, page: 0 })
             }}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
@@ -468,10 +491,10 @@ export default function SolicitudesPage() {
           <input
             type="date"
             title="Fecha hasta"
-            value={(dateFilter?.type === 'range' ? dateFilter.to : null) ?? ''}
+            value={filters.dateTo ?? ''}
             onChange={(e) => {
               const to = e.target.value || null
-              setDateFilter((prev) => ({ type: 'range', from: prev?.type === 'range' ? prev.from : null, to }))
+              setFilters({ dateTo: to, page: 0 })
             }}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
@@ -516,7 +539,7 @@ export default function SolicitudesPage() {
       {/* Tabla */}
       <DataTable<SolicitudWithRelations>
         columns={columns}
-        data={displayedSolicitudes}
+        data={solicitudes}
         keyExtractor={(row) => row.id}
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"
