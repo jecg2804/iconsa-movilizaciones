@@ -391,14 +391,21 @@ function LineEditor({
       newErrors.to = 'Indique el destino'
     }
 
-    // J7: Código de costo (fase) requerido
+    // J7 — Código de costo completo requerido (los 3 campos que lo componen):
+    // Extra/Sección (solo si el proyecto tiene extras), Fase, y Categoría.
+    if (hasExtras && !selectedExtraId) {
+      newErrors.extra = 'Seleccione un extra/sección'
+    }
     if (!costCodeId) {
-      newErrors.cost_code = 'El código de costo es requerido'
+      newErrors.cost_code = 'La fase / código de costo es requerida'
+    }
+    if (!costCategoryId) {
+      newErrors.cost_category = 'La categoría de costo es requerida'
     }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
-  }, [description, quantity, fromValue, toValue, costCodeId])
+  }, [description, quantity, fromValue, toValue, hasExtras, selectedExtraId, costCodeId, costCategoryId])
 
   // --- Guardar ---
   const handleSave = useCallback(async () => {
@@ -568,7 +575,7 @@ function LineEditor({
         {/* Dropdown Extra — solo visible si el proyecto tiene extras */}
         {hasExtras && (
           <Select
-            label="Extra / Sección"
+            label="Extra / Sección *"
             placeholder={loadingExtras ? 'Cargando...' : 'Seleccionar extra...'}
             options={[
               { value: '__base__', label: '(Proyecto Base)' },
@@ -577,6 +584,7 @@ function LineEditor({
             value={selectedExtraId}
             onChange={handleExtraChange}
             disabled={loadingExtras}
+            error={errors.extra}
           />
         )}
 
@@ -592,12 +600,13 @@ function LineEditor({
         />
 
         <Select
-          label="Categoría de Costo"
+          label="Categoría de Costo *"
           placeholder={loadingCategories ? 'Cargando...' : costCodeId ? 'Seleccionar categoría...' : 'Seleccione una fase primero'}
           options={categoryOptions}
           value={costCategoryId}
           onChange={setCostCategoryId}
           disabled={!costCodeId || loadingCategories}
+          error={errors.cost_category}
         />
 
         <Input
