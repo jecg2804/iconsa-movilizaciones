@@ -389,6 +389,18 @@ export default function SolicitudDetailPage() {
     setIsDirty(true)
   }, [])
 
+  // J8b: duplicar línea — copia la existente como nueva (id=null para que
+  // el save la inserte). Solo permitido en Borrador (regla #2 CLAUDE.md).
+  const handleDuplicateLine = useCallback((index: number) => {
+    if (!canAddLines) return
+    setLines((prev) => {
+      const original = prev[index]
+      if (!original) return prev
+      return [...prev, { ...original, id: undefined }]
+    })
+    setIsDirty(true)
+  }, [canAddLines])
+
   // --- Verificacion de duplicados (solo en Borrador) ---
   const handleCheckDuplicates = useCallback(
     async (line: LineInput): Promise<DuplicateMatch[]> => {
@@ -657,6 +669,7 @@ export default function SolicitudDetailPage() {
                     setEditingLineIndex(index)
                   }}
                   onDelete={() => handleDeleteLine(index)}
+                  onDuplicate={canAddLines ? () => handleDuplicateLine(index) : undefined}
                   fromDisplay={names.fromDisplay}
                   toDisplay={names.toDisplay}
                   unitDisplay={names.unitDisplay}

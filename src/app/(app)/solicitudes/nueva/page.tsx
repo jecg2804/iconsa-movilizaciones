@@ -207,6 +207,16 @@ export default function NuevaSolicitudPage() {
     setLines((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
+  // J8b: duplicar línea — copia la línea y la agrega al final de la lista.
+  // No abre el editor; el usuario puede editar la copia después si quiere.
+  const handleDuplicateLine = useCallback((index: number) => {
+    setLines((prev) => {
+      const original = prev[index]
+      if (!original) return prev
+      return [...prev, { ...original }]
+    })
+  }, [])
+
   const handleLineSave = useCallback(
     (line: LineInput) => {
       // Aplicar bulk requires_code si está activo
@@ -465,6 +475,7 @@ export default function NuevaSolicitudPage() {
                 isScheduled={false}
                 onEdit={() => handleEditLine(index)}
                 onDelete={() => handleDeleteLine(index)}
+                onDuplicate={() => handleDuplicateLine(index)}
                 fromDisplay={getDisplayName(locationOptions, line.from_location_id)}
                 toDisplay={getDisplayName(locationOptions, line.to_location_id)}
                 unitDisplay={

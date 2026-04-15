@@ -1,6 +1,6 @@
 'use client'
 
-import { Wrench, Package, Pencil, Trash2, ArrowRight } from 'lucide-react'
+import { Wrench, Package, Pencil, Trash2, Copy, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { formatQty } from '@/lib/utils/format'
 import type { LineInput } from '@/hooks/useSolicitudes'
@@ -13,6 +13,8 @@ interface LineRowProps {
   isScheduled: boolean
   onEdit: () => void
   onDelete: () => void
+  /** Opcional — si se provee, muestra botón Duplicar (J8b). Solo tiene sentido cuando se pueden agregar líneas (ej. Borrador). */
+  onDuplicate?: () => void
   // Nombres resueltos por el componente padre
   fromDisplay?: string
   toDisplay?: string
@@ -33,6 +35,7 @@ function LineRow({
   isScheduled,
   onEdit,
   onDelete,
+  onDuplicate,
   fromDisplay,
   toDisplay,
   unitDisplay,
@@ -111,7 +114,7 @@ function LineRow({
           </div>
 
           {/* Acciones */}
-          {(editable || canDelete) && (
+          {(editable || canDelete || onDuplicate) && (
             <div className="flex shrink-0 items-center gap-1">
               {editable && (
                 <button
@@ -121,6 +124,16 @@ function LineRow({
                   title="Editar linea"
                 >
                   <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  type="button"
+                  onClick={onDuplicate}
+                  className="rounded p-1.5 text-iconsa-gray hover:bg-gray-100 hover:text-iconsa-blue transition-colors"
+                  title="Duplicar linea"
+                >
+                  <Copy className="h-4 w-4" />
                 </button>
               )}
               {canDelete && (
@@ -200,7 +213,7 @@ function LineRow({
             )}
           </div>
 
-          {(editable || canDelete) && (
+          {(editable || canDelete || onDuplicate) && (
             <div className="flex items-center gap-1">
               {editable && (
                 <button
@@ -210,6 +223,16 @@ function LineRow({
                   title="Editar linea"
                 >
                   <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  type="button"
+                  onClick={onDuplicate}
+                  className="rounded p-1.5 text-iconsa-gray hover:bg-gray-100 hover:text-iconsa-blue transition-colors"
+                  title="Duplicar linea"
+                >
+                  <Copy className="h-3.5 w-3.5" />
                 </button>
               )}
               {canDelete && (
