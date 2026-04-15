@@ -36,7 +36,7 @@ export function RevertModal({ event, onConfirm, onClose, loading }: RevertModalP
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-      <div className="w-full max-w-md rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-6">
         <h3 className="mb-4 text-lg font-semibold text-gray-900">
           Revertir {event.event_type}
         </h3>

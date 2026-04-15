@@ -110,7 +110,7 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <MapPin className="h-5 w-5 text-cyan-600" />
           <h3 className="text-lg font-semibold text-gray-900">

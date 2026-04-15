@@ -149,7 +149,7 @@ export function DispatchModal({ trip, onConfirm, onClose, loading, role }: Dispa
   // --- Render ---
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-6 shadow-xl sm:rounded-2xl">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-6">
         <h3 className="mb-4 text-lg font-semibold text-gray-900">
           {canEdit ? 'Despacho' : 'Confirmar Salida'} — {trip.trip_id}
         </h3>
