@@ -830,7 +830,7 @@ export default function Page() {
       // G1: solo admin puede revertir eventos de OTRO usuario. Logistica
       // solo puede revertir eventos que ella misma registró.
       if (role !== 'admin' && revertEvent.registered_by?.id !== person?.id) {
-        setEventError('Solo podés revertir eventos que registraste vos. Contactá a un administrador.')
+        setEventError('Solo puedes revertir eventos que tú registraste. Contacta a un administrador.')
         return
       }
 
