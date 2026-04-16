@@ -41,7 +41,7 @@ interface TripEvent {
   id: string
   event_type: string
   event_timestamp: string
-  registered_by: { name: string } | null
+  registered_by: { id: string; name: string } | null
   received_by_name: string | null
   notes: string | null
   attachments: Attachment[]
@@ -411,7 +411,7 @@ export default function Page() {
         id,
         event_type,
         event_timestamp,
-        registered_by:registered_by(name),
+        registered_by:registered_by(id, name),
         received_by_name,
         notes,
         attachments,
@@ -425,7 +425,7 @@ export default function Page() {
     if (data) {
       const mapped: TripEvent[] = (data as unknown as Record<string, unknown>[]).map((row) => {
         const rb = row.registered_by
-        const registeredBy = Array.isArray(rb) ? (rb[0] ?? null) : rb
+        const registeredBy = Array.isArray(rb) ? (rb[0] ?? null) : rb as { id: string; name: string } | null
         const rawAtt = row.attachments
         const att: Attachment[] = Array.isArray(rawAtt)
           ? (rawAtt as unknown[]).map(a => a as Attachment)
@@ -434,7 +434,7 @@ export default function Page() {
           id: row.id as string,
           event_type: row.event_type as string,
           event_timestamp: row.event_timestamp as string,
-          registered_by: registeredBy as { name: string } | null,
+          registered_by: registeredBy as { id: string; name: string } | null,
           received_by_name: (row.received_by_name as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
           attachments: att,
@@ -814,6 +814,14 @@ export default function Page() {
   const handleRevert = useCallback(
     async (reason: string) => {
       if (!revertEvent || !trip) return
+
+      // G1: solo admin puede revertir eventos de OTRO usuario. Logistica
+      // solo puede revertir eventos que ella misma registró.
+      if (role !== 'admin' && revertEvent.registered_by?.id !== person?.id) {
+        setEventError('Solo podés revertir eventos que registraste vos. Contactá a un administrador.')
+        return
+      }
+
       setReverting(true)
       setEventError(null)
 
