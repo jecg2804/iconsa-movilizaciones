@@ -265,7 +265,11 @@ export default async function DashboardPage() {
           </h3>
           <div className="space-y-2">
             {tripsEnRoute.map((trip) => (
-              <div key={trip.id} className="flex items-center justify-between gap-2 text-sm flex-wrap">
+              <a
+                key={trip.id}
+                href={`/mis-viajes/${trip.id}`}
+                className="flex items-center justify-between gap-2 text-sm flex-wrap rounded-md px-2 py-1.5 -mx-2 transition-colors hover:bg-blue-100/60 cursor-pointer"
+              >
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-medium text-blue-900">{trip.trip_id}</span>
                   <span className="text-blue-700">&rarr; {trip.destination}</span>
@@ -275,7 +279,7 @@ export default async function DashboardPage() {
                   {trip.departure_time && <span>{trip.departure_time}</span>}
                   <span>{trip.line_count} línea{trip.line_count !== 1 ? 's' : ''}</span>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
