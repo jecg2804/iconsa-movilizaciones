@@ -139,6 +139,7 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [validationError, setValidationError] = useState<string | null>(null)
   const eventIdRef = useRef(crypto.randomUUID())
   const deliveredQtys = useRef<Record<string, number>>({})
 
@@ -171,6 +172,12 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
   )
 
   const handleDirectConfirm = useCallback(() => {
+    // G10: Incidencia requiere notas descriptivas (mínimo 10 caracteres)
+    if (eventType === 'Incidencia' && notes.trim().length < 10) {
+      setValidationError('La descripción de la incidencia debe tener al menos 10 caracteres.')
+      return
+    }
+    setValidationError(null)
     onConfirm({
       id: eventIdRef.current,
       event_type: eventType,
@@ -266,13 +273,18 @@ function EventModal({ eventType, confirmationCode, receiverOptions, assignments,
             />
           </div>
         ) : (
-          <div className="mt-4 flex gap-2">
-            <Button variant="primary" onClick={handleDirectConfirm} loading={loading}>
-              Confirmar
-            </Button>
-            <Button variant="ghost" onClick={onClose} disabled={loading}>
-              Cancelar
-            </Button>
+          <div className="mt-4 space-y-2">
+            {validationError && (
+              <p className="text-sm text-iconsa-red">{validationError}</p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={handleDirectConfirm} loading={loading}>
+                Confirmar
+              </Button>
+              <Button variant="ghost" onClick={onClose} disabled={loading}>
+                Cancelar
+              </Button>
+            </div>
           </div>
         )}
       </div>
