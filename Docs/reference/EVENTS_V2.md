@@ -54,7 +54,7 @@ pero no terminó de **perfeccionar** las features de Events V2.
 - Shortcuts en programación y solicitud detail
 - Timeline mejorada con detalle per-line + observaciones
 - Dashboard "En Tránsito Ahora"
-- 4 nuevas notificaciones email
+- 4 nuevas notificaciones email planificadas (2 implementadas: `notifyReversionRegistrada`, `notifyMaterialPreparado`; 2 pendientes: `notifyEntregaConObservaciones` G3, `notifyLineaRechazada` G4). Total actual: 18 funciones `notify*` en `src/lib/notifications/actions.ts`
 
 ### Fuera del scope de Events V2
 
@@ -372,21 +372,16 @@ tiene `requires_code=true`. Si ninguna lo requiere, no aparece.
 **Receptor pre-seleccionado:** si la línea tiene `designated_receiver_id`
 y coincide con el usuario logueado, pre-seleccionado.
 
-**Operaciones al confirmar (orden CRÍTICO):**
+**Operaciones al confirmar (orden CRÍTICO — actualizado 2026-04-16):**
 
-1. UPDATE sm_request_lines (qty_delivered, status) — **PRIMERO**, antes
-   del INSERT en trip_events (para que el trigger de ubicación vea el
-   status actualizado)
-2. UPDATE trip_line_assignments (qty_delivered)
-3. INSERT trip_events (`event_type='Entrega'`)
-4. INSERT trip_event_lines (una fila por línea incluida) — **OBLIGATORIO**
-5. INSERT delivery_observations (si hay líneas con observaciones)
-6. El trigger `update_equipment_location_on_delivery` dispara automáticamente
-   y filtra por `srl.status='Entregada'` — solo mueve los equipos recién
-   entregados, no todas las líneas del viaje
+1. INSERT trip_events (`event_type='Entrega'`) con UUID pre-generado — **PRIMERO**, como checkpoint de idempotencia (retry bajo red mala hace early-return si el event_id ya existe via 23505)
+2. INSERT trip_event_lines (una fila por línea incluida) — **OBLIGATORIO**
+3. INSERT delivery_observations (si hay líneas con observaciones)
+4. UPDATE sm_request_lines (qty_delivered, status)
+5. UPDATE trip_line_assignments (qty_delivered)
+6. El trigger `update_equipment_location_on_delivery` dispara automáticamente y filtra por `srl.status='Entregada'`
 7. Cascade trigger re-evalúa solicitudes padre
-8. Notificaciones: `entrega_confirmada`, `entrega_con_observaciones`
-   (si aplica)
+8. Notificaciones: `notifyEntregaConfirmada` per línea. (`notifyEntregaConObservaciones` y `notifyLineaRechazada` pendientes — ver G3, G4 en BACKLOG)
 
 #### 4.5.6 Modal de Preparación (pickup)
 
@@ -461,7 +456,7 @@ Funciona igual que Entrega, con 2 diferencias:
 
 **Operaciones al confirmar:**
 
-1. INSERT trip_events: `event_type='Parada'`, `stop_location`,
+1. INSERT trip_events: `event_type='Parada'`, `location`,
    `stop_type`, attachments
 2. INSERT trip_event_lines per línea afectada (si hay) con quantity
    y status en campo libre
@@ -543,7 +538,7 @@ hay viajes activos. **D6 (pending):** hacer clickeables.
 | trip_line_assignments | `qty_dispatched` | NUMERIC(10,2) | 0 | Qty real despachada |
 | trip_events | `reverts_event_id` | UUID FK→trip_events | NULL | Para reversiones |
 | trip_events | `source` | TEXT | 'manual' | 'manual' o 'gps' |
-| trip_events | `stop_location` | TEXT | NULL | Ubicación de Parada |
+| trip_events | `location` | TEXT | NULL | Ubicación de Parada |
 | trip_events | `stop_type` | TEXT | NULL | 'retiro'/'entrega'/'intercambio' |
 | vehicles | `gps_vehicle_id` | TEXT | NULL | ID Startrack GPS (future-proof) |
 
