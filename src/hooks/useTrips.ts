@@ -244,7 +244,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         from_text: (rawLine.from_text as string | null) ?? null,
         to_text: (rawLine.to_text as string | null) ?? null,
         unit_text: (rawLine.unit_text as string | null) ?? null,
-        requires_code: (rawLine.requires_code as boolean) ?? false,
+        requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
         designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
         designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
         equipment: equipRel,

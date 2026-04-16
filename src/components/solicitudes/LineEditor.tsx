@@ -104,8 +104,7 @@ function LineEditor({
   )
   const [poReference, setPoReference] = useState(initialData?.po_reference ?? '')
   const [lineNotes, setLineNotes] = useState(initialData?.notes ?? '')
-  const [requiresCode, setRequiresCode] = useState(initialData?.requires_code ?? false)
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
+
 
   // Extras del proyecto (cascada: Proyecto → Extra → Fase → Categoría)
   const [extraOptions, setExtraOptions] = useState<SelectOption[]>([])
@@ -345,7 +344,7 @@ function LineEditor({
       material_category: lineType === 'Material' ? materialCategory : null,
       po_reference: poReference.trim() || null,
       notes: lineNotes.trim() || null,
-      requires_code: requiresCode,
+      requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
       designated_receiver_id: null,
       designated_receiver_name: null,
     }
@@ -363,7 +362,6 @@ function LineEditor({
     materialCategory,
     poReference,
     lineNotes,
-    requiresCode,
   ])
 
   // --- Validacion ---
@@ -634,29 +632,7 @@ function LineEditor({
         </div>
       </div>
 
-      {/* Opciones avanzadas */}
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-          className="text-xs text-iconsa-gray hover:text-navy transition-colors"
-        >
-          {showAdvancedOptions ? '▾' : '▸'} Opciones avanzadas
-        </button>
-        {showAdvancedOptions && (
-          <div className="mt-2 pl-4 border-l-2 border-gray-200 space-y-2">
-            <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={requiresCode ?? false}
-                onChange={(e) => setRequiresCode(e.target.checked)}
-                className="accent-navy"
-              />
-              Requiere código de confirmación
-            </label>
-          </div>
-        )}
-      </div>
+      {/* Códigos de confirmación siempre obligatorios (decisión 2026-04-16) */}
 
       {/* Warning de duplicados */}
       {showDuplicateWarning && duplicates && duplicates.length > 0 && (

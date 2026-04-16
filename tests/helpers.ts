@@ -91,11 +91,8 @@ export async function createSolicitud(
   // Set date
   await page.getByRole('textbox', { name: 'Fecha Requerida' }).fill(opts.date ?? '2026-04-15')
 
-  // Confirmation code checkbox at solicitud level
-  if (opts.requiresCode) {
-    const cb = page.getByRole('checkbox', { name: /Requiere código de confirmación/ })
-    if (!(await cb.isChecked())) await cb.click()
-  }
+  // Códigos de confirmación siempre obligatorios (decisión 2026-04-16)
+  // El checkbox fue eliminado — requires_code=true por defecto en toda línea
 
   // Add each line
   for (const line of opts.lines) {

@@ -29,7 +29,7 @@ test.describe.serial('Entrega Complete', () => {
 
   test('Setup: Create solicitud, trip, and dispatch', async () => {
     const sol = await createSolicitud(page, {
-      requiresCode: true,
+
       lines: [
         { type: 'Material', description: 'TEST-ENTREGA Material A', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 10, unit: /und/ },
       ],
@@ -137,9 +137,9 @@ test.describe.serial('Confirmation Code Verification', () => {
     page = await browser.newPage()
     await login(page)
 
-    // Create solicitud with requires_code=true
+    // Códigos siempre obligatorios — no necesita requiresCode opt
     const sol = await createSolicitud(page, {
-      requiresCode: true,
+
       lines: [
         { type: 'Material', description: 'TEST-CODE Verify', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 5, unit: /und/ },
       ],
@@ -159,7 +159,7 @@ test.describe.serial('Confirmation Code Verification', () => {
     await page.close()
   })
 
-  test('Entrega modal shows code input when requires_code=true', async () => {
+  test('Entrega modal always shows code input', async () => {
     const entregaBtn = page.getByRole('button', { name: 'Registrar Entrega' })
     await expect(entregaBtn).toBeVisible({ timeout: 5000 })
     await entregaBtn.click()

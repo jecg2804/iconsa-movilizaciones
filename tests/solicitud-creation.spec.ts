@@ -114,11 +114,10 @@ test.describe('Solicitud Creation', () => {
     await expect(solicitante).toContainText('Admin')
   })
 
-  // --- Confirmation Code Logic ---
+  // --- Confirmation Code Logic (códigos siempre obligatorios desde 2026-04-16) ---
 
-  test('Solicitud-level requires_code checkbox sets ALL lines', async () => {
+  test('All lines have requires_code=true by default', async () => {
     const result = await createSolicitud(page, {
-      requiresCode: true,
       lines: [
         { type: 'Material', description: 'TEST Code Line 1', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
         { type: 'Material', description: 'TEST Code Line 2', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
@@ -133,22 +132,6 @@ test.describe('Solicitud Creation', () => {
     for (const line of lines ?? []) {
       expect(line.requires_code).toBe(true)
     }
-  })
-
-  test('Default: lines do NOT require code', async () => {
-    const tag = `NOCODE-${Date.now()}`
-    const result = await createSolicitud(page, {
-      lines: [
-        { type: 'Material', description: `TEST ${tag}`, from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
-      ],
-    })
-    createdIds.push(result.dbId)
-
-    const { data: lines } = await db
-      .from('sm_request_lines')
-      .select('requires_code')
-      .eq('request_id', result.dbId)
-    expect(lines![0].requires_code).toBe(false)
   })
 
   // --- Save as Draft ---

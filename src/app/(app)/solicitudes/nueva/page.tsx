@@ -80,7 +80,7 @@ export default function NuevaSolicitudPage() {
   const [lines, setLines] = useState<LineInput[]>([])
   const [showLineEditor, setShowLineEditor] = useState(false)
   const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null)
-  const [bulkRequiresCode, setBulkRequiresCode] = useState(false)
+  // bulkRequiresCode eliminado — códigos siempre obligatorios (2026-04-16)
   const [headerErrors, setHeaderErrors] = useState<Record<string, string>>({})
 
   // Hook de solicitudes (para saveSolicitud)
@@ -219,10 +219,9 @@ export default function NuevaSolicitudPage() {
 
   const handleLineSave = useCallback(
     (line: LineInput) => {
-      // Aplicar bulk requires_code si está activo
       const lineWithBulk = {
         ...line,
-        requires_code: bulkRequiresCode ? true : line.requires_code,
+        requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
       }
 
       if (editingLineIndex !== null) {
@@ -237,7 +236,7 @@ export default function NuevaSolicitudPage() {
       setShowLineEditor(false)
       setEditingLineIndex(null)
     },
-    [editingLineIndex, bulkRequiresCode],
+    [editingLineIndex],
   )
 
   const handleLineCancel = useCallback(() => {
@@ -389,24 +388,6 @@ export default function NuevaSolicitudPage() {
           currentPersonId={person?.id ?? ''}
           role={role}
         />
-      </div>
-
-      {/* Opciones de movilización */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6 space-y-3">
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={bulkRequiresCode}
-              onChange={(e) => {
-                setBulkRequiresCode(e.target.checked)
-                setLines(prev => prev.map(l => ({ ...l, requires_code: e.target.checked })))
-              }}
-              className="accent-navy"
-            />
-            Requiere código de confirmación
-          </label>
-        </div>
       </div>
 
       {/* Seccion de lineas */}

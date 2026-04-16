@@ -49,7 +49,6 @@ interface LineState {
   status: 'ok' | 'with_observations' | 'rejected'
   observationType: string
   observationNotes: string
-  requiresCode: boolean
 }
 
 const STATUS_OPTIONS: SelectOption[] = [
@@ -96,12 +95,10 @@ export function DeliveryModal({
       status: 'ok' as const,
       observationType: '',
       observationNotes: '',
-      requiresCode: a.line?.requires_code ?? false,
     })),
   )
 
-  // Check if any line requires code
-  const needsCode = useMemo(() => lines.some((l) => l.requiresCode && l.status !== 'rejected'), [lines])
+  // Código siempre obligatorio (decisión 2026-04-16)
 
   // Auto-select receiver if person matches designated_receiver
   const initialReceiver = useMemo((): SelectWithFallbackValue => {
@@ -124,8 +121,8 @@ export function DeliveryModal({
 
   // Validation
   const receiverFilled = (receiver.id !== null && receiver.id !== '') || (receiver.text !== null && receiver.text.trim() !== '')
-  const codeValid = !needsCode || (code.length === 4 && code === trip.confirmation_code)
-  const codeIncorrect = needsCode && code.length === 4 && code !== trip.confirmation_code
+  const codeValid = code.length === 4 && code === trip.confirmation_code
+  const codeIncorrect = code.length === 4 && code !== trip.confirmation_code
   const hasDeliverableLines = lines.some((l) => l.status !== 'rejected' && l.qty > 0)
   const canConfirm = receiverFilled && codeValid && hasDeliverableLines && !loading
 
@@ -178,7 +175,7 @@ export function DeliveryModal({
         event_id: eventIdRef.current,
         received_by_id: receiver.id,
         received_by_name: receiverName,
-        confirmation_code: needsCode ? code : undefined,
+        confirmation_code: code,
         lines: lines.map((l) => ({
           request_line_id: l.request_line_id,
           quantity: l.qty,
@@ -193,7 +190,7 @@ export function DeliveryModal({
       eventIdRef.current = crypto.randomUUID()
       throw err
     }
-  }, [receiver, receiverOptions, needsCode, code, lines, notes, attachments, onConfirm])
+  }, [receiver, receiverOptions, code, lines, notes, attachments, onConfirm])
 
   // --- Render ---
   if (deliverableAssignments.length === 0) {
@@ -256,9 +253,6 @@ export function DeliveryModal({
                     <span className="flex-1 text-sm text-gray-700 truncate">
                       {line.description}
                     </span>
-                    {line.requiresCode && (
-                      <span title="Requiere código de confirmación" className="text-xs">🔑</span>
-                    )}
                     <input
                       type="number"
                       min={0}
@@ -309,32 +303,30 @@ export function DeliveryModal({
             </div>
           </div>
 
-          {/* Código de confirmación (solo si alguna línea lo requiere) */}
-          {needsCode && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Código de confirmación
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="4 dígitos"
-                className={`w-32 rounded-lg border px-3 py-2 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-1 ${
-                  codeIncorrect
-                    ? 'border-red-500 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500'
-                    : 'border-gray-300 focus:border-iconsa-blue focus:ring-iconsa-blue'
-                }`}
-              />
-              {codeIncorrect && (
-                <p className="mt-1 text-xs text-red-600">
-                  Código incorrecto. Verifique con el solicitante.
-                </p>
-              )}
-            </div>
-          )}
+          {/* Código de confirmación (siempre obligatorio) */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Código de confirmación
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="4 dígitos"
+              className={`w-32 rounded-lg border px-3 py-2 text-center font-mono text-lg tracking-widest focus:outline-none focus:ring-1 ${
+                codeIncorrect
+                  ? 'border-red-500 bg-red-50 text-red-700 focus:border-red-500 focus:ring-red-500'
+                  : 'border-gray-300 focus:border-iconsa-blue focus:ring-iconsa-blue'
+              }`}
+            />
+            {codeIncorrect && (
+              <p className="mt-1 text-xs text-red-600">
+                Código incorrecto. Verifique con el solicitante.
+              </p>
+            )}
+          </div>
 
           {/* Fotos */}
           <FileUploader
