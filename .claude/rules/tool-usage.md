@@ -96,6 +96,17 @@ Los skills se cargan automáticamente cuando la tarea matchea su descripción. T
 1. Actualizar `Docs/SYNC_LOG.md` si hubo cambios significativos
 2. `npm run build` debe pasar antes de cerrar
 
+## Screenshots y archivos temporales de tests
+- Screenshots de E2E tests (`Docs/test-screenshots/`, `test-results/`,
+  `playwright-report/`) son **temporales** — usarlos para análisis
+  durante la sesión y **borrarlos antes de cerrar la sesión**.
+- **NUNCA commitear imágenes al repo.** Ocupan espacio y no aportan
+  valor a Claude Chat ni a la historia de git. `.gitignore` los excluye
+  pero verificar antes de `git add`.
+- Si un screenshot es relevante para documentación permanente,
+  describirlo en texto (en CHANGELOG o BACKLOG) en vez de incluir la
+  imagen.
+
 ## NUNCA
 - No escribir a Supabase — NUNCA, bajo ninguna circunstancia
 - No instalar dependencias npm sin preguntar a James
@@ -103,3 +114,4 @@ Los skills se cargan automáticamente cuando la tarea matchea su descripción. T
 - No modificar CLAUDE.md ni FEATURE_SPEC.md (Tier 1 — solo Chat)
 - No usar Playwright/DevTools en producción sin permiso
 - No hacer commits a main — solo jaime/dev
+- No commitear imágenes (PNG, JPG, screenshots) al repo

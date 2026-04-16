@@ -49,3 +49,6 @@ playwright-report/
 # Claude Code machine-specific (session data, local overrides)
 .claude/settings.local.json
 .claude/projects/
+
+# Test screenshots — temporales, no deben persistir en el repo
+Docs/test-screenshots/
