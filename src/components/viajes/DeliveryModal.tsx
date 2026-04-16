@@ -256,6 +256,9 @@ export function DeliveryModal({
                     <span className="flex-1 text-sm text-gray-700 truncate">
                       {line.description}
                     </span>
+                    {line.requiresCode && (
+                      <span title="Requiere código de confirmación" className="text-xs">🔑</span>
+                    )}
                     <input
                       type="number"
                       min={0}
