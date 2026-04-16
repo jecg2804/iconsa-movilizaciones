@@ -75,3 +75,27 @@ haciendo.
   `Docs/TRAIL.md` con la nueva position.
 - Al hacer un commit de un bloque del plan, eliminar ese bloque del
   plan file en el mismo commit (o en el siguiente inmediato).
+
+## Sincronización con el repo (para Claude Chat)
+
+Claude Chat necesita acceso a los plan files para poder analizar y
+mejorar el workflow de Claude Code. Los plans viven en
+`~/.claude/plans/` (global, fuera del repo) pero deben sincronizarse
+al repo en `.claude/plans/`.
+
+**Regla:** cada vez que se crea, edita, o borra un plan file en
+`~/.claude/plans/`, copiar el cambio a `.claude/plans/` en el repo
+e incluirlo en el mismo commit (o en el siguiente inmediato).
+
+```bash
+# Al crear/editar:
+cp ~/.claude/plans/<nombre>.md .claude/plans/<nombre>.md
+git add .claude/plans/<nombre>.md
+
+# Al borrar:
+rm .claude/plans/<nombre>.md
+git add .claude/plans/<nombre>.md
+```
+
+Esto asegura que Chat siempre ve el plan file activo y puede dar
+feedback sobre estructura, scope, o approach.
