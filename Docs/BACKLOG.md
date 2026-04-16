@@ -18,9 +18,9 @@ gatea su item correspondiente):**
   entity? Prerequisito para J1. La semántica actual de forzar pickup
   dentro de Trip genera edge cases (vehicle_id null, driver_id null,
   custody transfer coupling).
-- **J2 requires_code default** — ¿`true` o `false`? ¿visible sin
-  expandir "Opciones avanzadas"? ¿PickupModal debe respetar el flag
-  (hoy siempre pide código) o mantener hardcoded?
+- ~~**J2 requires_code default**~~ — **CERRADO 2026-04-16.** Decisión
+  de James + jefe: códigos de confirmación son **siempre obligatorios**.
+  El feature `requires_code` per-line se elimina. Implementación pendiente.
 - **J9 cost code architectural** — ¿mover `cost_code_id` /
   `cost_category_id` / extra de `sm_request_lines` a `sm_requests`?
   Requiere data analysis primero: contar cuántas solicitudes tienen
@@ -35,8 +35,13 @@ gatea su item correspondiente):**
   (el toggle los limpia en UI pero `validate()` en
   `nuevo/page.tsx:200-213` no los hace opcionales). Fix corto o
   profundo depende de AD-1.
-- **J2 Códigos entrega opcionales** — arreglar default + UX + PickupModal
-  según decisión de design discussion.
+- **J2 Eliminar `requires_code` del código** — códigos son siempre
+  obligatorios (decisión 2026-04-16). Eliminar: checkbox en LineEditor
+  "Opciones avanzadas", bulk checkbox en solicitudes/nueva, lógica
+  condicional `needsCode` en DeliveryModal, badge 🔑 per-line (G7),
+  campo `requiresCode` de interfaces en hooks. Tests que validan
+  requires_code=true/false. BD: columna `requires_code` puede quedar
+  pero ignorarse (o DROP posterior).
 - **J5 Overarching event design** — seguir refinando el rediseño de
   EVENTS V2 con features que no existen en prod.
 - **J9 Cost code refactor** — solo después del data analysis.

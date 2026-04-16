@@ -48,7 +48,8 @@ pero no terminó de **perfeccionar** las features de Events V2.
 - Multi-entrega (N entregas por trip, una por destino)
 - Reversiones con audit trail (reverts_event_id, no DELETE)
 - Self-pickup como flujo diferenciado (sin Salida/Llegada/Retorno)
-- Códigos de confirmación opcionales a nivel línea (`requires_code`)
+- Códigos de confirmación **siempre obligatorios** (decisión 2026-04-16,
+  feature `requires_code` per-line eliminado)
 - Receptores designados a nivel línea (`designated_receiver_id`)
 - Sub-status operativo en lista de solicitudes
 - Shortcuts en programación y solicitud detail
@@ -86,8 +87,7 @@ Programado → Salida/Despacho → (Llegada opcional) → Entrega* → Retorno �
 - Líneas "Con observaciones" o "Rechazado" se registran en
   `delivery_observations`
 - Líneas rechazadas vuelven a Pendiente al Retorno
-- Código de confirmación solo aparece si alguna línea de esa entrega
-  tiene `requires_code=true`
+- Código de confirmación **siempre requerido** en toda entrega
 
 ### 3.2 Self-pickup (flujo separado, secuencia más corta)
 
@@ -104,8 +104,8 @@ Programado → Preparación → Retiro → Completado
 - Almacenista marca material listo (evento Preparación)
 - PM viene a recoger, almacenista comparte código verbalmente
 - PM entra código en su app (evento Retiro) → trip completa automáticamente
-- **Código siempre obligatorio en pickup** (independiente del flag
-  `requires_code` de la línea) — el código ES el mecanismo de verificación
+- **Código siempre obligatorio** — tanto en pickup como en fleet (decisión
+  2026-04-16: códigos son obligatorios en toda entrega/retiro)
 - No hay Salida, Llegada, ni Retorno en pickup
 
 ### 3.3 Incidencia (cualquier momento)
@@ -366,8 +366,9 @@ Al Retorno vuelve a Pendiente en el backlog.
 líneas En Transito en el viaje. Cada Entrega cubre un subconjunto de
 líneas. Permite viajes multi-destino.
 
-**Código condicional:** campo visible solo si ALGUNA línea seleccionada
-tiene `requires_code=true`. Si ninguna lo requiere, no aparece.
+**Código obligatorio:** campo de código de confirmación siempre visible
+y requerido en toda entrega (decisión 2026-04-16 — el feature
+`requires_code` per-line fue eliminado).
 
 **Receptor pre-seleccionado:** si la línea tiene `designated_receiver_id`
 y coincide con el usuario logueado, pre-seleccionado.
@@ -420,7 +421,7 @@ status de trip ni líneas. Informativo + notifica al PM (`material_preparado`).
 
 Funciona igual que Entrega, con 2 diferencias:
 
-- Código siempre obligatorio (independiente de `requires_code` de líneas)
+- Código obligatorio (igual que fleet — ya no hay distinción)
 - Trip completa al confirmar (RPC `complete_pickup_trip` → `status='Completado'`,
   `actual_arrival=now()`). No hay Retorno posterior.
 
@@ -531,7 +532,7 @@ hay viajes activos. **D6 (pending):** hacer clickeables.
 | Tabla | Columna | Tipo | Default | Para qué |
 |---|---|---|---|---|
 | sm_requests | `fulfillment_type` | TEXT | 'fleet' | 'fleet' o 'pickup' (pero D11 quitó el toggle del form) |
-| sm_request_lines | `requires_code` | BOOLEAN | false | Código de confirmación por línea |
+| sm_request_lines | `requires_code` | BOOLEAN | false | **OBSOLETO (2026-04-16)** — códigos ahora siempre obligatorios. Columna pendiente de DROP. |
 | sm_request_lines | `designated_receiver_id` | UUID FK→people | NULL | Receptor designado |
 | sm_request_lines | `designated_receiver_name` | TEXT | NULL | Fallback texto del receptor |
 | trips | `is_self_pickup` | BOOLEAN | false | Viaje de retiro |
@@ -650,9 +651,9 @@ pre-llena líneas para crear trip. Más útil para Charris.
 
 ### D3 — Signifiers en backlog
 
-**Status:** ⏳ Pending implementation. Badge 🔑 para líneas con
-`requires_code=true`. Pickup badges diferidos hasta redesign de pickup
-(ver AD-1).
+**Status:** Badge 🔑 per-line **obsoleto** (2026-04-16 — códigos ahora
+siempre obligatorios, no hay distinción per-line). Pickup badges
+diferidos hasta redesign de pickup (ver AD-1).
 
 ### D4 — Pickup + fleet lines mezcladas en un trip
 
@@ -918,7 +919,7 @@ invoices.
 Después de cada cambio significativo, correr estos flows:
 
 1. **Fleet básico** — crear solicitud → programar → dispatch → deliver → retorno
-2. **Código verificación** — solicitud con `requires_code=true` → dispatch → entrega sin código debe fallar, con código correcto debe pasar
+2. **Código verificación** — dispatch → entrega sin código debe fallar, con código correcto debe pasar (código siempre obligatorio, no depende de `requires_code`)
 3. **Reversión cycle** — dispatch → revert Salida → re-dispatch / deliver → revert Entrega → verify qty_delivered decrementado → re-deliver
 4. **Pickup** — crear pickup solicitud → programar retiro → preparación → retiro con código → trip Completado
 5. **Multi-delivery** — solicitud qty=10 → dispatch → deliver qty=6 (Parcial) → deliver qty=4 (Entregada)

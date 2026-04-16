@@ -5,7 +5,7 @@
 > autocargo al inicio de cada sesión para recuperar el hilo sin leer
 > todo el plan file.
 
-**Última actualización:** 2026-04-15 (sprint prod cherry-pick cerrado)
+**Última actualización:** 2026-04-16 (sesión diseño estratégico)
 
 ## Root task
 
@@ -23,15 +23,17 @@ Perfeccionar movilizaciones
      ├─ [✅] Sprint prod cherry-pick (Abril 15, 2 releases en prod)
      │   ├─ v2026.04.15-1 (870a8f6): J3 + J4 + J6 + J7 + J8a + J8b
      │   └─ v2026.04.15-2 (1425cae): hotfix J4-A + J4-B + J7-ext
+     ├─ [✅] Quick wins G1+G6+G7+G10 + doc cleanup G17-G19
      └─ [⏳] Siguiente: staging-track Events V2 polish
+         ├─ [✅] J2 Códigos entrega — DECIDIDO: siempre obligatorios
+         │   (eliminar requires_code del código, implementación pendiente)
          ├─ J1 Pickup bloqueado + design discussion AD-1
-         ├─ J2 Códigos entrega opcionales + decisión default
-         ├─ J5 Overarching event design
+         ├─ J5 Overarching event design (en discusión activa)
          ├─ J9 Cost code a nivel solicitud (refactor estructural)
-         ├─ G-items sobrevivientes (G1 reversion guard, G4
-         │   notifyLineaRechazada, G5 timeline per-line, G10 Incidencia
-         │   min, G11 DeliveryModal partial warning)
-         └─ G17-G20 doc cleanup EVENTS_V2.md
+         ├─ G-items sobrevivientes (G4 notifyLineaRechazada,
+         │   G5 timeline per-line, G11 DeliveryModal partial warning)
+         ├─ GPS Skydata integration (en discusión activa)
+         └─ Fulfillment methods: fleet/pickup/third_party (en discusión)
 ```
 
 ## Contexto mínimo
@@ -67,12 +69,15 @@ no bloquean el resto pero deben happen antes de los items relacionados:
 
 1. **AD-1 Pickup architecture** — ¿PickupOrder entity separada (como
    dice `Docs/reference/Self-pickup.md`) vs fix rápido en Trip entity?
-   Prerequisito para J1.
-2. **J2 requires_code default** — ¿true/false? ¿visible sin expandir
-   "Opciones avanzadas"? ¿PickupModal debe respetar el flag?
+   Prerequisito para J1. En discusión: `transport_method` enum
+   (fleet/self_pickup/third_party).
+2. ~~**J2 requires_code default**~~ — **CERRADO.** Códigos siempre
+   obligatorios. Implementación pendiente (eliminar feature del código).
 3. **J9 cost code refactor** — ¿mover cost_code de `sm_request_lines`
-   a `sm_requests`? Requiere data analysis primero (cuántas solicitudes
-   tienen líneas con cost_codes distintos, si es lossy la migración).
+   a `sm_requests`? Requiere data analysis primero.
+4. **GPS Skydata** — Skydata API investigada (webhooks, geofencing,
+   posición en tiempo real). Fase 1: mapa vivo en Dashboard + trip
+   detail. En discusión.
 
 Parked deliberadamente por James:
 
@@ -93,7 +98,7 @@ Parked deliberadamente por James:
 
 ## Links
 
-- **Plan file activo:** ninguno (sprint cerrado, abrir nuevo al arrancar staging-track)
+- **Plan file activo:** `.claude/plans/linked-sleeping-lighthouse.md` (sesión diseño estratégico)
 - **BACKLOG completo:** `Docs/BACKLOG.md`
 - **CHANGELOG:** `Docs/CHANGELOG.md`
 - **EVENTS V2 reference:** `Docs/reference/EVENTS_V2.md`
