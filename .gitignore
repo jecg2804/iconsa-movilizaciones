@@ -45,3 +45,7 @@ playwright-report/
 
 # Husky post-commit background build status
 .build-status
+
+# Claude Code machine-specific (session data, local overrides)
+.claude/settings.local.json
+.claude/projects/
