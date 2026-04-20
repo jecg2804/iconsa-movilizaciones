@@ -5,6 +5,21 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-20
+- [bd] **Fix `notification_log.valid_event_type` constraint desincronizado**: aplicado a staging (`vonwkciosksqspyljzfy`) y prod (`bzeoszympkkicwlfdtcn`) 2026-04-20. Staging tenía 13 event_types, prod tenía 15, pero el código emite 18. Los huérfanos globales (`viaje_editado`, `material_preparado`, `reversion_registrada`) hacían que el INSERT al audit trail fallara y la dedup de 5min quedara rota para esos 3 tipos. Staging además no tenía `solicitud_urgente_nueva` y `alerta_diaria_urgentes` (hotfix histórico aplicado solo a prod sin documentar). El ALTER es aditivo (DROP + ADD con superset de 18), ninguna fila existente violaba el constraint nuevo.
+
+  ```sql
+  ALTER TABLE public.notification_log DROP CONSTRAINT valid_event_type;
+  ALTER TABLE public.notification_log ADD CONSTRAINT valid_event_type
+    CHECK (event_type = ANY (ARRAY[
+      'solicitud_enviada','solicitud_editada','solicitud_cancelada',
+      'solicitud_completada','lineas_programadas','viaje_cancelado',
+      'viaje_reprogramado','viaje_editado','viaje_asignado_conductor',
+      'entrega_confirmada','salida_registrada','incidencia_ruta',
+      'sugerencia_fallback','retorno_registrado','solicitud_urgente_nueva',
+      'alerta_diaria_urgentes','material_preparado','reversion_registrada'
+    ]));
+  ```
+
 - [bd] **GPS live tracking — columna `equipment.gps_vehicle_id`**: ejecutado en staging (`vonwkciosksqspyljzfy`) 2026-04-20. Pendiente ejecutar en prod (`bzeoszympkkicwlfdtcn`). Dos migraciones consecutivas: (1) `gps_vehicle_id_column_and_bootstrap` — ALTER TABLE + índice parcial + 13 UPDATEs match por `spectrum_code`, 10 impactaron; (2) `gps_vehicle_id_bootstrap_by_plate` — 3 UPDATEs match por `plate` para los vehículos donde SkyData usaba placa como identificador en vez de spectrum_code (ED8244 / EM0539 / ES3830 son placas de los equipos PUP244 / SUV539 / BUS830 respectivamente). Resultado: 13/13 vehículos con GPS mapeados. Verificado: filas pobladas, 0 huérfanos, índice parcial creado. Spec: `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`.
 
   ```sql
