@@ -114,26 +114,6 @@ test.describe('Solicitud Creation', () => {
     await expect(solicitante).toContainText('Admin')
   })
 
-  // --- Confirmation Code Logic (códigos siempre obligatorios desde 2026-04-16) ---
-
-  test('All lines have requires_code=true by default', async () => {
-    const result = await createSolicitud(page, {
-      lines: [
-        { type: 'Material', description: 'TEST Code Line 1', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
-        { type: 'Material', description: 'TEST Code Line 2', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
-      ],
-    })
-    createdIds.push(result.dbId)
-
-    const { data: lines } = await db
-      .from('sm_request_lines')
-      .select('requires_code')
-      .eq('request_id', result.dbId)
-    for (const line of lines ?? []) {
-      expect(line.requires_code).toBe(true)
-    }
-  })
-
   // --- Save as Draft ---
 
   test('Save as borrador (not sent)', async () => {

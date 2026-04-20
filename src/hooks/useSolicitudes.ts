@@ -60,7 +60,6 @@ export interface LineWithRelations {
   status: string
   qty_scheduled: number | null
   qty_delivered: number | null
-  requires_code: boolean | null
   designated_receiver_id: string | null
   designated_receiver_name: string | null
   created_at: string
@@ -102,7 +101,6 @@ export interface LineInput {
   material_category: string | null
   po_reference: string | null
   notes: string | null
-  requires_code?: boolean | null
   designated_receiver_id?: string | null
   designated_receiver_name?: string | null
 }
@@ -230,7 +228,6 @@ function lineInputToRow(
     material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
-    requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
     designated_receiver_id: line.designated_receiver_id ?? null,
     designated_receiver_name: line.designated_receiver_name ?? null,
   }
@@ -431,8 +428,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           material_category: (line.material_category as string | null) ?? null,
           po_reference: (line.po_reference as string | null) ?? null,
           notes: (line.notes as string | null) ?? null,
-          requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
-          designated_receiver_id: (line.designated_receiver_id as string | null) ?? null,
+                designated_receiver_id: (line.designated_receiver_id as string | null) ?? null,
           designated_receiver_name: (line.designated_receiver_name as string | null) ?? null,
           status: line.status as string,
           qty_scheduled: (line.qty_scheduled as number | null) ?? null,
@@ -675,8 +671,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 material_category: line.material_category,
                 po_reference: line.po_reference,
                 notes: line.notes,
-                requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
-                designated_receiver_id: line.designated_receiver_id ?? null,
+                            designated_receiver_id: line.designated_receiver_id ?? null,
                 designated_receiver_name: line.designated_receiver_name ?? null,
               }
             if (personId) lineUpdate.updated_by = personId

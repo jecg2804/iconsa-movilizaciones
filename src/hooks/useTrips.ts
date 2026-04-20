@@ -77,7 +77,6 @@ export interface TripAssignment {
     from_text: string | null
     to_text: string | null
     unit_text: string | null
-    requires_code: boolean
     designated_receiver_id: string | null
     designated_receiver_name: string | null
     equipment: { id: string; spectrum_code: string | null; description: string } | null
@@ -244,7 +243,6 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         from_text: (rawLine.from_text as string | null) ?? null,
         to_text: (rawLine.to_text as string | null) ?? null,
         unit_text: (rawLine.unit_text as string | null) ?? null,
-        requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
         designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
         designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
         equipment: equipRel,
@@ -330,7 +328,6 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       from_text: (rawLine.from_text as string | null) ?? null,
       to_text: (rawLine.to_text as string | null) ?? null,
       unit_text: (rawLine.unit_text as string | null) ?? null,
-      requires_code: (rawLine.requires_code as boolean) ?? false,
       designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
       designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
       equipment,
@@ -621,7 +618,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               notes,
               qty_scheduled,
               qty_delivered,
-              requires_code,
               designated_receiver_id,
               designated_receiver_name,
               from_location:from_location_id(id, name),
@@ -731,7 +727,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               notes,
               qty_scheduled,
               qty_delivered,
-              requires_code,
               designated_receiver_id,
               designated_receiver_name,
               from_text,

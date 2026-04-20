@@ -344,7 +344,6 @@ function LineEditor({
       material_category: lineType === 'Material' ? materialCategory : null,
       po_reference: poReference.trim() || null,
       notes: lineNotes.trim() || null,
-      requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
       designated_receiver_id: null,
       designated_receiver_name: null,
     }

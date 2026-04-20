@@ -2024,7 +2024,6 @@ export type Database = {
           qty_scheduled: number | null
           quantity: number
           request_id: string
-          requires_code: boolean | null
           status: string
           to_location_id: string | null
           to_text: string | null
@@ -2057,7 +2056,6 @@ export type Database = {
           qty_scheduled?: number | null
           quantity?: number
           request_id: string
-          requires_code?: boolean | null
           status?: string
           to_location_id?: string | null
           to_text?: string | null
@@ -2090,7 +2088,6 @@ export type Database = {
           qty_scheduled?: number | null
           quantity?: number
           request_id?: string
-          requires_code?: boolean | null
           status?: string
           to_location_id?: string | null
           to_text?: string | null

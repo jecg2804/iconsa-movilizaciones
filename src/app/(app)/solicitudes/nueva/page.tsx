@@ -219,19 +219,12 @@ export default function NuevaSolicitudPage() {
 
   const handleLineSave = useCallback(
     (line: LineInput) => {
-      const lineWithBulk = {
-        ...line,
-        requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
-      }
-
       if (editingLineIndex !== null) {
-        // Editar linea existente
         setLines((prev) =>
-          prev.map((existing, i) => (i === editingLineIndex ? lineWithBulk : existing)),
+          prev.map((existing, i) => (i === editingLineIndex ? line : existing)),
         )
       } else {
-        // Agregar linea nueva
-        setLines((prev) => [...prev, lineWithBulk])
+        setLines((prev) => [...prev, line])
       }
       setShowLineEditor(false)
       setEditingLineIndex(null)

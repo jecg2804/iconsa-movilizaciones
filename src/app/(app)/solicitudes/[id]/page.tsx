@@ -52,7 +52,6 @@ function lineToInput(line: LineWithRelations): LineInput {
     material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
-    requires_code: true, // Siempre obligatorio (decisión 2026-04-16)
     designated_receiver_id: line.designated_receiver_id ?? null,
     designated_receiver_name: line.designated_receiver_name ?? null,
   }

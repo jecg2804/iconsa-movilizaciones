@@ -78,7 +78,6 @@ export async function createSolicitud(
       unit?: RegExp
     }>
     send?: boolean // default true — send the solicitud (Borrador → Enviada)
-    requiresCode?: boolean
   },
 ): Promise<{ dbId: string; displayId: string }> {
   await page.goto(`${BASE}/solicitudes/nueva`)
@@ -90,9 +89,6 @@ export async function createSolicitud(
 
   // Set date
   await page.getByRole('textbox', { name: 'Fecha Requerida' }).fill(opts.date ?? '2026-04-15')
-
-  // Códigos de confirmación siempre obligatorios (decisión 2026-04-16)
-  // El checkbox fue eliminado — requires_code=true por defecto en toda línea
 
   // Add each line
   for (const line of opts.lines) {

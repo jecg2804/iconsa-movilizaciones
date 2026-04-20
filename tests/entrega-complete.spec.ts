@@ -137,9 +137,7 @@ test.describe.serial('Confirmation Code Verification', () => {
     page = await browser.newPage()
     await login(page)
 
-    // Códigos siempre obligatorios — no necesita requiresCode opt
     const sol = await createSolicitud(page, {
-
       lines: [
         { type: 'Material', description: 'TEST-CODE Verify', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 5, unit: /und/ },
       ],
