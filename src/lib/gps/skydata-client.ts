@@ -20,17 +20,20 @@ function readCredentials(): { key: string; password: string; baseUrl: string } {
 
 /**
  * Normaliza una fila cruda del array que devuelve `/api/fleet/status` al
- * shape interno VehiclePosition. SkyData puede agregar/renombrar campos sin
- * aviso — esta función absorbe esos cambios en un solo lugar.
+ * shape interno VehiclePosition. SkyData usa nomenclatura geográfica:
+ *   y = latitud, x = longitud (ambos strings de número).
+ *   vehId es number, hay que stringificar.
+ *   event es number (código); eventDescription es el string human-readable.
+ * Probado contra el payload real el 2026-04-20 con 13 vehículos de ICONSA.
  */
 function normalize(row: Record<string, unknown>): VehiclePosition {
   return {
-    vehId: String(row.id ?? row.vehId ?? ''),
-    lat: Number(row.lat ?? 0),
-    lon: Number(row.lon ?? row.lng ?? 0),
+    vehId: String(row.vehId ?? row.id ?? ''),
+    lat: Number(row.y ?? row.lat ?? 0),
+    lon: Number(row.x ?? row.lon ?? row.lng ?? 0),
     speed: Number(row.speed ?? 0),
     heading: Number(row.heading ?? row.course ?? 0),
-    event: String(row.event ?? ''),
+    event: String(row.eventDescription ?? row.event ?? ''),
     place: String(row.place ?? ''),
     epoch: Number(row.epoch ?? 0),
     odometer: Number(row.odometer ?? 0),
