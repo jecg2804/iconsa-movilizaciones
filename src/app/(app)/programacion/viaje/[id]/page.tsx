@@ -22,6 +22,7 @@ import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
+import TripLiveMap from '@/components/gps/TripLiveMap'
 import { LineSelector, getDateColor } from '@/components/programacion/LineSelector'
 import type { Attachment } from '@/lib/supabase/storage'
 import FileDisplay from '@/components/ui/FileDisplay'
@@ -738,6 +739,15 @@ export default function ViajeDetailPage() {
           initialAttachments={(trip.attachments as unknown[])?.map(a => a as Attachment) ?? []}
         />
       </div>
+
+      {/* Mapa en vivo del vehículo (GPS) — solo trips En Ruta no-pickup con GPS */}
+      {trip.status === 'En Ruta' &&
+        !trip.is_self_pickup &&
+        trip.vehicle?.gps_vehicle_id && (
+          <div className="mt-6">
+            <TripLiveMap tripId={trip.id} variant="full" />
+          </div>
+        )}
 
       {/* Banner material entregado pendiente retorno */}
       {trip.status === 'En Ruta' && tripEvents.some(e => e.event_type === 'Entrega') && (
