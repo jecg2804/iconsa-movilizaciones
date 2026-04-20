@@ -712,9 +712,32 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
       .select('request_line_id')
       .eq('trip_id', tripId)
 
+    // Pairs of (requester_id, request.id) for every line in this trip.
+    // Used below to personalize each recipient's email link.
+    type RequestLink = { requester_id: string; request_id: string }
+    let requestLinks: RequestLink[] = []
+
     const destinations = new Set<string>()
     if (assignments?.length) {
       const lineIds = assignments.map(a => a.request_line_id)
+
+      // Cada PM recibe link a UNA de SUS solicitudes en este trip.
+      // Multi-PM-per-trip es estructural en ICONSA (solicitante, gerente,
+      // superintendente pueden ser distintos y estar en el mismo trip). Si un
+      // PM tiene varias solicitudes en el trip, cualquiera es válida — el
+      // primer match gana.
+      const { data: linesWithRequest } = await supabase
+        .from('sm_request_lines')
+        .select('request:request_id(id, requester_id)')
+        .in('id', lineIds)
+
+      requestLinks = (linesWithRequest ?? [])
+        .map(row => {
+          const req = (row as { request: { id: string; requester_id: string } | null }).request
+          return req ? { requester_id: req.requester_id, request_id: req.id } : null
+        })
+        .filter((x): x is RequestLink => x !== null)
+
       const { data: lines } = await supabase
         .from('sm_request_lines')
         .select('to_location_id, to_text')
@@ -743,21 +766,36 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     const now = new Date()
     const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })
 
-    const template = templates.salidaRegistrada({
-      tripId: trip.trip_id ?? '',
-      departureTime,
-      destination: [...destinations].join(', ') || '—',
-      requestIds: requestIds.join(', ') || '—',
-      referenceId: trip.id,
-    })
+    // Build per-recipient solicitudId map. Fallback chain:
+    //   1) first request in trip whose requester_id matches this recipient
+    //   2) first request_id seen in the trip (any solicitud → valid landing page)
+    //   3) trip.id (so the email link is never broken even with no requests)
+    const fallbackSolicitudId = requestLinks[0]?.request_id ?? trip.id
+    const recipientSolicitudIds = new Map<string, string>()
+    for (const recipient of recipients) {
+      const match = requestLinks.find(rl => rl.requester_id === recipient.id)
+      recipientSolicitudIds.set(recipient.id, match?.request_id ?? fallbackSolicitudId)
+    }
 
-    await sendNotification({
-      eventType: 'salida_registrada',
-      referenceType: 'trip',
-      referenceId: trip.id,
-      recipients,
-      ...template,
-    })
+    for (const recipient of recipients) {
+      const solicitudId = recipientSolicitudIds.get(recipient.id) ?? fallbackSolicitudId
+      const template = templates.salidaRegistrada({
+        tripId: trip.trip_id ?? '',
+        departureTime,
+        destination: [...destinations].join(', ') || '—',
+        requestIds: requestIds.join(', ') || '—',
+        referenceId: trip.id,
+        solicitudId,
+      })
+
+      await sendNotification({
+        eventType: 'salida_registrada',
+        referenceType: 'trip',
+        referenceId: trip.id,
+        recipients: [recipient],
+        ...template,
+      })
+    }
   } catch (err) {
     console.error('[Notify] salida_registrada FAILED:', err)
   }

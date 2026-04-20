@@ -313,6 +313,7 @@ export function salidaRegistrada(data: {
   destination: string
   requestIds: string
   referenceId: string
+  solicitudId: string
 }): TemplateResult {
   const body = `
 ${alertBanner('El viaje salió de Chilibre.', 'info')}
@@ -322,10 +323,10 @@ ${dataTable(
   dataRow('Destino', escapeHtml(data.destination)) +
   dataRow('Solicitudes', escapeHtml(data.requestIds))
 )}
-${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+${ctaButton('Ver ubicación en vivo →', `${APP_URL}/solicitudes/${data.solicitudId}`)}`
 
   return {
-    subject: `Viaje ${data.tripId} En Ruta → ${data.destination}`,
+    subject: `Viaje ${data.tripId} en ruta — ver ubicación en vivo → ${data.destination}`,
     html: emailLayout('Viaje En Ruta', body),
   }
 }
