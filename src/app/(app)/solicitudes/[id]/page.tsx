@@ -17,16 +17,7 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
-import {
-  formatDate,
-  formatDateTime,
-  formatQty,
-  formatTimePanama,
-  formatCompletionDelta,
-  daysUntilDue,
-  daysUntilDueColor,
-  formatDaysUntilDue,
-} from '@/lib/utils/format'
+import { formatDate, formatDateTime, formatQty, formatTimePanama } from '@/lib/utils/format'
 import Link from 'next/link'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import { notifySolicitudEnviada, notifySolicitudUrgenteNueva } from '@/lib/notifications/actions'
@@ -605,55 +596,37 @@ export default function SolicitudDetailPage() {
         )
       })()}
 
-      {/* Header solicitud — barra de identificación (código SM + estado + delta
-          completación). Se renderiza inline acá (en vez de dentro del
-          SolicitudForm) para poder insertar las líneas entre este header y
-          el resto del form. El SolicitudForm recibe showIdBar={false} para
-          no duplicar el bloque. Helpers compartidos con SolicitudForm via
-          @/lib/utils/format. */}
-      {(() => {
-        const requestId = solicitud.request_id
-        const status = solicitud.status
-        const dateRequired = solicitud.date_required
-        const dateCompleted = solicitud.date_completed
-        const isTerminal = status === 'Cancelada' || status === 'Completada'
-        const completionDelta =
-          status === 'Completada' && dateRequired && dateCompleted
-            ? formatCompletionDelta(dateRequired, dateCompleted)
-            : null
-        return (
-          <div className="flex flex-col gap-2 rounded-lg bg-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              {requestId ? (
-                <span className="text-lg font-bold font-mono text-navy">
-                  {requestId}
-                </span>
-              ) : (
-                <span className="text-sm italic text-iconsa-gray">
-                  Se generara al guardar
-                </span>
-              )}
-            </div>
-            {(status || dateRequired) && (
-              <div className="flex items-center gap-2">
-                {status && <Badge variant="status" label={status} />}
-                {completionDelta ? (
-                  <span className={`text-xs font-medium ${completionDelta.color}`}>
-                    {completionDelta.text}
-                  </span>
-                ) : !isTerminal && dateRequired ? (
-                  <span className={`text-xs font-medium ${daysUntilDueColor(daysUntilDue(dateRequired))}`}>
-                    {formatDaysUntilDue(dateRequired)}
-                  </span>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )
-      })()}
+      {/* Header del formulario */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
+        <SolicitudForm
+          mode={mode}
+          initialData={{
+            requestId: solicitud.request_id,
+            projectId: solicitud.project_id,
+            requesterId: solicitud.requester_id,
+            approvedBy: solicitud.approved_by,
+            dateRequired: solicitud.date_required,
+            dateCreated: solicitud.date_created ?? solicitud.created_at ?? undefined,
+            notes: solicitud.notes,
+            status: solicitud.status,
+            priority: solicitud.priority,
+            dateSubmitted: solicitud.date_submitted ?? undefined,
+            dateCompleted: solicitud.date_completed ?? undefined,
+            dateCancelled: solicitud.date_cancelled ?? undefined,
+            fulfillmentType: solicitud.fulfillment_type ?? 'fleet',
+          }}
+          projects={projectOptions}
+          people={people}
+          approvers={approvers}
+          onChange={handleHeaderChange}
+          currentPersonId={person?.id ?? ''}
+          role={role}
+          solicitudId={solicitud.id}
+          initialAttachments={(solicitud.attachments as unknown[])?.map(a => a as import('@/lib/supabase/storage').Attachment) ?? []}
+        />
+      </div>
 
-      {/* Seccion de lineas — movida arriba de los campos del form para que el
-          usuario vea qué se pidió antes que la metadata. */}
+      {/* Seccion de lineas */}
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">
@@ -745,40 +718,6 @@ export default function SolicitudDetailPage() {
             />
           </div>
         )}
-      </div>
-
-      {/* Cuerpo del formulario — proyecto, solicitante, aprobado por, fecha
-          requerida, fechas ciclo, notas y documentos adjuntos. La barra de
-          identificación se renderiza arriba (antes de las líneas) por lo que
-          pasamos showIdBar={false} acá. */}
-      <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
-        <SolicitudForm
-          mode={mode}
-          showIdBar={false}
-          initialData={{
-            requestId: solicitud.request_id,
-            projectId: solicitud.project_id,
-            requesterId: solicitud.requester_id,
-            approvedBy: solicitud.approved_by,
-            dateRequired: solicitud.date_required,
-            dateCreated: solicitud.date_created ?? solicitud.created_at ?? undefined,
-            notes: solicitud.notes,
-            status: solicitud.status,
-            priority: solicitud.priority,
-            dateSubmitted: solicitud.date_submitted ?? undefined,
-            dateCompleted: solicitud.date_completed ?? undefined,
-            dateCancelled: solicitud.date_cancelled ?? undefined,
-            fulfillmentType: solicitud.fulfillment_type ?? 'fleet',
-          }}
-          projects={projectOptions}
-          people={people}
-          approvers={approvers}
-          onChange={handleHeaderChange}
-          currentPersonId={person?.id ?? ''}
-          role={role}
-          solicitudId={solicitud.id}
-          initialAttachments={(solicitud.attachments as unknown[])?.map(a => a as import('@/lib/supabase/storage').Attachment) ?? []}
-        />
       </div>
 
       {/* Movilizaciones Programadas — visible cuando solicitud no está en Borrador */}
