@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import type { GpsTripPosition, VehiclePosition } from '@/lib/gps/types'
 
 // MapLibre touches `window`. Dynamic import + ssr:false avoids the SSR break.
@@ -174,7 +173,7 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
       </div>
       {isStale ? (
         <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Último reporte hace {formatHoursAgo(position.epoch)} h — el dispositivo
+          Último reporte hace {formatHoursAgo(position.epoch)} — el dispositivo
           puede estar desconectado.
         </div>
       ) : (
