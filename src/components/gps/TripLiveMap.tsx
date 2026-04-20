@@ -157,19 +157,19 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
 
   // Guard: coordenadas inválidas (0/0, NaN, fuera de rango). Sucede con
   // devices sin fix GPS o recién instalados. No montamos el canvas porque
-  // centraría el mapa en (0,0) — el Atlántico sur, gris uniforme.
+  // centraría el mapa en (0,0) — el Atlántico sur, gris uniforme. El
+  // placeholder conserva la misma altura que el mapa para no colapsar layout.
   if (!isValidPosition(position)) {
-    if (isStale) {
-      return (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Último reporte hace {formatHoursAgo(position.epoch)} — el dispositivo
-          puede estar desconectado.
-        </div>
-      )
-    }
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-iconsa-gray">
-        El dispositivo GPS está reportando sin coordenadas válidas. Contacta a Logística.
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div
+          className={`${heightClass} flex items-center justify-center bg-gray-50 text-sm text-iconsa-gray px-4 text-center`}
+        >
+          El dispositivo GPS no está reportando coordenadas válidas.
+          {isStale && (
+            <> Último reporte hace {formatHoursAgo(position.epoch)}.</>
+          )}
+        </div>
       </div>
     )
   }
