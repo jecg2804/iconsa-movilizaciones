@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { Crosshair } from 'lucide-react'
+// Type-only import: no afecta el bundle ni el dynamic import, solo tipado.
+import type { MapRef } from 'react-map-gl/maplibre'
 import type { GpsTripPosition, VehiclePosition } from '@/lib/gps/types'
 
 // MapLibre touches `window`. Dynamic import + ssr:false avoids the SSR break.
@@ -70,6 +73,15 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
   )
   const isUnmountedRef = useRef(false)
 
+  // Auto-follow: el mapa se recentra en cada fix GPS nuevo hasta que el usuario
+  // interactúe (drag, zoom, rotate, pitch). Click en "Seguir vehículo" resetea
+  // el flag y retoma el seguimiento automático.
+  const [userInteracted, setUserInteracted] = useState(false)
+  const mapRef = useRef<MapRef | null>(null)
+  // Epoch del último fix que disparó un easeTo — evita re-seguir la misma
+  // posición si la API devuelve data con epoch sin cambios.
+  const lastFollowedEpochRef = useRef(0)
+
   const fetchPosition = useCallback(async () => {
     try {
       const resp = await fetch(`/api/gps/trip/${tripId}/position`, {
@@ -136,6 +148,40 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
     }, POLL_INTERVAL_MS)
     return () => window.clearInterval(id)
   }, [shouldPoll, fetchPosition])
+
+  // Effect 4: auto-follow. Cada vez que llega un fix nuevo Y el usuario no
+  // interactuó con el mapa, pan suave hacia la nueva posición del vehículo.
+  useEffect(() => {
+    if (!state.data) return
+    const pos =
+      state.data.status === 'live' ? state.data.position
+      : state.data.status === 'stale' ? state.data.lastReport
+      : null
+    if (!pos) return
+    if (!Number.isFinite(pos.lat) || !Number.isFinite(pos.lon)) return
+    if (pos.lat === 0 && pos.lon === 0) return
+    if (pos.epoch === lastFollowedEpochRef.current) return
+    lastFollowedEpochRef.current = pos.epoch
+    if (userInteracted) return
+    mapRef.current?.easeTo({ center: [pos.lon, pos.lat], duration: 500 })
+  }, [state.data, userInteracted])
+
+  // Handler del botón "Seguir vehículo". Definido antes de los early returns
+  // para respetar las hooks rules (el número de hooks llamados tiene que ser
+  // estable entre renders). Extrae la posición de state.data en tiempo del
+  // click — no puede depender de `position` que se computa después.
+  const handleRecenter = useCallback(() => {
+    setUserInteracted(false)
+    lastFollowedEpochRef.current = 0
+    const data = state.data
+    if (!data) return
+    const p =
+      data.status === 'live' ? data.position
+      : data.status === 'stale' ? data.lastReport
+      : null
+    if (!p) return
+    mapRef.current?.easeTo({ center: [p.lon, p.lat], duration: 500 })
+  }, [state.data])
 
   // Condición de carrera — el parent debería haber filtrado estos estados.
   if (state.data?.status === 'not_in_route' || state.data?.status === 'pickup') {
@@ -219,12 +265,20 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className={`${heightClass} relative`}>
         <Map
+          ref={mapRef}
           mapLib={import('maplibre-gl')}
           mapStyle={TILE_STYLE_URL}
           initialViewState={{
             longitude: position.lon,
             latitude: position.lat,
             zoom: 13,
+          }}
+          // originalEvent es undefined cuando el movimiento es programático
+          // (nuestros easeTo); defined cuando el usuario interactúa (pan/zoom/
+          // rotate/pitch en mouse o touch). Usar onMoveStart en vez de
+          // onDragStart+onZoomStart para no ensuciar el flag con easeTo propio.
+          onMoveStart={(e) => {
+            if (e.originalEvent) setUserInteracted(true)
           }}
           style={{ width: '100%', height: '100%' }}
         >
@@ -240,6 +294,17 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
             </div>
           </Marker>
         </Map>
+        {userInteracted && (
+          <button
+            type="button"
+            onClick={handleRecenter}
+            title="Centrar en el vehículo y reanudar seguimiento"
+            className="absolute top-2 right-2 flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow hover:bg-gray-50"
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+            {variant === 'full' && <span>Seguir vehículo</span>}
+          </button>
+        )}
       </div>
       {isStale ? (
         <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 flex items-center justify-between gap-3 flex-wrap">
