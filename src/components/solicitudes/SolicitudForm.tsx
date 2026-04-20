@@ -45,6 +45,14 @@ interface SolicitudFormProps {
   solicitudId?: string
   /** Adjuntos iniciales de la solicitud */
   initialAttachments?: Attachment[]
+  /**
+   * Si es true, el componente renderiza la barra de identificación interna
+   * (código SM + badge estado + delta completación). Si false, el caller es
+   * responsable de renderizar su propia barra — útil cuando se quiere
+   * reordenar el layout con otros bloques (ej. líneas entre el header y el
+   * resto del formulario). Default true para no romper call-sites existentes.
+   */
+  showIdBar?: boolean
 }
 
 function SolicitudForm({
@@ -58,6 +66,7 @@ function SolicitudForm({
   role,
   solicitudId,
   initialAttachments,
+  showIdBar = true,
 }: SolicitudFormProps) {
   const approverOptions = approvers ?? people
   const isReadonly = mode === 'readonly'
@@ -155,34 +164,38 @@ function SolicitudForm({
 
   return (
     <div className="space-y-4">
-      {/* Barra de identificacion */}
-      <div className="flex flex-col gap-2 rounded-lg bg-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          {requestId ? (
-            <span className="text-lg font-bold font-mono text-navy">
-              {requestId}
-            </span>
-          ) : (
-            <span className="text-sm italic text-iconsa-gray">
-              Se generara al guardar
-            </span>
+      {/* Barra de identificacion — ocultable para permitir que el caller la
+          renderice en una posición distinta del layout (ej. arriba de las
+          líneas en /solicitudes/[id]). */}
+      {showIdBar && (
+        <div className="flex flex-col gap-2 rounded-lg bg-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            {requestId ? (
+              <span className="text-lg font-bold font-mono text-navy">
+                {requestId}
+              </span>
+            ) : (
+              <span className="text-sm italic text-iconsa-gray">
+                Se generara al guardar
+              </span>
+            )}
+          </div>
+          {(status || dateRequired) && (
+            <div className="flex items-center gap-2">
+              {status && <Badge variant="status" label={status} />}
+              {completionDelta ? (
+                <span className={`text-xs font-medium ${completionDelta.color}`}>
+                  {completionDelta.text}
+                </span>
+              ) : !isTerminal && dateRequired ? (
+                <span className={`text-xs font-medium ${daysUntilDueColor(daysUntilDue(dateRequired))}`}>
+                  {formatDaysUntilDue(dateRequired)}
+                </span>
+              ) : null}
+            </div>
           )}
         </div>
-        {(status || dateRequired) && (
-          <div className="flex items-center gap-2">
-            {status && <Badge variant="status" label={status} />}
-            {completionDelta ? (
-              <span className={`text-xs font-medium ${completionDelta.color}`}>
-                {completionDelta.text}
-              </span>
-            ) : !isTerminal && dateRequired ? (
-              <span className={`text-xs font-medium ${daysUntilDueColor(daysUntilDue(dateRequired))}`}>
-                {formatDaysUntilDue(dateRequired)}
-              </span>
-            ) : null}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Campos del header */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
