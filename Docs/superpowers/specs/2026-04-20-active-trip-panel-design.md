@@ -1,9 +1,9 @@
 # ActiveTripPanel — Feature Spec
 
-**Version:** 1.0
-**Status:** Design approved — pending implementation plan
+**Version:** 1.1
+**Status:** Design approved (v1.1 revisions incorporated) — pending implementation plan
 **Depende de:** GPS live tracking MVP shippeado (commits `91dca65..ad2ac2d`), guard `Parcial` del mapa (`fbe74ba`), reorder previo revertido (`8c405fc`).
-**No toca:** `SolicitudForm.tsx`, la card histórica "Movilizaciones Programadas", `/solicitudes/nueva`, `/programacion/viaje/[id]`.
+**No toca:** `SolicitudForm.tsx`, `/solicitudes/nueva`, `/programacion/viaje/[id]`. **Toca mínimamente** la card histórica "Movilizaciones Programadas": solo elimina su `<TripLiveMap>` embedded (v1.1); el resto intacto.
 
 ---
 
@@ -20,7 +20,7 @@ Esto genera tres problemas:
 2. **Ruido visual**: mientras un trip está activo, tanto el banner como la card muestran info redundante.
 3. **Mix de contextos**: la card histórica muestra trips Programados y Completados mezclados con el activo — el PM tiene que parsear cuál es el relevante hoy.
 
-La solución es consolidar toda la vista operativa del trip activo en **un único panel arriba de la página**, y dejar la card histórica abajo para consulta (sin cambios — trips Programados/Completados siguen viviendo ahí).
+La solución es consolidar toda la vista operativa del trip activo en **un único panel arriba de la página**, y dejar la card histórica abajo para consulta de trips (Programados / En Ruta / Completados / Cancelados). La card histórica pierde su `<TripLiveMap>` interno para evitar tener el mapa duplicado — conserva el resto (header, metadata, líneas, código de verificación, timeline de eventos).
 
 ## 2. Scope
 
@@ -35,7 +35,7 @@ La solución es consolidar toda la vista operativa del trip activo en **un únic
 
 ### 2.2 — OUT
 
-- **Card "Movilizaciones Programadas"** (histórica, abajo del form): sin cambios. Sigue mostrando todos los trips — Programados, En Ruta, Completados, Cancelados. Coexistencia intencional con el panel durante trip activo.
+- **Card "Movilizaciones Programadas"** (histórica, abajo del form): se elimina el `<TripLiveMap>` interno. El resto de la card (header del trip, metadata, líneas, código de verificación, timeline de eventos) queda intacto. El mapa vive **exclusivamente** en el panel arriba; la card de abajo es vista histórica pura. Cambio aprobado en spec v1.1 tras descartar la coexistencia de dos mapas.
 - **`SolicitudForm.tsx`**: no se toca. La ID bar interna y los campos siguen como están.
 - **`/solicitudes/nueva`**: no se toca. Sin trips activos, el filter devuelve `[]`, ningún panel se monta.
 - **`/programacion/viaje/[id]`** (vista de Charris): no se toca. Layout distinto, contexto distinto.
@@ -205,12 +205,22 @@ export interface AssociatedTrip {
 
 ## 6. Cambios en `page.tsx`
 
-### 6.1 — Imports nuevos
+### 6.1 — Imports — deltas
+
+Agregar:
 
 ```ts
 import ActiveTripPanel from '@/components/solicitudes/ActiveTripPanel'
 import type { AssociatedTrip, TripLineInfo, TripEventInfo } from '@/components/solicitudes/types'
 ```
+
+Eliminar:
+
+```ts
+import TripLiveMap from '@/components/gps/TripLiveMap'
+```
+
+El uso único de `TripLiveMap` en `page.tsx` (dentro de la card histórica) se elimina en §6.6; la import queda huérfana y debe removerse. `<TripLiveMap>` sigue siendo consumido por `<ActiveTripPanel>`, que tiene su propia import en el nuevo archivo.
 
 ### 6.2 — Interfaces inline a borrar
 
@@ -242,7 +252,35 @@ Inmediatamente después del error banner (línea ~570) y antes del `<SolicitudFo
 
 ### 6.5 — Card histórica "Movilizaciones Programadas"
 
-Sin cambios. Líneas ~723+ permanecen idénticas. El `.map(t => ...)` sigue iterando sobre `associatedTrips` completo (incluyendo el trip activo que también aparece en el panel arriba). Coexistencia intencional.
+La card sigue montada en el mismo lugar (líneas ~723+) y mantiene todas sus partes: header del trip, metadata (conductor / vehículo / trailer / badges ATT/Escolta), lista de líneas asignadas, código de verificación, mini-timeline de eventos. El `.map(t => ...)` sigue iterando `associatedTrips` completo (incluyendo el trip activo que también aparece en el panel arriba — ahora sin mapa duplicado, ver §6.6).
+
+### 6.6 — Eliminar `<TripLiveMap>` de la card histórica
+
+Dentro del per-trip card de la sección "Movilizaciones Programadas" (page.tsx líneas 802-818 aprox), vive el bloque siguiente que **se elimina completo**:
+
+```tsx
+{/* Mapa en vivo del vehículo (compact) — solo si al menos
+    una línea de este trip (asociada a ESTA solicitud) sigue
+    en movimiento (En Transito o Parcial). Apagar después de
+    Entregada evita polling innecesario hasta que el camión
+    vuelve a base. Parcial se incluye porque es estado
+    terminal hasta la próxima Entrega — el material sigue
+    viajando y el PM todavía quiere ver el mapa. */}
+{t.status === 'En Ruta' &&
+  !t.is_self_pickup &&
+  t.vehicle?.gps_vehicle_id &&
+  t.lines.some(
+    (line) => line.status === 'En Transito' || line.status === 'Parcial',
+  ) && (
+    <div className="mt-2">
+      <TripLiveMap tripId={t.id} variant="compact" />
+    </div>
+  )}
+```
+
+Se elimina: el comentario, el guard completo (status / is_self_pickup / gps_vehicle_id / lines.some), el `<div>` wrapper, y el `<TripLiveMap>`. Queda solamente la mini-timeline de eventos (línea 819 en adelante) y el código de verificación — estructura intacta.
+
+Consecuencia adicional: la import `import TripLiveMap from '@/components/gps/TripLiveMap'` en línea 31 de `page.tsx` **se elimina también**. `<TripLiveMap>` ahora es consumido exclusivamente por `<ActiveTripPanel>`, que vive en su propio archivo y tiene su propia import. Sin este cleanup el linter marcaría `TripLiveMap` como unused import.
 
 ## 7. Criterios de Éxito
 
@@ -256,7 +294,8 @@ Sin cambios. Líneas ~723+ permanecen idénticas. El `.map(t => ...)` sigue iter
 - [ ] Solicitud con 2 trips activos simultáneos: 2 paneles apilados, más reciente primero.
 - [ ] Línea Parcial (guard del commit `fbe74ba`): panel sigue visible; el status badge de la línea muestra "Parcial".
 - [ ] Mapa dentro del panel hereda polling hygiene, auto-follow, Reactivar, Seguir vehículo, y placeholder de coords inválidas — sin regresión.
-- [ ] Card histórica "Movilizaciones Programadas" abajo sigue apareciendo exactamente igual.
+- [ ] Card histórica "Movilizaciones Programadas" abajo sigue apareciendo con toda su información (header, metadata, líneas, código de verificación, timeline de eventos) — **pero sin el mapa embedded**. El mapa vive exclusivamente en el panel arriba.
+- [ ] `TripLiveMap` NO aparece importado en `page.tsx` tras el cambio (evitar unused-import lint warning). Verificable con `grep -n "TripLiveMap" src/app/\(app\)/solicitudes/\[id\]/page.tsx` → 0 matches.
 
 **No-funcional:**
 
@@ -271,13 +310,13 @@ Sin cambios. Líneas ~723+ permanecen idénticas. El `.map(t => ...)` sigue iter
 - [ ] `SolicitudForm.tsx` sin modificar.
 - [ ] `/solicitudes/nueva` sin regresión visual ni funcional.
 - [ ] `/programacion/viaje/[id]` sin cambios.
-- [ ] La card histórica muestra el mismo set de trips que antes.
+- [ ] La card histórica itera sobre el mismo set de trips que antes (el `.map(t => ...)` sobre `associatedTrips` completo — Programados + En Ruta + Completados + Cancelados siguen apareciendo). Solo se removió el `<TripLiveMap>` dentro de cada card; el resto del rendering por-trip es idéntico.
 
 ## 8. Riesgos y Mitigación
 
 | Riesgo | Prob. | Impacto | Mitigación |
 |--------|-------|---------|-----------|
-| Duplicación visual PM ve el mapa + código dos veces (arriba en el panel, abajo en la card) | Segura | Bajo | Es intencional por el spec — contextos distintos (operativo vs histórico). Aceptado por James en el aprobado del design. |
+| Usuario acostumbrado al mapa en la card histórica no lo encuentra allá tras el cambio | Baja | Bajo | El panel arriba es más prominente, está siempre visible al entrar a la página (sin scroll), y aparece EXACTAMENTE cuando tiene sentido (trip activo con línea en movimiento). UX mejora en vez de empeorar. La card histórica sigue mostrando el código de verificación y la timeline — sigue siendo utilizable para consulta de trips pasados o programados. |
 | Múltiples paneles triplican polling bajo carga | Baja | Bajo | Caché 10s compartido mitiga. Caso raro (2+ trips simultáneos por solicitud). Si escala mal se introduce dedup client-side por `tripId` en una iteración futura. |
 | Edge case: múltiples Salidas por reversión — `find()` devuelve la primera (potencialmente revertida) | Baja | Bajo | James lo anotó como no-bloqueante. Documentado en sección OUT. Fix futuro: filtrar eventos revertidos antes del `find()`. |
 | Drift entre `AssociatedTrip` en `types.ts` y el shape real del SELECT de Supabase en `page.tsx` | Baja | Medio | Mismo archivo mantiene el tipo + el mapping. Si cambia el SELECT se cambia el tipo en el mismo commit. Documentado como convención. |
@@ -292,3 +331,4 @@ Ninguna bloqueante. James aprobó las 6 micro-decisiones en el mensaje del aprob
 | Version | Fecha | Cambios |
 |---------|-------|---------|
 | 1.0 | 2026-04-20 | Versión inicial tras aprobación del design por James. 6 micro-decisiones confirmadas. Edge case de reversión de Salida anotado como OUT no-bloqueante. |
+| 1.1 | 2026-04-20 | (1) Card histórica: eliminar `<TripLiveMap>` interno — el mapa vive exclusivamente en el panel arriba, sin duplicación. Resto de la card (header, metadata, líneas, código, timeline) intacto. (2) Import `TripLiveMap` removida de `page.tsx` — ahora vive solo en `ActiveTripPanel.tsx`. (3) §6.6 agregada con líneas exactas (802-818) del bloque a remover. (4) §8 riesgo de "duplicación visual" reemplazado por "usuario no encuentra el mapa en la card histórica" con mitigación (panel arriba es más prominente). Cambios pedidos por James tras revisión del spec v1.0. |
