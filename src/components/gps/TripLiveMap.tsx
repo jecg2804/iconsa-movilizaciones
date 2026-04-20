@@ -44,6 +44,16 @@ function formatHoursAgo(epochSec: number): string {
   return `${ageH} h`
 }
 
+function isValidPosition(p: VehiclePosition): boolean {
+  // SkyData puede devolver 0/0 para devices sin fix GPS o recién instalados.
+  // Panamá está aproximadamente en lat 7-10, lon -83 a -77.
+  // Filtro amplio pero descarta los 0/0 y cualquier valor obviamente inválido.
+  if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return false
+  if (p.lat === 0 && p.lon === 0) return false
+  if (Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180) return false
+  return true
+}
+
 export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
   const heightClass = variant === 'full' ? 'h-[400px]' : 'h-[250px]'
 
@@ -144,6 +154,25 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
   const isStale = state.data.status === 'stale'
   const position: VehiclePosition =
     state.data.status === 'live' ? state.data.position : state.data.lastReport
+
+  // Guard: coordenadas inválidas (0/0, NaN, fuera de rango). Sucede con
+  // devices sin fix GPS o recién instalados. No montamos el canvas porque
+  // centraría el mapa en (0,0) — el Atlántico sur, gris uniforme.
+  if (!isValidPosition(position)) {
+    if (isStale) {
+      return (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Último reporte hace {formatHoursAgo(position.epoch)} — el dispositivo
+          puede estar desconectado.
+        </div>
+      )
+    }
+    return (
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-iconsa-gray">
+        El dispositivo GPS está reportando sin coordenadas válidas. Contacta a Logística.
+      </div>
+    )
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
