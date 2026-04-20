@@ -25,8 +25,12 @@ function readCredentials(): { key: string; password: string; baseUrl: string } {
  *   vehId es number, hay que stringificar.
  *   event es number (código); eventDescription es el string human-readable.
  * Probado contra el payload real el 2026-04-20 con 13 vehículos de ICONSA.
+ *
+ * Exportado para `scripts/debug-skydata.ts` — consumirlo desde ahí mantiene
+ * el debug en sync con el runtime (un solo sitio donde los nombres viven).
+ * No usarlo desde runtime externo a este módulo.
  */
-function normalize(row: Record<string, unknown>): VehiclePosition {
+export function normalize(row: Record<string, unknown>): VehiclePosition {
   return {
     vehId: String(row.vehId ?? row.id ?? ''),
     lat: Number(row.y ?? row.lat ?? 0),
