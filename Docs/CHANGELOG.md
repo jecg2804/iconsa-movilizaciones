@@ -5,22 +5,20 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 ---
 
 ## 2026-04-20
-- [bd-pending] **GPS live tracking — columna `equipment.gps_vehicle_id`**: nueva columna nullable + índice parcial + bootstrap del mapeo de los 13 vehículos con dispositivo GPS contra SkyData. Datos verificados contra `/api/vehicles` el 2026-04-20. James ejecuta primero en staging (`vonwkciosksqspyljzfy`), luego en prod (`bzeoszympkkicwlfdtcn`). Spec: `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`.
+- [bd] **GPS live tracking — columna `equipment.gps_vehicle_id`**: ejecutado en staging (`vonwkciosksqspyljzfy`) 2026-04-20. Pendiente ejecutar en prod (`bzeoszympkkicwlfdtcn`). Dos migraciones consecutivas: (1) `gps_vehicle_id_column_and_bootstrap` — ALTER TABLE + índice parcial + 13 UPDATEs match por `spectrum_code`, 10 impactaron; (2) `gps_vehicle_id_bootstrap_by_plate` — 3 UPDATEs match por `plate` para los vehículos donde SkyData usaba placa como identificador en vez de spectrum_code (ED8244 / EM0539 / ES3830 son placas de los equipos PUP244 / SUV539 / BUS830 respectivamente). Resultado: 13/13 vehículos con GPS mapeados. Verificado: filas pobladas, 0 huérfanos, índice parcial creado. Spec: `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`.
 
   ```sql
-  -- Columna
+  -- Migración 1 — columna + índice + bootstrap por spectrum_code (10 de 13 matchean)
   ALTER TABLE public.equipment
   ADD COLUMN gps_vehicle_id text NULL;
 
   COMMENT ON COLUMN public.equipment.gps_vehicle_id IS
   'ID interno del vehículo en SkyData/SkyGlobal (campo `id`, no `unit_id`). Solo los 13 vehículos con dispositivo GPS tienen valor. NULL para equipos sin GPS.';
 
-  -- Índice parcial (evita inflar el índice con filas NULL)
   CREATE INDEX idx_equipment_gps_vehicle_id
   ON public.equipment (gps_vehicle_id)
   WHERE gps_vehicle_id IS NOT NULL;
 
-  -- Bootstrap del mapeo (13 vehículos)
   UPDATE public.equipment SET gps_vehicle_id = '118'  WHERE spectrum_code = 'CAB444';
   UPDATE public.equipment SET gps_vehicle_id = '119'  WHERE spectrum_code = 'CAB930';
   UPDATE public.equipment SET gps_vehicle_id = '120'  WHERE spectrum_code = 'CAM839';
@@ -31,9 +29,12 @@ Actualizado con cada commit. Entries > 90 días se archivan.
   UPDATE public.equipment SET gps_vehicle_id = '5061' WHERE spectrum_code = 'PUP467';
   UPDATE public.equipment SET gps_vehicle_id = '5062' WHERE spectrum_code = 'PUP468';
   UPDATE public.equipment SET gps_vehicle_id = '5063' WHERE spectrum_code = 'PUP245';
-  UPDATE public.equipment SET gps_vehicle_id = '5067' WHERE spectrum_code = 'ED8244';
-  UPDATE public.equipment SET gps_vehicle_id = '6218' WHERE spectrum_code = 'EM0539';
-  UPDATE public.equipment SET gps_vehicle_id = '6612' WHERE spectrum_code = 'ES3830';
+
+  -- Migración 2 — corrección por plate para los 3 vehículos donde SkyData usa placa en vez de spectrum_code.
+  -- SkyData description: "ED8244" / "EM0539" / "ES3830" corresponden a equipos PUP244 / SUV539 / BUS830.
+  UPDATE public.equipment SET gps_vehicle_id = '5067' WHERE plate = 'ED8244';
+  UPDATE public.equipment SET gps_vehicle_id = '6218' WHERE plate = 'EM0539';
+  UPDATE public.equipment SET gps_vehicle_id = '6612' WHERE plate = 'ES3830';
   ```
 
 ## 2026-04-19
