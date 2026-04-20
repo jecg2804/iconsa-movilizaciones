@@ -4,6 +4,38 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-20
+- [bd-pending] **GPS live tracking — columna `equipment.gps_vehicle_id`**: nueva columna nullable + índice parcial + bootstrap del mapeo de los 13 vehículos con dispositivo GPS contra SkyData. Datos verificados contra `/api/vehicles` el 2026-04-20. James ejecuta primero en staging (`vonwkciosksqspyljzfy`), luego en prod (`bzeoszympkkicwlfdtcn`). Spec: `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`.
+
+  ```sql
+  -- Columna
+  ALTER TABLE public.equipment
+  ADD COLUMN gps_vehicle_id text NULL;
+
+  COMMENT ON COLUMN public.equipment.gps_vehicle_id IS
+  'ID interno del vehículo en SkyData/SkyGlobal (campo `id`, no `unit_id`). Solo los 13 vehículos con dispositivo GPS tienen valor. NULL para equipos sin GPS.';
+
+  -- Índice parcial (evita inflar el índice con filas NULL)
+  CREATE INDEX idx_equipment_gps_vehicle_id
+  ON public.equipment (gps_vehicle_id)
+  WHERE gps_vehicle_id IS NOT NULL;
+
+  -- Bootstrap del mapeo (13 vehículos)
+  UPDATE public.equipment SET gps_vehicle_id = '118'  WHERE spectrum_code = 'CAB444';
+  UPDATE public.equipment SET gps_vehicle_id = '119'  WHERE spectrum_code = 'CAB930';
+  UPDATE public.equipment SET gps_vehicle_id = '120'  WHERE spectrum_code = 'CAM839';
+  UPDATE public.equipment SET gps_vehicle_id = '121'  WHERE spectrum_code = 'CAM837';
+  UPDATE public.equipment SET gps_vehicle_id = '123'  WHERE spectrum_code = 'BUS009';
+  UPDATE public.equipment SET gps_vehicle_id = '124'  WHERE spectrum_code = 'BUS010';
+  UPDATE public.equipment SET gps_vehicle_id = '126'  WHERE spectrum_code = 'CAM430';
+  UPDATE public.equipment SET gps_vehicle_id = '5061' WHERE spectrum_code = 'PUP467';
+  UPDATE public.equipment SET gps_vehicle_id = '5062' WHERE spectrum_code = 'PUP468';
+  UPDATE public.equipment SET gps_vehicle_id = '5063' WHERE spectrum_code = 'PUP245';
+  UPDATE public.equipment SET gps_vehicle_id = '5067' WHERE spectrum_code = 'ED8244';
+  UPDATE public.equipment SET gps_vehicle_id = '6218' WHERE spectrum_code = 'EM0539';
+  UPDATE public.equipment SET gps_vehicle_id = '6612' WHERE spectrum_code = 'ES3830';
+  ```
+
 ## 2026-04-19
 - [fix] **J2 — Eliminar `requires_code` del código**: la columna `requires_code` fue dropeada en BD (prod + staging) pero el frontend seguía enviándola en inserts/updates → error PGRST204 "Could not find the 'requires_code' column of 'sm_request_lines' in the schema cache" al agregar líneas a solicitudes. Fix: eliminar todas las referencias en código y tests. Cambios: (1) `src/components/solicitudes/LineEditor.tsx` — quitado del payload de `handleSave`. (2) `src/app/(app)/solicitudes/nueva/page.tsx` — simplificado `handleLineSave` (ya no wrappa con `requires_code: true`). (3) `src/app/(app)/solicitudes/[id]/page.tsx` — quitado del mapper de línea para editar. (4) `src/hooks/useSolicitudes.ts` — `LineWithRelations` y `LineInput` sin `requires_code`; 3 inserts/updates limpios. (5) `src/hooks/useTrips.ts` — interface `TripLine` sin `requires_code`; 2 mappers + 2 SELECTs limpios (ya no se consulta la columna). (6) `src/lib/types/database.ts` — edición quirúrgica: quitadas las 3 ocurrencias de `requires_code` en Row/Insert/Update de `sm_request_lines` (NO regeneré con `gen types` porque destapaba drift de `qty_dispatched` entre prod y staging — ver nota abajo). (7) Tests: `tests/helpers.ts` sin opt `requiresCode`, `tests/solicitud-creation.spec.ts` sin test "All lines have requires_code=true by default", `tests/entrega-complete.spec.ts` sin comentario obsoleto. **Nota drift BD:** al intentar regenerar tipos con `npx supabase gen types` desde prod (`bzeoszympkkicwlfdtcn`), descubrí que prod NO tiene la columna `qty_dispatched` en `trip_line_assignments`, mientras que staging (`vonwkciosksqspyljzfy`) SÍ la tiene. El código frontend usa `qty_dispatched` intensivamente (Dispatch, Pickup, Delivery modals + mis-viajes flow) — no tocar sin decisión explícita de James. Documentado para investigación futura.
 - [audit] **Drift prod/staging detectado**: `trip_line_assignments.qty_dispatched` existe en staging pero no en prod. Impacto: potencialmente los flows de Dispatch/Pickup/Delivery en prod están fallando silenciosamente. Requiere investigación — ¿prod realmente no tiene la columna, o el snapshot del MCP es incompleto? James debe decidir: (a) dropear `qty_dispatched` en staging para alinear, o (b) aplicar migración en prod para añadirla.

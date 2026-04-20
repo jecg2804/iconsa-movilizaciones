@@ -383,6 +383,7 @@ export type Database = {
           purchase_date: string | null
           qr_code_url: string | null
           serial_number: string | null
+          gps_vehicle_id: string | null
           spectrum_code: string | null
           status: string | null
           tracking_tier: string | null
@@ -422,6 +423,7 @@ export type Database = {
           purchase_date?: string | null
           qr_code_url?: string | null
           serial_number?: string | null
+          gps_vehicle_id?: string | null
           spectrum_code?: string | null
           status?: string | null
           tracking_tier?: string | null
@@ -461,6 +463,7 @@ export type Database = {
           purchase_date?: string | null
           qr_code_url?: string | null
           serial_number?: string | null
+          gps_vehicle_id?: string | null
           spectrum_code?: string | null
           status?: string | null
           tracking_tier?: string | null
