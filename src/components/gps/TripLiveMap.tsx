@@ -63,6 +63,11 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
     consecutiveErrors: 0,
     lastFetchedAt: null,
   })
+  // Lazy initializer — evaluamos document.visibilityState solo al mount.
+  // Default true cubre el SSR/undefined path aunque el componente es 'use client'.
+  const [isVisible, setIsVisible] = useState(() =>
+    typeof document === 'undefined' ? true : document.visibilityState !== 'hidden',
+  )
   const isUnmountedRef = useRef(false)
 
   const fetchPosition = useCallback(async () => {
@@ -90,22 +95,47 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
     }
   }, [tripId])
 
+  // Derivado: pollear solo si la tab está visible Y el último status no es stale.
+  // Un dispositivo stale (>48h) no va a reportar en los próximos 30s por definición;
+  // tab oculta significa que nadie consume el dato. Los dos casos pausan requests.
+  const isStaleStatus = state.data?.status === 'stale'
+  const shouldPoll = isVisible && !isStaleStatus
+
+  // Effect 1: mount/unmount tracking del ref. Corre UNA vez — separado del
+  // polling effect porque ese re-corre en cada flip de shouldPoll y setearía
+  // isUnmountedRef.current = true en cada pausa, rompiendo los setState de
+  // los fetches in-flight.
   useEffect(() => {
     isUnmountedRef.current = false
+    return () => {
+      isUnmountedRef.current = true
+    }
+  }, [])
+
+  // Effect 2: visibility listener — corre UNA vez.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const handler = () => setIsVisible(document.visibilityState !== 'hidden')
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [])
+
+  // Effect 3: polling. Re-corre cuando shouldPoll flippea (visibility o stale).
+  // In-flight fetches al cleanup siguen vivos; el setState es idempotente con
+  // el isUnmountedRef guard, y si el componente sigue montado el setState es
+  // válido y actualiza state.data correctamente.
+  useEffect(() => {
+    if (!shouldPoll) return
     void fetchPosition()
     const id = window.setInterval(() => {
-      // Detener polling tras 3 fallos consecutivos — el usuario debe presionar Reintentar.
       setState((prev) => {
         if (prev.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) return prev
         void fetchPosition()
         return prev
       })
     }, POLL_INTERVAL_MS)
-    return () => {
-      isUnmountedRef.current = true
-      window.clearInterval(id)
-    }
-  }, [fetchPosition])
+    return () => window.clearInterval(id)
+  }, [shouldPoll, fetchPosition])
 
   // Condición de carrera — el parent debería haber filtrado estos estados.
   if (state.data?.status === 'not_in_route' || state.data?.status === 'pickup') {
@@ -170,6 +200,17 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
             <> Último reporte hace {formatHoursAgo(position.epoch)}.</>
           )}
         </div>
+        {isStale && (
+          <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => void fetchPosition()}
+              className="rounded border border-amber-300 bg-white px-3 py-1 font-medium text-amber-800 hover:bg-amber-100"
+            >
+              Reactivar
+            </button>
+          </div>
+        )}
       </div>
     )
   }
@@ -201,9 +242,18 @@ export default function TripLiveMap({ tripId, variant }: TripLiveMapProps) {
         </Map>
       </div>
       {isStale ? (
-        <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Último reporte hace {formatHoursAgo(position.epoch)} — el dispositivo
-          puede estar desconectado.
+        <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 flex items-center justify-between gap-3 flex-wrap">
+          <span>
+            Último reporte hace {formatHoursAgo(position.epoch)} — el dispositivo
+            puede estar desconectado.
+          </span>
+          <button
+            type="button"
+            onClick={() => void fetchPosition()}
+            className="shrink-0 rounded border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+          >
+            Reactivar
+          </button>
         </div>
       ) : (
         <div className="border-t border-gray-100 bg-white px-4 py-2 text-sm text-gray-700 flex items-center justify-between gap-2 flex-wrap">
