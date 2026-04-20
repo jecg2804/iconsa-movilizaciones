@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/Button'
 import { SolicitudForm, type FormMode } from '@/components/solicitudes/SolicitudForm'
 import { LineEditor } from '@/components/solicitudes/LineEditor'
 import { LineRow } from '@/components/solicitudes/LineRow'
+import TripLiveMap from '@/components/gps/TripLiveMap'
 
 // --- Helpers ---
 
@@ -127,10 +128,11 @@ export default function SolicitudDetailPage() {
     status: string
     confirmation_code: string | null
     driver: { name: string } | null
-    vehicle: { description: string; spectrum_code: string | null } | null
+    vehicle: { description: string; spectrum_code: string | null; gps_vehicle_id: string | null } | null
     trailer: { description: string; spectrum_code: string | null } | null
     att_permit: boolean
     escort: boolean
+    is_self_pickup: boolean
     lines: TripLineInfo[]
     events: TripEventInfo[]
   }
@@ -191,8 +193,9 @@ export default function SolicitudDetailPage() {
             confirmation_code,
             att_permit,
             escort,
+            is_self_pickup,
             driver:driver_id(name),
-            vehicle:vehicle_id(description, spectrum_code),
+            vehicle:vehicle_id(description, spectrum_code, gps_vehicle_id),
             trailer:trailer_id(description, spectrum_code),
             trip_events(event_type, event_timestamp, received_by_name, notes)
           )
@@ -241,10 +244,11 @@ export default function SolicitudDetailPage() {
           status: t.status as string,
           confirmation_code: (t.confirmation_code as string | null) ?? null,
           driver: driver as { name: string } | null,
-          vehicle: vehicle as { description: string; spectrum_code: string | null } | null,
+          vehicle: vehicle as { description: string; spectrum_code: string | null; gps_vehicle_id: string | null } | null,
           trailer: trailer as { description: string; spectrum_code: string | null } | null,
           att_permit: (t.att_permit as boolean) ?? false,
           escort: (t.escort as boolean) ?? false,
+          is_self_pickup: (t.is_self_pickup as boolean) ?? false,
           lines: lineInfo ? [lineInfo] : [],
           events,
         })
@@ -793,6 +797,14 @@ export default function SolicitudDetailPage() {
                     ))}
                   </ul>
                 )}
+                {/* Mapa en vivo del vehículo (compact) */}
+                {t.status === 'En Ruta' &&
+                  !t.is_self_pickup &&
+                  t.vehicle?.gps_vehicle_id && (
+                    <div className="mt-2">
+                      <TripLiveMap tripId={t.id} variant="compact" />
+                    </div>
+                  )}
                 {/* Mini-timeline de eventos */}
                 {t.events.length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-gray-200 pt-2">
