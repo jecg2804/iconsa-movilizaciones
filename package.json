@@ -18,9 +18,11 @@
     "@vercel/speed-insights": "^2.0.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.576.0",
+    "maplibre-gl": "^5.23.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-map-gl": "^8.1.1",
     "recharts": "^3.8.0",
     "resend": "^6.9.3"
   },
