@@ -1,0 +1,40 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-20-active-trip-panel.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Extraer tipos a src/components/solicitudes/types.ts",
+      "status": "pending",
+      "description": "**Goal:** Mover las 3 interfaces (TripLineInfo, TripEventInfo, AssociatedTrip) de inline en page.tsx a un archivo compartido. Refactor puro — sin cambio de shape ni de comportamiento.\n\n**Files:**\n- Create: src/components/solicitudes/types.ts\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx (eliminar las 3 interfaces inline ~líneas 111-138; agregar import type después de línea 30)\n\n**Acceptance Criteria:**\n- types.ts exporta las 3 interfaces con shape exacto\n- 0 matches de las 3 interfaces inline en page.tsx\n- AssociatedTrip aparece al menos 1 vez en page.tsx (el import)\n- npm run build exit 0\n- eslint sin errores nuevos\n\n**Verify:** npm run build → exit 0\n\n**Steps:** Crear types.ts con shape exacto, agregar import, eliminar bloque inline, build, commit con message 'refactor: extraer tipos AssociatedTrip a src/components/solicitudes/types.ts'.\n\n```json:metadata\n{\"files\": [\"src/components/solicitudes/types.ts\", \"src/app/(app)/solicitudes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"types.ts creado con las 3 interfaces\", \"0 interfaces inline en page.tsx\", \"import type agregado\", \"npm run build exit 0\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Crear componente ActiveTripPanel",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Crear el componente client que renderiza las 6 secciones operativas de un trip activo. Archivo aislado — no se importa todavía.\n\n**Files:**\n- Create: src/components/solicitudes/ActiveTripPanel.tsx\n\n**Acceptance Criteria:**\n- Archivo existe con 'use client' como primera línea\n- Export default con props { trip: AssociatedTrip, role: string | null }\n- 6 secciones: header MOV+Badge+Salida, metadata, líneas filtradas (En Transito/Parcial) con badge, <TripLiveMap variant='compact'>, código gated, botón Link '/mis-viajes/[id]?action=deliver'\n- Gate del código: role === 'pm' || 'logistica' || 'admin' Y trip.confirmation_code existe\n- npm run build exit 0\n- eslint clean\n- Grep 'ActiveTripPanel' fuera del archivo propio → 0 matches (aún no wire-upped)\n\n**Verify:** npm run build → exit 0\n\n**Steps:** Crear archivo con código completo según §4.2 del spec, build, eslint check, grep aislación, commit 'feat: componente ActiveTripPanel (6 secciones operativas, aún no wire-upped)'.\n\n```json:metadata\n{\"files\": [\"src/components/solicitudes/ActiveTripPanel.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"'use client' primer línea\", \"export default\", \"6 secciones presentes\", \"role gate correcto\", \"npm run build exit 0\", \"grep aislación: solo 1 match\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Wire up panel en page.tsx + eliminar banner 'Material en camino'",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Eliminar el banner IIFE 'Material en camino' del top de page.tsx y reemplazarlo con render del filter+sort+map de ActiveTripPanel. El cambio visible.\n\n**Files:**\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx\n\n**Acceptance Criteria:**\n- import ActiveTripPanel agregado\n- Banner IIFE eliminado (0 matches de 'Material en camino' o 'tripEnRoute = associatedTrips.find')\n- Render de 0..N paneles insertado entre error banner y <SolicitudForm>\n- Filter: t.status === 'En Ruta' && t.lines.some(l => En Transito || Parcial)\n- Sort: por Salida.event_timestamp descendente (más reciente primero)\n- npm run build exit 0\n- Si Link/formatTimePanama quedaron huérfanos, remover de imports\n\n**Verify:** npm run build → exit 0; grep 'Material en camino' → 0 matches; manual smoke\n\n**Steps:** Agregar import, eliminar banner IIFE (con grep verificación), insertar render del map, chequear Link/formatTimePanama huérfanos, build, commit 'feat: renderizar ActiveTripPanel arriba + eliminar banner Material en camino'.\n\n```json:metadata\n{\"files\": [\"src/app/(app)/solicitudes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"import ActiveTripPanel\", \"banner eliminado\", \"render con filter+sort+map\", \"imports huérfanos limpios\", \"npm run build exit 0\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Eliminar <TripLiveMap> embedded de card histórica + import huérfana",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Remover el <TripLiveMap variant='compact'> que vive dentro del per-trip card de 'Movilizaciones Programadas' + la import huérfana de TripLiveMap en page.tsx. El mapa queda exclusivamente en el panel arriba.\n\n**Files:**\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx (líneas ~802-818 del estado actual + línea 31 de import)\n\n**Acceptance Criteria:**\n- Bloque completo del mapa embedded eliminado (comentario + guard + div + TripLiveMap)\n- Import 'TripLiveMap from @/components/gps/TripLiveMap' eliminado de page.tsx\n- grep 'TripLiveMap' en page.tsx → 0 matches\n- Card histórica sigue renderizando header/metadata/líneas/timeline/código (solo pierde el mapa)\n- npm run build exit 0, sin unused-import warning\n\n**Verify:** grep 'TripLiveMap' en page.tsx → 0 matches; npm run build exit 0\n\n**Steps:** Edit para eliminar bloque 802-818, edit para eliminar import línea 31, grep final, build, eslint, commit 'refactor: eliminar <TripLiveMap> de card histórica — mapa vive solo en ActiveTripPanel'.\n\n```json:metadata\n{\"files\": [\"src/app/(app)/solicitudes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"bloque mapa embedded eliminado\", \"import TripLiveMap eliminado\", \"grep TripLiveMap en page.tsx = 0\", \"card histórica intacta sin mapa\", \"npm run build exit 0\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Verificación manual + entry [feat] CHANGELOG",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Smoke test contra los 6 escenarios del spec §7 y anotar el feature en CHANGELOG como [feat] para cerrar.\n\n**Files:**\n- Modify: Docs/CHANGELOG.md (agregar entry al bloque ## 2026-04-20)\n\n**Acceptance Criteria:**\n- npm run build exit 0 final\n- npm run lint sin warnings nuevos en los 3 archivos tocados\n- Smoke manual contra los 6 escenarios del spec §7 OK\n- CHANGELOG tiene entry [feat] describiendo el panel y los 3 cambios coordinados\n\n**Verify:** npm run build && npm run lint → exit 0. Smoke manual en browser.\n\n**Steps:** Build+lint final, smoke 6 escenarios (trip activo panel+banner gone, Confirmar Recepción link, solicitud sin trips, Completada, entrega parcial preserva panel, card histórica sin mapa), agregar entry [feat] a CHANGELOG, commit 'docs: CHANGELOG — [feat] ActiveTripPanel + cleanup card histórica'.\n\n```json:metadata\n{\"files\": [\"Docs/CHANGELOG.md\"], \"verifyCommand\": \"npm run build && npm run lint\", \"acceptanceCriteria\": [\"build+lint clean\", \"6 smoke scenarios OK\", \"CHANGELOG [feat] entry agregado\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-20T00:00:00Z"
+}
