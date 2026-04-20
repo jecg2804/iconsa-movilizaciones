@@ -112,6 +112,7 @@ export default function SolicitudDetailPage() {
   interface TripLineInfo {
     description: string
     line_type: string
+    status: string
     quantity_assigned: number
     qty_delivered: number
   }
@@ -184,7 +185,7 @@ export default function SolicitudDetailPage() {
           trip_id,
           quantity_assigned,
           qty_delivered,
-          sm_request_lines!inner(description, line_type),
+          sm_request_lines!inner(description, line_type, status),
           trips!inner(
             id,
             trip_id,
@@ -218,6 +219,7 @@ export default function SolicitudDetailPage() {
           ? {
               description: (lineRaw as Record<string, unknown>).description as string,
               line_type: (lineRaw as Record<string, unknown>).line_type as string,
+              status: (lineRaw as Record<string, unknown>).status as string,
               quantity_assigned: row.quantity_assigned as number,
               qty_delivered: (row.qty_delivered as number) ?? 0,
             }
@@ -797,10 +799,14 @@ export default function SolicitudDetailPage() {
                     ))}
                   </ul>
                 )}
-                {/* Mapa en vivo del vehículo (compact) */}
+                {/* Mapa en vivo del vehículo (compact) — solo si al menos
+                    una línea de este trip (asociada a ESTA solicitud) sigue
+                    En Transito. Apagar después de Entrega evita polling
+                    innecesario hasta que el camión vuelve a base. */}
                 {t.status === 'En Ruta' &&
                   !t.is_self_pickup &&
-                  t.vehicle?.gps_vehicle_id && (
+                  t.vehicle?.gps_vehicle_id &&
+                  t.lines.some((line) => line.status === 'En Transito') && (
                     <div className="mt-2">
                       <TripLiveMap tripId={t.id} variant="compact" />
                     </div>
