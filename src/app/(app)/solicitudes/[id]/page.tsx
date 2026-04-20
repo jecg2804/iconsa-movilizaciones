@@ -801,12 +801,17 @@ export default function SolicitudDetailPage() {
                 )}
                 {/* Mapa en vivo del vehículo (compact) — solo si al menos
                     una línea de este trip (asociada a ESTA solicitud) sigue
-                    En Transito. Apagar después de Entrega evita polling
-                    innecesario hasta que el camión vuelve a base. */}
+                    en movimiento (En Transito o Parcial). Apagar después de
+                    Entregada evita polling innecesario hasta que el camión
+                    vuelve a base. Parcial se incluye porque es estado
+                    terminal hasta la próxima Entrega — el material sigue
+                    viajando y el PM todavía quiere ver el mapa. */}
                 {t.status === 'En Ruta' &&
                   !t.is_self_pickup &&
                   t.vehicle?.gps_vehicle_id &&
-                  t.lines.some((line) => line.status === 'En Transito') && (
+                  t.lines.some(
+                    (line) => line.status === 'En Transito' || line.status === 'Parcial',
+                  ) && (
                     <div className="mt-2">
                       <TripLiveMap tripId={t.id} variant="compact" />
                     </div>
