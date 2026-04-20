@@ -33,12 +33,33 @@ Claude Code sigue estas reglas automáticamente sin que James lo pida.
 - **Especialmente útil** para APIs que cambian entre versiones (App Router patterns, @supabase/ssr)
 - Invocar: agregar "use context7" al prompt o "use library /supabase/supabase"
 
-## Plugins — Cuándo se activan
+## Plugins — USO OBLIGATORIO
 
-### Superpowers
-- Se activa automáticamente al inicio de sesión
-- Para **features nuevos**: seguir su flujo completo (brainstorm → plan → implement → review)
-- Para **fixes rápidos**: decir "skip brainstorming, just fix this"
+### Superpowers (pcvelz fork) — ENFORCEMENT ACTIVO
+- **Feature nuevo o rediseño** → SIEMPRE invocar `brainstorming` skill
+  ANTES de planificar. Sin excepción. No importa si "ya entiendo".
+- **Bug complejo (3+ archivos)** → invocar `systematic-debugging`
+- **Después de implementar paso mayor** → `requesting-code-review`
+- **Plan mode nativo desactivado** — todo planning pasa por Superpowers
+  (brainstorming → writing-plans → executing-plans)
+- Para **fixes triviales (1 archivo, obvio)**: decir "skip brainstorming"
+  explícitamente. Pero el DEFAULT es invocar.
+- Hooks activos: pre-commit task gate, low-context stop blocker
+
+### Context7
+- **SIEMPRE** antes de usar APIs que cambian entre versiones:
+  Next.js App Router, Supabase SSR, React hooks, Tailwind
+- Invocar: `use context7` o `use library /supabase/supabase`
+- No necesita configuración — es invocación por prompt
+- NO saltar porque "ya conozco esta API" — las APIs cambian
+
+### Repomix
+- **Antes de sesiones con Claude Chat**: `repomix --compress` en root
+  del proyecto genera `repomix-output.xml` con toda la arquitectura
+  (signatures only, ~70% reducción de tokens). Subir a Chat.
+- **Para repos externos**: `repomix --remote user/repo`
+- **Para token budgeting**: `repomix --token-count-tree`
+- Config en `repomix.config.ts` en root del proyecto
 
 ### UI-UX-Pro-Max + frontend-design
 - Se activan automáticamente cuando la tarea involucra crear UI

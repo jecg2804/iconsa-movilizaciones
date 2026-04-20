@@ -52,3 +52,6 @@ playwright-report/
 
 # Test screenshots — temporales, no deben persistir en el repo
 Docs/test-screenshots/
+
+# Repomix output — generado bajo demanda para Claude Chat
+repomix-output.*

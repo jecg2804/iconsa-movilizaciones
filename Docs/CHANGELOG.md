@@ -4,6 +4,11 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-17
+- [chore] **Tooling upgrade**: Repomix v1.13.1 instalado globalmente + config `repomix.config.ts` (compress, tree-sitter, security check). Para dar contexto completo del codebase a Claude Chat con un solo archivo.
+- [chore] **Superpowers enforcement**: `tool-usage.md` reescrito con reglas de uso obligatorio — brainstorming ANTES de features, systematic-debugging para bugs, Context7 ANTES de APIs, Repomix antes de Chat. Plan mode nativo desactivado (`EnterPlanMode` en deny list) — todo planning pasa por Superpowers.
+- [chore] **Swap Superpowers pendiente**: cambio de obra/superpowers a pcvelz/superpowers (fork Claude Code-specific con task management nativo y hooks de enforcement). Requiere ejecución manual en terminal.
+
 ## 2026-04-16
 - [fix] **G1 — Reversion guard valida registered_by**: `handleRevert` en `mis-viajes/[id]/page.tsx` ahora verifica que `registered_by.id === person.id` antes de permitir revertir. Admin bypasea (puede revertir cualquiera). Logistica solo puede revertir eventos que registró ella misma. TripEvent interface + loadEvents query actualizados para incluir `id` en registered_by (antes solo `name`).
 - [fix] **G6 — Dashboard "En Tránsito Ahora" clickeable**: cada trip en el widget de dashboard es ahora un `<a>` con href a `/mis-viajes/{id}`. Hover: `bg-blue-100/60`.
