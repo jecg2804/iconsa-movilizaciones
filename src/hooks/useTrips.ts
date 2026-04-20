@@ -114,7 +114,7 @@ export interface TripWithRelations {
   updated_at: string
   // Relaciones unidas
   driver: { id: string; name: string } | null
-  vehicle: { id: string; spectrum_code: string | null; description: string } | null
+  vehicle: { id: string; spectrum_code: string | null; description: string; gps_vehicle_id: string | null } | null
   trailer: { id: string; spectrum_code: string | null; description: string } | null
   rate: { id: string; code: string; description: string; rate: number } | null
   assignments: TripAssignment[]
@@ -707,7 +707,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         .select(`
           *,
           driver:driver_id(id, name),
-          vehicle:vehicle_id(id, spectrum_code, description),
+          vehicle:vehicle_id(id, spectrum_code, description, gps_vehicle_id),
           trailer:trailer_id(id, spectrum_code, description),
           rate:rate_id(id, code, description, rate),
           assignments:trip_line_assignments(
