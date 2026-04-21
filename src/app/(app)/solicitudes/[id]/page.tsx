@@ -17,8 +17,7 @@ import {
   type LineWithRelations,
 } from '@/hooks/useSolicitudes'
 import { canEditSolicitud } from '@/lib/utils/roles'
-import { formatDate, formatDateTime, formatQty, formatTimePanama } from '@/lib/utils/format'
-import Link from 'next/link'
+import { formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
 import { notifySolicitudEnviada, notifySolicitudUrgenteNueva } from '@/lib/notifications/actions'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
@@ -29,6 +28,7 @@ import { SolicitudForm, type FormMode } from '@/components/solicitudes/Solicitud
 import { LineEditor } from '@/components/solicitudes/LineEditor'
 import { LineRow } from '@/components/solicitudes/LineRow'
 import type { AssociatedTrip, TripLineInfo, TripEventInfo } from '@/components/solicitudes/types'
+import ActiveTripPanel from '@/components/solicitudes/ActiveTripPanel'
 import TripLiveMap from '@/components/gps/TripLiveMap'
 
 // --- Helpers ---
@@ -542,32 +542,29 @@ export default function SolicitudDetailPage() {
         </div>
       )}
 
-      {/* Banner de entrega — solo si hay líneas en tránsito */}
-      {(() => {
-        const tripEnRoute = associatedTrips.find(t => t.status === 'En Ruta')
-        const hasLinesInTransit = solicitud.lines?.some((l: { status: string }) => l.status === 'En Transito')
-        if (!tripEnRoute || !hasLinesInTransit) return null
-        const salidaEvent = tripEnRoute.events?.find((e: { event_type: string }) => e.event_type === 'Salida')
-        return (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <p className="text-sm font-semibold text-blue-900">
-                🚛 Material en camino
-              </p>
-              <p className="text-xs text-blue-700">
-                Viaje <span className="font-mono font-bold">{tripEnRoute.trip_id}</span>
-                {salidaEvent && <> | Salió {formatTimePanama(salidaEvent.event_timestamp)}</>}
-              </p>
-            </div>
-            <Link
-              href={`/mis-viajes/${tripEnRoute.id}?action=deliver`}
-              className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90 transition-colors"
-            >
-              Confirmar Recepción →
-            </Link>
-          </div>
+      {/* Paneles operativos de trips activos — uno por cada trip En Ruta
+          con al menos una línea En Transito o Parcial. Ordenados por Salida
+          descendente (más reciente primero). Reemplaza el antiguo banner
+          "Material en camino" — todo el contexto operativo (código, mapa,
+          botón Confirmar Recepción) vive ahora dentro del panel. */}
+      {associatedTrips
+        .filter(
+          (t) =>
+            t.status === 'En Ruta' &&
+            t.lines.some(
+              (l) => l.status === 'En Transito' || l.status === 'Parcial',
+            ),
         )
-      })()}
+        .sort((a, b) => {
+          const aSalida =
+            a.events.find((e) => e.event_type === 'Salida')?.event_timestamp ??
+            ''
+          const bSalida =
+            b.events.find((e) => e.event_type === 'Salida')?.event_timestamp ??
+            ''
+          return bSalida.localeCompare(aSalida)
+        })
+        .map((t) => <ActiveTripPanel key={t.id} trip={t} role={role} />)}
 
       {/* Header del formulario */}
       <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
