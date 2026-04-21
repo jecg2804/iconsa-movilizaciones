@@ -74,6 +74,18 @@ original, cross-checkear G6 (dashboard links) y otros.
 
 ---
 
+## Merge v2 (staging → main) — cuando llegue el momento
+
+- **Merge v2 (staging → main)**:
+  - Bootstrap GPS en prod (13 UPDATEs por `spectrum_code` + 3 por `plate` — SQL completo en `CHANGELOG.md` entry del 2026-04-20). Staging ya tiene 13/13.
+  - Constraint `valid_event_type` superset (18 event_types — ya aplicado en staging + prod el 2026-04-20, solo verificar que sigue en sync post-merge).
+  - Suite de notificaciones: `RESEND_API_KEY` en env prod, data de staging, recipients de event_types nuevos.
+  - Multi-PM email smoke post-merge — verificar que `salidaRegistrada` manda correctamente a múltiples PMs cuando un trip afecta solicitudes de proyectos distintos.
+
+Consolida items sueltos de Task 10 del plan GPS MVP (`Docs/superpowers/plans/2026-04-20-gps-live-tracking.md`) — los otros items de esa lista (render paths `no_gps` / `pickup`, flip CHANGELOG, fix constraint) ya están resueltos o son edge cases de bajo valor. El merge es la verdadera unidad de trabajo.
+
+---
+
 ## Completado recientemente (abril 2026)
 
 - **Sprint prod cherry-pick 2026-04-15 — 2 releases tagged y verificados en prod.**
