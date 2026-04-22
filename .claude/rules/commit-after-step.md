@@ -1,46 +1,69 @@
-# Commits y push automáticos en branch de desarrollo
+# Commits y push en branch de desarrollo
 
-Claude Code PUEDE hacer commits Y push automáticos en `jaime/dev`.
-NUNCA hacer commits ni push directos a `main`. Para la política completa
-de git (branches, releases, tags, enforcement layers), ver
-`.claude/rules/git-workflow.md`.
+## Política
+
+Claude Code hace commits automáticamente en `jaime/dev` después de cada
+step completado. James ejecuta `git push` manualmente cuando decide que
+el batch está listo para remote.
+
+**Resumen:**
+- ✅ Code commitea (atómico, por step)
+- ❌ Code NO pushea — ni `jaime/dev`, ni ninguna branch
+- ✅ James pushea cuando decide (checkpoint manual antes de que Vercel/CI vea)
+
+Esta política complementa a `git-workflow.md`, que define la política
+permanente de branches, tags, releases, y enforcement layers.
+
+## Razón
+
+- **Commits atómicos** permiten bisect + trazabilidad sin overhead de
+  aprobación por commit individual.
+- **Push manual por James** es checkpoint natural: James revisa el batch
+  completo antes de que el remote (y Vercel) lo vean.
+- **Previene push accidental** de trabajo a medio cocinar o con
+  regresiones sutiles.
 
 ## Después de cada paso completado
 
-1. El hook `post-commit` de Husky lanza `npm run build` en background
-   automáticamente — no hace falta correrlo a mano salvo que quieras
-   ver el resultado inmediato. Si el background build falla, la siguiente
-   operación git te lo va a mostrar.
-2. `git add <archivos>` + `git commit -m "mensaje"` + `git push origin jaime/dev`.
+1. `git add <archivos>` + `git commit -m "mensaje"` (convenciones en
+   `git-workflow.md`).
+2. El hook `post-commit` de Husky lanza `npm run build` en background
+   automáticamente. Si el build falla, la siguiente operación git te lo
+   muestra.
 3. Continuar al siguiente paso sin esperar aprobación.
-4. Si el paso involucró cambios significativos, actualizar `Docs/CHANGELOG.md`
-   en el mismo commit (política de docs vivos).
+4. **Si el paso involucró cambios en docs vivos** (CHANGELOG, TRAIL,
+   BACKLOG), incluir esas actualizaciones en el mismo commit.
 
 ## Formato de commits
 
-- `fix: bug #X — descripción breve`
-- `feat: descripción breve`
-- `docs: descripción breve`
-- `refactor: descripción breve`
-- `chore: descripción breve`
-- `test: descripción breve`
+Ver `git-workflow.md` (prefijos, mensaje, atomicidad).
 
-## Ejemplos
+## Qué puede Code hacer
 
-- `feat: TripCard componente con timeline de eventos`
-- `fix: bug #3 — tarifa auto-rellena campo costo al seleccionar`
-- `docs: actualizar CHANGELOG con cambios de sesión`
+- ✅ `git add`, `git commit` (con mensaje y atomicidad correctos)
+- ✅ `git status`, `git diff`, `git log` (lectura siempre)
+- ✅ `git checkout -b <branch>` si necesita aislar trabajo
+- ✅ `git branch -d <branch>` (local, branch mergeada)
 
-## Releases (jaime/dev → main)
+## Qué NO puede Code hacer
 
-Usar el skill `/release` (ver `.claude/skills/git-release.md`). Nunca
-hacer merge manual a `main` — el skill valida Vercel, crea PR, squash-
-mergea, taggea con `v{YYYY}.{MM}.{DD}-{N}`, y pushea el tag.
+- ❌ `git push` (cualquier branch, cualquier flag) — James lo hace
+- ❌ `gh pr create` (es push implícito)
+- ❌ Merges que involucren push al remote
+- ❌ `--amend` a commits que podrían haber sido pusheados por James
+- ❌ `--no-verify` para bypass de hooks
+- ❌ Commits a `main` (ver `git-workflow.md`)
 
-## NUNCA
+## Al terminar una tarea grande (multi-commit)
 
-- Hacer commits a `main`
-- Hacer push a `main` (incluso con `--force-with-lease`)
-- Acumular múltiples pasos en un solo commit
-- Usar `--no-verify` para bypass de hooks
-- Usar `--amend` en commits ya pusheados
+1. Summary de qué se commiteó (files + commit messages).
+2. Output de `git log origin/jaime/dev..HEAD --oneline` para mostrar a
+   James qué hay local no pusheado.
+3. James ejecuta push cuando decide.
+
+## Enforcement técnico
+
+Los deny patterns en `.claude/settings.json` bloquean `git push origin *`
+para Code. Si un patrón falla o se actualizó el settings y permite push,
+esta rule es documental — el Git client de Code no debe pushear
+independiente del enforcement.
