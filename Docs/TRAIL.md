@@ -111,6 +111,5 @@ Parked deliberadamente por James:
 - **Self-pickup reference:** `Docs/reference/Self-pickup.md`
 - **GPS future opportunities:** `Docs/reference/GPS_Future_Opportunities.md`
 - **Spec ActiveTripPanel (v1.1 shipped):** `Docs/superpowers/specs/2026-04-20-active-trip-panel-design.md`
-- **Plan ActiveTripPanel (candidato a borrar per plan-lifecycle — Tanda 2 decide):** `Docs/superpowers/plans/2026-04-20-active-trip-panel.md`
-- **Spec GPS live tracking (v1.2 shipped):** `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`
+- **Spec GPS live tracking (v1.3 shipped):** `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`
 - **Regla de ciclo de vida de plans:** `.claude/rules/plan-lifecycle.md`
