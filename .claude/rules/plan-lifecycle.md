@@ -1,101 +1,88 @@
 # Ciclo de vida de plan files
 
-Regla explícita para manejar plan files (`~/.claude/plans/*.md`) sin
-acumular ruido. Motivación: durante el audit de abril-2026, el plan file
-activo llegó a 1778 líneas porque mezclaba audit history, tareas
-diferidas, y plan activo — se perdió la visibilidad de qué estábamos
-haciendo.
+Regla para manejar plan files generados por Superpowers sin acumular
+ruido. Motivación: durante el audit de abril-2026, un plan activo llegó
+a 1778 líneas porque mezclaba audit history, tareas diferidas, y plan
+activo — se perdió la visibilidad de qué estábamos haciendo.
+
+## Dónde viven
+
+Path canónico: `Docs/superpowers/plans/<slug>.md` dentro del repo. Cada
+plan puede tener además `<slug>.md.tasks.json` para el tracking de tasks
+por `executing-plans` / `subagent-driven-development`.
+
+Git-tracked: los plans son revisables en PRs, consultables via `repomix`,
+y viven con el código. No requieren sincronización externa — el file
+está en el repo desde el momento en que `writing-plans` lo crea.
 
 ## Cuándo crear un plan file
 
-- Al entrar a **plan mode** para una tarea no-trivial (aproximadamente
-  3+ commits esperados, o scope que requiere varios bloques).
-- El harness escribe el plan en `~/.claude/plans/<nombre-auto>.md`.
-- Si ya existe un plan file activo y **la tarea nueva es distinta**,
-  **sobrescribir** el contenido completo (no acumular múltiples planes
-  en el mismo file).
+- Tras `brainstorming` acordado con James, invocar `writing-plans` para
+  tareas no-triviales (~3+ commits esperados, o scope que toca varios
+  bloques).
+- Si ya existe un plan activo y la tarea nueva es **distinta**, crear un
+  plan nuevo en lugar de sobreescribir. Un file por tarea.
 - Si la tarea actual es **continuación directa** del plan existente,
-  editar incrementalmente.
+  editar in-place.
 
-## Qué contiene un plan file (y qué NO)
+## Qué contiene un plan (y qué NO)
 
 **Sí:**
 
-- Contexto mínimo de por qué se hace el cambio
-- Bloques/fases con pasos concretos
-- Archivos tocados
-- Verificación
-- Fuera de scope
+- Contexto mínimo de por qué se hace el cambio.
+- Bloques / fases con pasos concretos.
+- Archivos tocados + verificación.
+- Fuera de scope explícito.
 
 **NO:**
 
-- Historia de commits pasados (eso vive en CHANGELOG)
-- Features diferidos o ideas futuras (eso vive en BACKLOG)
-- Audit findings o bugs detectados (esos viven en CHANGELOG como
-  entries `[audit]` / `[fix]`)
-- Aprendizajes técnicos duraderos (esos viven en skills)
+- Historia de commits ejecutados — vive en `Docs/CHANGELOG.md`.
+- Features diferidos o ideas futuras — viven en `Docs/BACKLOG.md`.
+- Audit findings / bugs abiertos — viven en CHANGELOG como entries
+  `[audit]` / `[fix]`.
+- Aprendizajes técnicos duraderos — viven en skills.
 
 ## Cuándo limpiar / recortar
 
-- **Tras cada bloque commiteado**: marcar el bloque como ✅ o eliminarlo
-  del plan file. No acumular detalles de ejecución pasada.
-- **Si el plan file supera 300 líneas**: PARAR y limpiar antes de
-  continuar. 300 líneas es ruido estructural, no plan.
-- **Al cerrar el último bloque de un plan**: mover aprendizajes
-  duraderos a CHANGELOG o skills, y sobrescribir el plan con un stub
-  tipo "task cerrada, esperando próxima dirección" (~5 líneas).
+- **Tras cada bloque commiteado:** marcar el bloque como ✅ o eliminarlo
+  del plan. No acumular detalles de ejecución pasada.
+- **Si el plan supera 300 líneas:** PARAR y limpiar antes de continuar.
+  300 líneas es ruido estructural, no plan.
+- **Hard cap de 1000 líneas:** nunca. Si llegás ahí, es un log histórico
+  disfrazado de plan — recortar agresivamente o borrar y recrear.
 
 ## Cuándo borrar
 
-- **Tras cerrar una tarea completa**: borrar el plan file en la
-  siguiente sesión si ya no queda contenido útil (ej. plans de fixes
-  aplicados semanas atrás).
-- **Plans con >30 días sin edit**: candidatos a revisión automática.
-- **Plans cuyo contenido está reflejado en CHANGELOG/BACKLOG**: borrar,
-  no duplicar.
+- **Al cerrar una tarea completa:** borrar el plan file. No archivar. El
+  valor histórico está en CHANGELOG; el plan cumplió su función.
+- **Plans sin edit por >30 días:** candidatos a revisión. Si la tarea ya
+  se cerró o se descartó, borrar.
+- **Plans cuyo contenido está reflejado en CHANGELOG / BACKLOG:** borrar.
+  No duplicar.
+
+## Spec files (fuera de scope de esta rule)
+
+Los spec files producto de `brainstorming` (pre-plan) viven en
+`Docs/superpowers/specs/`. Su ciclo de vida es distinto al de los plans
+y se definirá en una rule separada (`spec-lifecycle.md` pendiente —
+Tanda 3). Esta rule solo cubre plans.
 
 ## Qué NO hacer nunca
 
-- Nunca acumular **1000+ líneas** en un plan — eso es un log histórico
-  disfrazado de plan.
-- Nunca dejar **5+ plans históricos** sin limpiar. Al inicio de cada
-  sesión nueva, revisar `~/.claude/plans/` y borrar lo obsoleto.
-- Nunca **mezclar tarea activa con tareas diferidas** en el mismo plan.
-  Si algo se difiere, moverlo a `Docs/BACKLOG.md` y eliminarlo del plan.
-- Nunca usar el plan file como "memoria a largo plazo" del proyecto.
-  La memoria vive en CHANGELOG (qué pasó), BACKLOG (qué falta),
-  CLAUDE.md (convenciones), y skills (patrones).
+- Mezclar tarea activa con tareas diferidas en el mismo plan. Si algo se
+  difiere, moverlo a `Docs/BACKLOG.md` y eliminarlo del plan.
+- Usar el plan como "memoria a largo plazo" del proyecto. La memoria
+  vive en CHANGELOG (qué pasó), BACKLOG (qué falta), CLAUDE.md
+  (convenciones), skills (patrones), TRAIL (posición actual).
+- Dejar 5+ plans históricos sin limpiar. Al inicio de cada sesión,
+  `ls Docs/superpowers/plans/` y borrar lo obsoleto.
 
 ## Integración con el workflow
 
-- Al inicio de cada sesión, leer `Docs/TRAIL.md` para ver dónde estoy
-  en el árbol de tareas. Si el plan file activo no matchea el trail,
-  el trail es la fuente de verdad — corregir el plan.
+- Al inicio de cada sesión, leer `Docs/TRAIL.md` para ubicación en el
+  árbol de tareas. Si el plan activo no matchea el trail, TRAIL es la
+  fuente de verdad — corregir el plan.
 - Al cerrar cualquier task (completa o parcial), actualizar
-  `Docs/TRAIL.md` con la nueva position.
-- Al hacer un commit de un bloque del plan, eliminar ese bloque del
-  plan file en el mismo commit (o en el siguiente inmediato).
-
-## Sincronización con el repo (para Claude Chat)
-
-Claude Chat necesita acceso a los plan files para poder analizar y
-mejorar el workflow de Claude Code. Los plans viven en
-`~/.claude/plans/` (global, fuera del repo) pero deben sincronizarse
-al repo en `.claude/plans/`.
-
-**Regla:** cada vez que se crea, edita, o borra un plan file en
-`~/.claude/plans/`, copiar el cambio a `.claude/plans/` en el repo
-e incluirlo en el mismo commit (o en el siguiente inmediato).
-
-```bash
-# Al crear/editar:
-cp ~/.claude/plans/<nombre>.md .claude/plans/<nombre>.md
-git add .claude/plans/<nombre>.md
-
-# Al borrar:
-rm .claude/plans/<nombre>.md
-git add .claude/plans/<nombre>.md
-```
-
-Esto asegura que Chat siempre ve el plan file activo y puede dar
-feedback sobre estructura, scope, o approach.
+  `Docs/TRAIL.md` con la nueva posición.
+- Al commitear un bloque del plan, eliminar ese bloque del plan file en
+  el mismo commit (o en el siguiente inmediato).
