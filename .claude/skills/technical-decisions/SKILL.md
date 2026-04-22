@@ -5,7 +5,7 @@ description: Funciones, triggers, estados, cascada, RLS, cost codes, y decisione
 
 # Technical Decisions & DB Internals
 
-> **Schema de tablas:** usar Supabase MCP (44 tablas con COMMENT ON TABLE/COLUMN).
+> **Schema de tablas:** usar Supabase MCP (47 tablas con COMMENT ON TABLE/COLUMN).
 > Este skill cubre la lógica interna: funciones, triggers, cascada, RLS, cost codes.
 
 ---
@@ -121,4 +121,4 @@ cost_categories (8 tipos: CON/EQA/EQI/ICS/MAT/OTR/SAL/SUB)
 11. **Equipment location tracking:** Trigger actualiza current_location/current_project_id en Entrega.
 12. **Paginación:** Server-side (solicitudes, viajes con `.range()` + `count: 'exact'`), client-side (admin masters).
 13. **Notificaciones:** Server actions via Resend (no Edge Functions). 12 templates. Fire-and-forget.
-14. **44 tablas total:** 22 operativas + 22 nuevas (inspecciones, work orders, fuel, PO, warehouse, campaigns, vendors).
+14. **47 tablas total:** 22 operativas + 22 nuevas (inspecciones, work orders, fuel, PO, warehouse, campaigns, vendors) + 3 Events V2 (trip_event_lines, delivery_observations, custody_transfers).
