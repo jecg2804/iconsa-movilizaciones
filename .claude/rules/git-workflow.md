@@ -13,9 +13,11 @@ en GitHub — ver sección "Enforcement layered" al final para el contexto.
   para hotfixes. La protección es 100% client-side (deny patterns + Husky)
   porque GitHub requiere upgrade a Team para branch protection en repos
   privados — ver nota abajo.
-- **`jaime/dev`** — branch de trabajo de James. Claude Code hace commits y push
-  directamente aquí con cada paso completado. Es la fuente de verdad para
-  desarrollo activo.
+- **`jaime/dev`** — branch de trabajo de James. Claude Code hace **commits**
+  directamente aquí con cada paso completado. James ejecuta `git push` manualmente
+  cuando decide que el batch está listo para remote. Es la fuente de verdad para
+  desarrollo activo. Ver `commit-after-step.md` para el detalle de la política
+  commits-sí-push-no.
 
 Otras branches (`andy/dev`, feature branches) no existen en el workflow actual.
 
@@ -33,7 +35,7 @@ Otras branches (`andy/dev`, feature branches) no existen en el workflow actual.
 
 ## Push
 
-- **`git push origin jaime/dev`** — permitido para Claude Code y James.
+- **`git push origin jaime/dev`** — solo James. Code NO pushea (ver `commit-after-step.md`).
 - **`git push origin main`** — DENEGADO. Solo GitHub lo acepta via merge de PR.
 - **`git push --force`** / **`-f`** — DENEGADO en ambas branches. Si hay que
   corregir historial, se usa `git push --force-with-lease` con confirmación
