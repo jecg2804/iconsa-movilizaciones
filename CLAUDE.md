@@ -40,7 +40,6 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 │   ├── events-page.md
 │   ├── form-submit-guard.md      # Anti doble-submit — useSubmitGuard en todo handler async
 │   ├── supabase-queries.md
-│   ├── self-update.md
 │   ├── partial-delivery/SKILL.md
 │   ├── seed-data/SKILL.md
 │   └── technical-decisions/SKILL.md  # Funciones, triggers, cascada, RLS
