@@ -11,7 +11,7 @@ description: Verificar que el proyecto está listo para deploy a producción.
 4. Buscar secrets hardcoded: `sbp_`, `sk-`, `password=`
 5. `git status` — reportar archivos sin commit
 6. Verificar que el branch es `jaime/dev` (no main)
-7. Verificar que SYNC_LOG.md está actualizado (último entry < 7 días)
+7. Verificar que CHANGELOG.md está actualizado (último entry < 7 días)
 
 ## Output
 
