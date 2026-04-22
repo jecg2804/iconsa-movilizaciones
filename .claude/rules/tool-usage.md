@@ -8,6 +8,17 @@ Política fija de cuándo usar qué herramienta. Superpowers-driven.
 - **Claude Code (tú)**: implementa, lee codebase completo, verifica su propio trabajo. NUNCA escribe a BD.
 - **James**: decisiones, aprobaciones, testing, contexto de negocio.
 
+## Lectura eficiente al inicio de sesión
+
+Orden para recuperar contexto sin cargar 20K tokens de docs:
+
+1. `Docs/TRAIL.md` — dónde estamos en el árbol de tareas (1 página).
+2. `Docs/CHANGELOG.md` — últimas entradas (top), contexto reciente.
+3. `Docs/FEATURE_SPEC.md` — solo la sección relevante a la tarea (NUNCA full, son 39K chars).
+4. Supabase MCP — verificar schema de las tablas que vas a tocar.
+
+Prompts específicos con rutas de archivo ("Edita `src/hooks/useTrips.ts`", no "mejora los trips"). Un archivo por prompt cuando sea posible. Si la tarea toca 5+ archivos, arrancar con `brainstorming` antes de implementar.
+
 ## Superpowers — obligatorio (no es opcional)
 
 Plan mode nativo de Claude Code está **desactivado** (`EnterPlanMode` en deny-list). Todo flow de planificación / ejecución / review pasa por el plugin Superpowers (fork `pcvelz/superpowers`).
