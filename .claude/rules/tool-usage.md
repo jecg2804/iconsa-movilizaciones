@@ -1,138 +1,137 @@
 # Rule: Uso de Herramientas — Cuándo y Cómo
 
-Claude Code sigue estas reglas automáticamente sin que James lo pida.
+Política fija de cuándo usar qué herramienta. Superpowers-driven.
 
-## Modelo de 3 actores (recordatorio)
-- **Claude Chat**: arquitecto, planifica, escribe a Supabase (con aprobación de James), genera prompts goal-oriented
-- **Claude Code (tú)**: implementa frontend, lee codebase completo, verifica su propio trabajo. NUNCA escribe a BD.
-- **James**: todas las decisiones, aprobaciones, testing, contexto de negocio
+## Modelo de 3 actores
 
-## MCPs — Cuándo usar cada uno
+- **Claude Chat**: arquitecto, planifica, escribe a Supabase (con aprobación de James), genera prompts goal-oriented.
+- **Claude Code (tú)**: implementa, lee codebase completo, verifica su propio trabajo. NUNCA escribe a BD.
+- **James**: decisiones, aprobaciones, testing, contexto de negocio.
 
-### Supabase MCP (read-only)
-- **SIEMPRE** antes de escribir queries: verificar que las tablas/columnas existen
-- **SIEMPRE** antes de implementar un feature que toca BD: verificar schema actual
-- **NUNCA** para escribir datos. Si necesitas un cambio de BD → STOP → escribir en SYNC_LOG → James consulta con Chat
-- Queries útiles: `SELECT column_name FROM information_schema.columns WHERE table_name = 'X'`
+## Superpowers — obligatorio (no es opcional)
 
-### Playwright MCP
-- **Después de implementar** cambios visuales: abrir localhost:3000 y verificar que funciona
-- **Para debugging visual**: navegar paso a paso cuando un flujo de usuario no funciona
-- **Para verificar** que la app carga sin errores después de refactors
-- Invocar: "Usa Playwright para abrir localhost:3000/[ruta] y verificar [qué]"
-- **NUNCA** usar en producción (rein-eisenwerk.com) sin permiso explícito de James
+Plan mode nativo de Claude Code está **desactivado** (`EnterPlanMode` en deny-list). Todo flow de planificación / ejecución / review pasa por el plugin Superpowers (fork `pcvelz/superpowers`).
 
-### Chrome DevTools MCP
-- **Cuando hay errores** que no son obvios en el código: revisar consola del browser
-- **Para debugging de API**: ver network requests fallidas a Supabase
-- **Para performance**: correr Lighthouse audit si la página carga lento
-- Invocar: "Usa Chrome DevTools para revisar la consola de localhost:3000/[ruta]"
+- **Feature nuevo o rediseño (3+ commits esperados)** → invocar `brainstorming` ANTES de escribir código o spec. Sin excepción, aunque "ya entiendas".
+- **Después de brainstorming aprobado** → `writing-plans` genera plan file en `Docs/superpowers/plans/` (ver `plan-lifecycle.md`).
+- **Ejecución del plan** → `executing-plans` (secuencial) o `subagent-driven-development` (paralelo).
+- **Bug complejo (3+ archivos)** → `systematic-debugging` (ver `fix-bug.md` para el flujo reducido de 1-archivo).
+- **Después de step mayor** → `requesting-code-review` (revisor contextual del plan, no un agente genérico).
 
-### Context7
-- **Cuando necesites** docs actualizados de Next.js, Supabase, React, o Tailwind
-- **Especialmente útil** para APIs que cambian entre versiones (App Router patterns, @supabase/ssr)
-- Invocar: agregar "use context7" al prompt o "use library /supabase/supabase"
+Para fixes triviales (1 archivo, obvio): decir "skip brainstorming" explícitamente. Default es invocar.
 
-## Plugins — USO OBLIGATORIO
+## Supabase MCP — read-only
 
-### Superpowers (pcvelz fork) — ENFORCEMENT ACTIVO
-- **Feature nuevo o rediseño** → SIEMPRE invocar `brainstorming` skill
-  ANTES de planificar. Sin excepción. No importa si "ya entiendo".
-- **Bug complejo (3+ archivos)** → invocar `systematic-debugging`
-- **Después de implementar paso mayor** → `requesting-code-review`
-- **Plan mode nativo desactivado** — todo planning pasa por Superpowers
-  (brainstorming → writing-plans → executing-plans)
-- Para **fixes triviales (1 archivo, obvio)**: decir "skip brainstorming"
-  explícitamente. Pero el DEFAULT es invocar.
-- Hooks activos: pre-commit task gate, low-context stop blocker
+SIEMPRE antes de tocar BD: verificar schema via MCP.
 
-### Context7
-- **SIEMPRE** antes de usar APIs que cambian entre versiones:
-  Next.js App Router, Supabase SSR, React hooks, Tailwind
-- Invocar: `use context7` o `use library /supabase/supabase`
-- No necesita configuración — es invocación por prompt
-- NO saltar porque "ya conozco esta API" — las APIs cambian
+- Tools permitidas (lectura): `list_tables`, `generate_typescript_types`, `get_logs`, `get_advisors`, `search_docs`, etc. Lista completa en `supabase-readonly.md`.
+- Tools mutantes (`execute_sql`, `apply_migration`, `deploy_edge_function`…) bloqueadas por deny-list en `.claude/settings.json`.
+- Default project_id: **staging** (`vonwkciosksqspyljzfy`). Prod (`bzeoszympkkicwlfdtcn`) solo para drift comparison y anunciado explícitamente en chat.
 
-### Repomix
-- **Antes de sesiones con Claude Chat**: `repomix --compress` en root
-  del proyecto genera `repomix-output.xml` con toda la arquitectura
-  (signatures only, ~70% reducción de tokens). Subir a Chat.
-- **Para repos externos**: `repomix --remote user/repo`
-- **Para token budgeting**: `repomix --token-count-tree`
-- Config en `repomix.config.ts` en root del proyecto
+Si necesitas un cambio de BD → STOP → `[bd-pending]` en `Docs/CHANGELOG.md` con el SQL exacto → James ejecuta manualmente en Supabase SQL Editor → `[bd-pending]` pasa a `[bd]`.
 
-### UI-UX-Pro-Max + frontend-design
-- Se activan automáticamente cuando la tarea involucra crear UI
-- Dejar que generen el design system antes de codear
-- No resistir sus sugerencias estéticas — producen UI no genérica
+## Context7 — docs actualizados
 
-### typescript-lsp
-- Siempre activo, mejora el entendimiento de TypeScript automáticamente
+SIEMPRE antes de usar APIs que cambian entre versiones:
 
-## Skills — Cuándo se cargan
+- Next.js App Router, Supabase SSR, React hooks, Tailwind v4, MapLibre, react-map-gl.
+- NO saltar porque "ya conozco esta API" — las versiones cambian los contratos.
+- Invocar: `use context7` o `use library /supabase/supabase` en el prompt.
 
-Los skills se cargan automáticamente cuando la tarea matchea su descripción. También se pueden invocar explícitamente.
+## Playwright MCP — verificación visual
+
+- **Después de cambios visuales** → abrir `localhost:3000` y verificar el flow end-to-end.
+- **Debugging de flow** → navegar paso a paso cuando un bug no es obvio en código.
+- NUNCA en `rein-eisenwerk.com` (producción) sin permiso explícito de James.
+
+## Chrome DevTools MCP — debugging bajo capa
+
+- **Errores no obvios** → consola del browser (`listConsoleMessages`).
+- **APIs fallidas** → network requests a Supabase.
+- **Performance issues** → Lighthouse audit.
+
+## Repomix — contexto comprimido para Chat
+
+- Antes de una sesión con Claude Chat: correr `repomix` en root del proyecto → `repomix-output.xml` con signatures only (~70% reducción de tokens). Subir a Chat.
+- Config vive en `repomix.config.ts` (compress + tree-sitter + security-check).
+- Token budgeting: `repomix --token-count-tree`.
+- **Repomix es snapshot del working tree, no sync en tiempo real.** Si Code hace cambios después de la última generación, Chat no los ve hasta que se regenere y se suba de nuevo. En sesiones largas, regenerar cuando haya cambios estructurales.
+
+## Subagent dispatching (Task tool)
+
+Usar `Task` con `subagent_type` cuando:
+
+- **Investigación paralelizable** (explorar 3 features a la vez) → `Explore` o `general-purpose`.
+- **Implementación paralelizable** (editar 4 archivos independientes) → flow `subagent-driven-development` de Superpowers.
+- **Preservar contexto del main** (búsqueda extensa que llenaría >30K tokens) → delegar a un subagent para que solo devuelva el resumen.
+
+NO usar para tareas triviales que se resuelven con 1-2 tool calls en el main session.
+
+## Skills del proyecto (on-demand)
+
+Los skills se cargan automáticamente cuando la tarea matchea su `description` frontmatter. También se pueden invocar explícitamente.
 
 | Skill | Cuándo se activa |
-|-------|-----------------|
-| crud-page | Crear página nueva con lista/tabla + formulario |
-| events-page | Trabajar en Mis Viajes, eventos, timeline |
-| supabase-queries | Cualquier query de Supabase: filtros, joins, cost codes |
-| partial-delivery | Lógica de cantidades: qty_assigned, qty_delivered, qty_pending |
-| seed-data | Crear datos de prueba, orden de FK para deletes |
-| technical-decisions | Consultar funciones, triggers, RLS, arquitectura |
-| self-update | Actualizar SYNC_LOG y BUGS al final de sesión |
-| form-submit-guard | Prevenir doble-submit en formularios async |
+|---|---|
+| `crud-page` | Página con lista/tabla + formulario |
+| `events-page` | Mis Viajes, eventos, timeline |
+| `supabase-queries` | Filtros, joins, cost codes |
+| `partial-delivery` | `qty_scheduled`, `qty_delivered`, entregas fraccionadas |
+| `seed-data` | Crear datos de prueba, orden de FK para deletes |
+| `technical-decisions` | Funciones, triggers, RLS, decisiones arquitectónicas |
+| `form-submit-guard` | Anti doble-submit en handlers async |
+| `debug-skydata` | Probar la API de SkyData con script standalone |
 
-## Flujo por tipo de tarea
+## Flujo estándar por tipo de tarea
 
-### Feature nuevo (viene de Chat como prompt goal-oriented)
-1. Leer el prompt completo — entender PROBLEMA, no solo la instrucción
-2. Usar **Plan Mode** para analizar impacto en el codebase
-3. Verificar schema via **Supabase MCP**
-4. Presentar plan a James — NO implementar hasta aprobación
-5. Implementar paso a paso con `npm run build` después de cada paso
-6. Verificar visualmente con **Playwright MCP**
-7. Si hay errores, debuggear con **Chrome DevTools MCP**
-8. Usar **code-reviewer agent** si tocaste 3+ archivos
-9. Commit siguiendo rules de commit-after-step
-10. Actualizar SYNC_LOG via skill self-update
+### Feature nuevo (prompt goal-oriented de Chat)
+
+1. Leer el prompt completo — entender **problema**, no solo la instrucción.
+2. `brainstorming` → acordar approach con James.
+3. Verificar schema vía Supabase MCP.
+4. `writing-plans` → plan file en `Docs/superpowers/plans/`.
+5. `executing-plans` o implementación manual paso a paso.
+6. Post-commit hook lanza `npm run build` en background; si falla, el siguiente push lo bloquea.
+7. Verificar con Playwright MCP si tocó UI.
+8. Commit atómico + entry en `Docs/CHANGELOG.md` (mismo commit).
+9. Al cerrar la feature, actualizar `Docs/TRAIL.md` (posición en el árbol de tareas) y `Docs/BACKLOG.md` si corresponde.
 
 ### Bug fix
-1. Entender el bug — leer descripción, buscar en codebase
-2. Verificar schema con **Supabase MCP** si involucra BD
-3. Implementar fix mínimo — no refactors oportunísticos
-4. Verificar con **Playwright MCP** que el fix funciona
-5. Si hay errores raros, usar **Chrome DevTools MCP** para consola/network
-6. Commit y actualizar BUGS.md
 
-### Tarea de UI/diseño
-1. **UI-UX-Pro-Max** genera design system automáticamente
-2. **frontend-design** sugiere estética
-3. Seguir skill **crud-page** para páginas con tabla + formulario
-4. Verificar visualmente con **Playwright MCP**
-5. Mobile-first: verificar responsive
+1. Si 3+ archivos tocados → `systematic-debugging`. Si 1 archivo obvio → directo (ver `fix-bug.md`).
+2. Verificar schema vía Supabase MCP si toca BD.
+3. Fix mínimo — sin refactors oportunísticos.
+4. Verificar con Playwright MCP.
+5. Commit + entry en `Docs/CHANGELOG.md`. Si el bug es recurrente o tiene contexto durable, entry en `Docs/BACKLOG.md`.
 
-## Al cerrar sesión pesada
-1. Actualizar `Docs/SYNC_LOG.md` si hubo cambios significativos
-2. `npm run build` debe pasar antes de cerrar
+### Tarea de UI / diseño
 
-## Screenshots y archivos temporales de tests
-- Screenshots de E2E tests (`Docs/test-screenshots/`, `test-results/`,
-  `playwright-report/`) son **temporales** — usarlos para análisis
-  durante la sesión y **borrarlos antes de cerrar la sesión**.
-- **NUNCA commitear imágenes al repo.** Ocupan espacio y no aportan
-  valor a Claude Chat ni a la historia de git. `.gitignore` los excluye
-  pero verificar antes de `git add`.
-- Si un screenshot es relevante para documentación permanente,
-  describirlo en texto (en CHANGELOG o BACKLOG) en vez de incluir la
-  imagen.
+1. `UI-UX-Pro-Max` + `frontend-design` antes de codear — dejan el design system listo.
+2. Seguir `crud-page` si es tabla + formulario.
+3. Mobile-first; verificar responsive con Playwright MCP.
+
+## Sincronización de docs vivos (responsabilidad de Code)
+
+Los docs vivos del proyecto son **responsabilidad de Claude Code**, no de Chat. Mantenerlos sincronizados:
+
+- `Docs/CHANGELOG.md` → entry atómico en el **mismo commit** que el código.
+- `Docs/BACKLOG.md` → cuando se cierra un item, se descubre uno nuevo, o cambia prioridad.
+- `Docs/TRAIL.md` → cuando se cierra una tarea o cambia la posición en el árbol de tareas. Este doc es la primera lectura al inicio de sesión.
+
+Ver `.claude/rules/plan-lifecycle.md` para el ciclo de vida de plan files y specs.
+
+## Screenshots y archivos temporales
+
+- Screenshots de E2E tests (`Docs/test-screenshots/`, `test-results/`, `playwright-report/`) son temporales. Borrar antes de cerrar sesión.
+- NUNCA commitear imágenes al repo — `.gitignore` los excluye, verificar antes de `git add`.
+- Si un screenshot es relevante para documentación permanente, describirlo en texto en CHANGELOG/BACKLOG.
 
 ## NUNCA
-- No escribir a Supabase — NUNCA, bajo ninguna circunstancia
-- No instalar dependencias npm sin preguntar a James
-- No hacer refactors oportunísticos durante un fix
-- No modificar CLAUDE.md ni FEATURE_SPEC.md (Tier 1 — solo Chat)
-- No usar Playwright/DevTools en producción sin permiso
-- No hacer commits a main — solo jaime/dev
-- No commitear imágenes (PNG, JPG, screenshots) al repo
+
+- Escribir a Supabase (MCP mutante bloqueado por deny-list).
+- Instalar dependencias npm sin preguntar.
+- Refactors oportunísticos durante un bug fix.
+- Modificar `CLAUDE.md` ni `Docs/FEATURE_SPEC.md` (solo Chat y James los tocan).
+- Usar Playwright / DevTools en producción sin permiso.
+- Commit ni push a `main` (ver `git-workflow.md`).
+- Commitear imágenes al repo.
