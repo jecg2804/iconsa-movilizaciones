@@ -76,7 +76,7 @@ Filtra al vehículo del viaje → retorna JSON al browser
 
 **Un solo endpoint `/api/gps/trip/[tripId]/position`** sirve tanto `/programacion/viaje/[id]` como `/solicitudes/[id]`. El componente `<TripLiveMap>` es el mismo en ambos lugares, solo varía `className` para tamaño.
 
-**Stack 100% open-source para el mapa.** Librería: MapLibre GL JS (BSD-3, fork community-driven de Mapbox GL JS 1.x antes de que Mapbox pasara a licencia propietaria en diciembre 2020). Hoy es mantenido por la Linux Foundation con ~500K downloads semanales. Wrapper React: `react-map-gl` v8+ (MIT) que soporta MapLibre como backend con la misma API que usa con Mapbox. Tiles: OpenFreeMap public instance (`https://tiles.openfreemap.org/styles/liberty`) — gratis, sin API key, sin registro, sin límite de requests. Data de OpenStreetMap. Producción desde junio 2024 como basemap de MapHub. Atribución automática cuando se usa desde MapLibre. **Costo de mapa: $0 permanente.** Si la instancia pública tuviera problemas, la migración a MapTiler Cloud free tier (100K loads/mes gratis) es un cambio de URL + agregar API key — 5 minutos de trabajo.
+**Stack 100% open-source para el mapa.** Librería: MapLibre GL JS (BSD-3, fork community-driven de Mapbox GL JS 1.x antes de que Mapbox pasara a licencia propietaria en diciembre 2020). Hoy es mantenido por la Linux Foundation con ~500K downloads semanales. Wrapper React: `react-map-gl` v8+ (MIT) que soporta MapLibre como backend con la misma API que usa con Mapbox. Tiles: OpenFreeMap public instance (`https://tiles.openfreemap.org/styles/liberty` — estilo balanceado con colores naturales) — gratis, sin API key, sin registro, sin límite de requests. Data de OpenStreetMap. Producción desde junio 2024 como basemap de MapHub. Atribución automática cuando se usa desde MapLibre. **Costo de mapa: $0 permanente.** Si la instancia pública tuviera problemas, la migración a MapTiler Cloud free tier (100K loads/mes gratis) es un cambio de URL + agregar API key — 5 minutos de trabajo.
 
 ## 4. Schema Delta
 
@@ -238,7 +238,7 @@ SKYDATA_BASE_URL=https://app.skydataglobal.com
 - **Source de tiles**: OpenFreeMap public instance, URL de estilo `https://tiles.openfreemap.org/styles/liberty`
 - **Sin API keys** — sin registro, sin credit card, sin límites de requests. Atribución (© OpenFreeMap © OpenStreetMap) se agrega automáticamente por MapLibre.
 
-**Estilo inicial**: `liberty` (balanceado, colorido, apto para general). Alternativas disponibles cambiando solo la URL: `positron` (limpio, minimalista — probablemente mejor para que el pin del vehículo destaque) y `bright` (saturado). Decisión final estética se deja al momento de revisar el primer render; cambio trivial.
+**Estilo**: `liberty` (balanceado, colores naturales). Probado visualmente por James, preferencia final. Alternativas triviales cambiando la URL: `positron` (limpio, minimalista, escala de grises), `bright` (saturado).
 
 **Fallback plan documentado:** si el public instance de OpenFreeMap tiene outage prolongado, se sustituye por MapTiler Cloud (free tier 100K loads/mo). Cambio: URL de estilo + agregar `NEXT_PUBLIC_MAPTILER_KEY` en env vars. 5 minutos.
 
@@ -345,7 +345,7 @@ Las plantillas `viajeAsignadoConductor`, `incidenciaRuta`, `retornoRegistrado` s
 ## 10. Preguntas Abiertas
 
 1. **¿Creamos usuario dedicado `api-movimientos` en SkyData antes del deploy?** Recomendación: sí, pero no bloquea MVP. Puede ser post-deploy.
-2. **¿Qué tile style usar de OpenFreeMap — liberty, positron, o bright?** Default: `liberty`. Probablemente `positron` funcione mejor (menos ruido visual para que el pin del vehículo destaque). Decisión al ver primer render; cambio trivial.
+2. ~~**¿Qué tile style usar de OpenFreeMap — liberty, positron, o bright?**~~ **CERRADO 2026-04-20:** `liberty`. Probado visualmente por James, preferencia final. Cambio de estilo posterior = 1 string en la URL de la source.
 3. **¿El mapa respeta el modo mobile?** Sí, MapLibre GL es responsive por default. Sin customización especial para MVP.
 4. **¿El mapa también en `/programacion/viaje/[id]` para status=Programado como preview?** No en MVP. Se ve sólo En Ruta. Consideramos en iteración 2.
 5. **¿Qué hace el frontend si el API route retorna un 5xx persistente?** Banner "No se pudo cargar ubicación" + botón "Reintentar". No se reintenta auto más de 3 veces para no hacer hammering.
@@ -392,8 +392,8 @@ STACK DEL MAPA:
 - Renderer: maplibre-gl (NO mapbox-gl)
 - Wrapper React: react-map-gl con import desde react-map-gl/maplibre
 - Source de tiles: OpenFreeMap public instance
-  URL de estilo default: https://tiles.openfreemap.org/styles/liberty
-  (alternativas: .../positron o .../bright)
+  URL de estilo: https://tiles.openfreemap.org/styles/liberty
+  (alternativas triviales: .../positron o .../bright — cambio de un string)
 - Sin API keys, sin registro, sin env vars para el mapa.
 
 NO HAGAS:
@@ -432,4 +432,5 @@ WORKFLOW SUGERIDO:
 |---------|-------|---------|
 | 1.0 | 2026-04-20 | Versión inicial. Scope MVP-only confirmado por James. |
 | 1.1 | 2026-04-20 | Stack de mapa cambiado a open-source: MapLibre GL JS + OpenFreeMap public instance. Removidas referencias a Mapbox token. Confirmado: API de SkyData incluido en contrato. |
-| 1.2 | 2026-04-20 | Brainstorming session. Schema delta reframed a `[bd-pending]` del proyecto (no archivos en supabase/migrations/). Añadido §4.3 regenerar types con guard anti-drift qty_dispatched. Notas de implementación en §6.2 y §6.3. Path `actions.ts` corregido. Spec movido a `Docs/superpowers/specs/`. |
+| 1.2 | 2026-04-20 | Brainstorming session. Schema delta reframed a `[bd-pending]` del proyecto (no archivos en supabase/migrations/). Añadido §4.3 regenerar types con guard anti-drift qty_dispatched. Notas de implementación en §6.2 y §6.3. Path `actions.ts` corregido. Spec movido a `Docs/superpowers/specs/`. §6.4 reescrito como defense-in-depth de 2 capas. §10.2 cerrado: default tile style = `positron`. |
+| 1.3 | 2026-04-22 | Sync con código shippeado: tile style = `liberty`, no `positron`. El spec v1.2 había cerrado §10.2 en `positron`, pero el código shippeó con `liberty` (preferencia visual final de James tras probar ambos). Corregido §3, §6, §10.2, y el bloque "STACK DEL MAPA" para reflejar `liberty`. La entry v1.2 queda intacta como registro histórico de la decisión original (superseded por esta v1.3). |
