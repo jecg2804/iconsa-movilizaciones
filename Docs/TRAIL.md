@@ -5,7 +5,7 @@
 > autocargo al inicio de cada sesión para recuperar el hilo sin leer
 > todo el plan file.
 
-**Última actualización:** 2026-04-16 (sesión diseño estratégico)
+**Última actualización:** 2026-04-20 (GPS MVP + constraint fix + ActiveTripPanel shippeados)
 
 ## Root task
 
@@ -24,6 +24,12 @@ Perfeccionar movilizaciones
      │   ├─ v2026.04.15-1 (870a8f6): J3 + J4 + J6 + J7 + J8a + J8b
      │   └─ v2026.04.15-2 (1425cae): hotfix J4-A + J4-B + J7-ext
      ├─ [✅] Quick wins G1+G6+G7+G10 + doc cleanup G17-G19
+     ├─ [✅] GPS Live Tracking MVP (13 commits jaime/dev, bootstrap staging
+     │   13/13, prod pendiente merge v2)
+     ├─ [✅] Fix constraint valid_event_type (staging + prod sync,
+     │   18 event_types superset)
+     ├─ [✅] ActiveTripPanel (5 commits jaime/dev, consolidación operativa
+     │   en /solicitudes/[id] — mapa único arriba, card histórica sin mapa)
      └─ [⏳] Siguiente: staging-track Events V2 polish
          ├─ [✅] J2 Códigos entrega — DECIDIDO: siempre obligatorios
          │   (eliminar requires_code del código, implementación pendiente)
@@ -98,9 +104,13 @@ Parked deliberadamente por James:
 
 ## Links
 
-- **Plan file activo:** `.claude/plans/linked-sleeping-lighthouse.md` (sesión diseño estratégico)
+- **Plan file activo:** ninguno activo
 - **BACKLOG completo:** `Docs/BACKLOG.md`
 - **CHANGELOG:** `Docs/CHANGELOG.md`
 - **EVENTS V2 reference:** `Docs/reference/EVENTS_V2.md`
 - **Self-pickup reference:** `Docs/reference/Self-pickup.md`
+- **GPS future opportunities:** `Docs/reference/GPS_Future_Opportunities.md`
+- **Spec ActiveTripPanel (v1.1 shipped):** `Docs/superpowers/specs/2026-04-20-active-trip-panel-design.md`
+- **Plan ActiveTripPanel (candidato a borrar per plan-lifecycle — Tanda 2 decide):** `Docs/superpowers/plans/2026-04-20-active-trip-panel.md`
+- **Spec GPS live tracking (v1.2 shipped):** `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`
 - **Regla de ciclo de vida de plans:** `.claude/rules/plan-lifecycle.md`
