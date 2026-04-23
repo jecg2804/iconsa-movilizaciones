@@ -1,3 +1,9 @@
+---
+status: shipped
+feature: ActiveTripPanel — vista operativa consolidada del trip activo
+shipped_commits: 186e7b0..2aed66b
+---
+
 # ActiveTripPanel — Feature Spec
 
 **Version:** 1.1

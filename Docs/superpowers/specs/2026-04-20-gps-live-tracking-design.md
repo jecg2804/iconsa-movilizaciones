@@ -1,3 +1,9 @@
+---
+status: shipped
+feature: GPS Live Tracking MVP — SkyData integration + MapLibre + OpenFreeMap Liberty
+shipped_commits: 91dca65..fbe74ba
+---
+
 # GPS Live Tracking (MVP) — Feature Spec
 
 **Version:** 1.2

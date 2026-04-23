@@ -1,3 +1,8 @@
+---
+status: draft
+feature: Mobilization Reports MVP — Capa 1 auto-generados (Edge Function + pg_cron + Resend + ExcelJS)
+---
+
 # Reportes de Movilizaciones (MVP) — Feature Spec
 
 **Version:** 2.0
