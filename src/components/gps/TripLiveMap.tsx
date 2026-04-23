@@ -17,7 +17,7 @@ const Marker = dynamic(
   { ssr: false },
 )
 
-const TILE_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron'
+const TILE_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
 const POLL_INTERVAL_MS = 30_000
 const MAX_CONSECUTIVE_ERRORS = 3
 
