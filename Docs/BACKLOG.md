@@ -84,6 +84,24 @@ original, cross-checkear G6 (dashboard links) y otros.
 
 Consolida items sueltos de Task 10 del plan GPS MVP (`Docs/superpowers/plans/2026-04-20-gps-live-tracking.md`) — los otros items de esa lista (render paths `no_gps` / `pickup`, flip CHANGELOG, fix constraint) ya están resueltos o son edge cases de bajo valor. El merge es la verdadera unidad de trabajo.
 
+- **Pre-merge v2: preparar script de migración BD consolidado** —
+  cuando se decida ejecutar el merge `jaime/dev` → `main`, consolidar
+  todos los cambios de BD acumulados desde el último release.
+  Procedimiento:
+  1. Extraer todas las entries `[bd]` de `Docs/CHANGELOG.md` desde el
+     último tag de release en `main`.
+  2. Ordenar cronológicamente y validar que no haya conflictos (ej.
+     columna agregada y después renombrada).
+  3. Generar script consolidado con orden correcto: columnas aditivas
+     → tablas nuevas → constraints → triggers → RLS → data migrations.
+  4. Verificar contra staging vía MCP diff prod vs staging como sanity
+     check final.
+  5. James ejecuta en prod via Supabase SQL Editor en ventana de bajo
+     tráfico, antes del merge de código.
+
+  Referencia: audit parcial 2026-04-23 confirmó que el drift actual es
+  trabajo esperado de Events V2 + GPS MVP + AD-1, sin sorpresas.
+
 ---
 
 ## Completado recientemente (abril 2026)
