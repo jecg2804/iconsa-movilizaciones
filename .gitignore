@@ -56,3 +56,6 @@ Docs/test-screenshots/
 
 # Repomix output — generado bajo demanda para Claude Chat
 repomix-output.*
+
+# Supabase CLI auto-generated temp state (no aporta valor al repo)
+supabase/.temp/
