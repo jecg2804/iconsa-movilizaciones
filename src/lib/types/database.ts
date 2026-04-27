@@ -2013,6 +2013,16 @@ export type Database = {
           designated_receiver_name: string | null
           equipment_id: string | null
           equipment_text: string | null
+          external_approved_at: string | null
+          external_approved_by: string | null
+          external_by_provider: boolean
+          external_completed_at: string | null
+          external_invoice_amount: number | null
+          external_invoice_attachments: Json
+          external_notes: string | null
+          external_provider_name: string | null
+          external_received_by_id: string | null
+          external_received_by_name: string | null
           from_location_id: string | null
           from_text: string | null
           id: string
@@ -2050,6 +2060,16 @@ export type Database = {
           designated_receiver_name?: string | null
           equipment_id?: string | null
           equipment_text?: string | null
+          external_approved_at?: string | null
+          external_approved_by?: string | null
+          external_by_provider?: boolean
+          external_completed_at?: string | null
+          external_invoice_amount?: number | null
+          external_invoice_attachments?: Json
+          external_notes?: string | null
+          external_provider_name?: string | null
+          external_received_by_id?: string | null
+          external_received_by_name?: string | null
           from_location_id?: string | null
           from_text?: string | null
           id?: string
@@ -2087,6 +2107,16 @@ export type Database = {
           designated_receiver_name?: string | null
           equipment_id?: string | null
           equipment_text?: string | null
+          external_approved_at?: string | null
+          external_approved_by?: string | null
+          external_by_provider?: boolean
+          external_completed_at?: string | null
+          external_invoice_amount?: number | null
+          external_invoice_attachments?: Json
+          external_notes?: string | null
+          external_provider_name?: string | null
+          external_received_by_id?: string | null
+          external_received_by_name?: string | null
           from_location_id?: string | null
           from_text?: string | null
           id?: string
@@ -2127,6 +2157,20 @@ export type Database = {
             columns: ["equipment_id"]
             isOneToOne: false
             referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_request_lines_external_approved_by_fkey"
+            columns: ["external_approved_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_request_lines_external_received_by_id_fkey"
+            columns: ["external_received_by_id"]
+            isOneToOne: false
+            referencedRelation: "people"
             referencedColumns: ["id"]
           },
           {
@@ -2539,7 +2583,6 @@ export type Database = {
           driver_id: string | null
           escort: boolean | null
           id: string
-          is_external: boolean | null
           notes: string | null
           rate_id: string | null
           route_summary: string | null
@@ -2566,7 +2609,6 @@ export type Database = {
           driver_id?: string | null
           escort?: boolean | null
           id?: string
-          is_external?: boolean | null
           notes?: string | null
           rate_id?: string | null
           route_summary?: string | null
@@ -2593,7 +2635,6 @@ export type Database = {
           driver_id?: string | null
           escort?: boolean | null
           id?: string
-          is_external?: boolean | null
           notes?: string | null
           rate_id?: string | null
           route_summary?: string | null

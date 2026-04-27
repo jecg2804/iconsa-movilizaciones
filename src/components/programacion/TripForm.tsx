@@ -44,7 +44,6 @@ interface TripFormProps {
     attPermit: boolean
     escort: boolean
     notes: string | null
-    isExternal: boolean
     status?: string
     confirmationCode?: string | null
   }
@@ -121,9 +120,6 @@ function TripForm({
     initialData?.escort ?? false,
   )
   const [notes, setNotes] = useState<string>(initialData?.notes ?? '')
-  const [isExternal, setIsExternal] = useState<boolean>(
-    initialData?.isExternal ?? false,
-  )
   const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments ?? [])
   // UUID estable para folder de storage (en modo crear, genera uno temporal)
   const folderIdRef = useRef(tripIdProp ?? crypto.randomUUID())
@@ -142,12 +138,11 @@ function TripForm({
         att_permit: overrides?.att_permit !== undefined ? overrides.att_permit : attPermit,
         escort: overrides?.escort !== undefined ? overrides.escort : escort,
         notes: overrides?.notes !== undefined ? overrides.notes : (notes.trim() || null),
-        is_external: overrides?.is_external !== undefined ? overrides.is_external : isExternal,
         attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
       }
       onChange(data)
     },
-    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, attachments, onChange],
+    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, attachments, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -254,15 +249,6 @@ function TripForm({
       const val = e.target.value
       setNotes(val)
       propagate({ notes: val.trim() || null })
-    },
-    [propagate],
-  )
-
-  const handleExternalChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.checked
-      setIsExternal(val)
-      propagate({ is_external: val })
     },
     [propagate],
   )
@@ -436,20 +422,6 @@ function TripForm({
             />
             <span className="text-sm font-medium text-gray-700">
               Requiere Escolta
-            </span>
-          </label>
-
-          {/* Viaje externo (conductor/empresa externa) */}
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isExternal}
-              onChange={handleExternalChange}
-              disabled={fieldsDisabled}
-              className="rounded border-gray-300 text-navy focus:ring-navy disabled:cursor-not-allowed"
-            />
-            <span className="text-sm font-medium text-gray-700">
-              Viaje externo
             </span>
           </label>
         </div>

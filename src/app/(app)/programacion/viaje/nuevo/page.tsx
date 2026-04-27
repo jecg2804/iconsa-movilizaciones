@@ -69,7 +69,6 @@ export default function NuevoViajePage() {
     att_permit: false,
     escort: false,
     notes: null,
-    is_external: false,
   })
 
   // Asignaciones de lineas seleccionadas

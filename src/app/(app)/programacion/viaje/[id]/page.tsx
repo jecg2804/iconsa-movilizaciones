@@ -50,7 +50,6 @@ function tripToInput(trip: TripWithRelations): TripInput {
     att_permit: trip.att_permit ?? false,
     escort: trip.escort ?? false,
     notes: trip.notes,
-    is_external: trip.is_external ?? false,
   }
 }
 
@@ -328,7 +327,6 @@ export default function ViajeDetailPage() {
     att_permit: false,
     escort: false,
     notes: null,
-    is_external: false,
   })
 
   // Asignaciones: las originales del viaje + las nuevas seleccionadas
@@ -789,7 +787,6 @@ export default function ViajeDetailPage() {
             attPermit: trip.att_permit ?? false,
             escort: trip.escort ?? false,
             notes: trip.notes,
-            isExternal: trip.is_external ?? false,
             status: trip.status,
             confirmationCode: trip.confirmation_code,
           }}

@@ -107,7 +107,6 @@ export interface TripWithRelations {
   actual_departure: string | null
   actual_arrival: string | null
   route_summary: string | null
-  is_external: boolean | null
   attachments: unknown[] | null
   created_at: string
   updated_at: string
@@ -130,7 +129,6 @@ export interface TripInput {
   att_permit: boolean
   escort: boolean
   notes: string | null
-  is_external: boolean
   attachments?: unknown[] | null
 }
 
@@ -283,7 +281,6 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     actual_departure: (row.actual_departure as string | null) ?? null,
     actual_arrival: (row.actual_arrival as string | null) ?? null,
     route_summary: (row.route_summary as string | null) ?? null,
-    is_external: (row.is_external as boolean | null) ?? null,
     attachments: (row.attachments as unknown[] | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
@@ -779,7 +776,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         actual_departure: (row.actual_departure as string | null) ?? null,
         actual_arrival: (row.actual_arrival as string | null) ?? null,
         route_summary: (row.route_summary as string | null) ?? null,
-        is_external: (row.is_external as boolean | null) ?? null,
         attachments: (row.attachments as unknown[] | null) ?? null,
         created_at: row.created_at as string,
         updated_at: row.updated_at as string,
@@ -832,7 +828,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             att_permit: input.att_permit,
             escort: input.escort,
             notes: input.notes,
-            is_external: input.is_external,
             attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             created_by: personId ?? null,
           })
@@ -954,7 +949,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             att_permit: input.att_permit,
             escort: input.escort,
             notes: input.notes,
-            is_external: input.is_external,
             attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             updated_by: personId ?? null,
           })
