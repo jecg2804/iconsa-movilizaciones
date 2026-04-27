@@ -4,6 +4,9 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-26
+- [bd] Cambio 1 Parada — `ALTER TABLE trip_events DROP COLUMN stop_type` aplicado en staging (`vonwkciosksqspyljzfy`) via Chat MCP. Migration `drop_stop_type_from_trip_events`. Justificación: toda Parada es retiro de proveedor por diseño (decisión 17 del rediseño Events V2). Verificado pre-aplicación: 0 filas con stop_type. `oc_reference` NO existe como columna (era prefijo a notes en modal). Pendiente aplicar a prod en el merge final.
+
 ## 2026-04-20
 - [bd] **Fix `notification_log.valid_event_type` constraint desincronizado**: aplicado a staging (`vonwkciosksqspyljzfy`) y prod (`bzeoszympkkicwlfdtcn`) 2026-04-20. Staging tenía 13 event_types, prod tenía 15, pero el código emite 18. Los huérfanos globales (`viaje_editado`, `material_preparado`, `reversion_registrada`) hacían que el INSERT al audit trail fallara y la dedup de 5min quedara rota para esos 3 tipos. Staging además no tenía `solicitud_urgente_nueva` y `alerta_diaria_urgentes` (hotfix histórico aplicado solo a prod sin documentar). El ALTER es aditivo (DROP + ADD con superset de 18), ninguna fila existente violaba el constraint nuevo.
 
