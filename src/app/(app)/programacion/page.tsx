@@ -600,6 +600,49 @@ export default function ProgramacionPage() {
         )}
       </div>
 
+      {/* ─── Sección Pickups Pendientes de Retiro (Cambio 3 — Surface 3) ─── */}
+      {(role === 'logistica' || role === 'admin') && (pickupsLoading || pendingPickups.length > 0) && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50/30">
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Pickups Pendientes de Retiro</h2>
+              {!pickupsLoading && (
+                <span className="rounded-full bg-amber-200 text-amber-900 px-2 py-0.5 text-xs font-medium">
+                  {pendingPickups.length}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="px-4 pb-4">
+            {pickupsLoading ? (
+              <p className="py-4 text-center text-sm text-iconsa-gray">Cargando pickups...</p>
+            ) : (
+              <div className="space-y-2">
+                {pendingPickups.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900">{p.description}</p>
+                      <p className="text-xs text-iconsa-gray">
+                        <span className="font-mono">{p.request_id}</span>
+                        {p.project_code && <span> · {p.project_code}</span>}
+                        <span> · {p.quantity} {p.unitCode}</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPickupDeliveryLine(p)}
+                      className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+                    >
+                      Registrar entrega
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ─── Sección 1: Sin Programar ─── */}
       <section className="rounded-xl border border-gray-200 bg-white">
         <div className="px-4 pt-4 pb-3 space-y-3">
@@ -862,54 +905,6 @@ export default function ProgramacionPage() {
           />
         </div>
       </section>
-
-      {/* ─── Sección 3: Pickups Pendientes de Retiro (Cambio 3 — Surface 3) ─── */}
-      {(role === 'logistica' || role === 'admin') && (
-        <section className="rounded-xl border border-amber-200 bg-amber-50/30">
-          <div className="px-4 pt-4 pb-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-900">Pickups Pendientes de Retiro</h2>
-              {!pickupsLoading && (
-                <span className="rounded-full bg-amber-200 text-amber-900 px-2 py-0.5 text-xs font-medium">
-                  {pendingPickups.length}
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="px-4 pb-4">
-            {pickupsLoading ? (
-              <p className="py-4 text-center text-sm text-iconsa-gray">Cargando pickups...</p>
-            ) : pendingPickups.length === 0 ? (
-              <p className="py-4 text-center text-sm text-iconsa-gray">
-                No hay pickups pendientes de retiro.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {pendingPickups.map((p) => (
-                  <div key={p.id} className="flex items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-2.5">
-                    <span className="text-base">🤝</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{p.description}</p>
-                      <p className="text-xs text-iconsa-gray">
-                        <span className="font-mono">{p.request_id}</span>
-                        {p.project_code && <span> · {p.project_code}</span>}
-                        <span> · {p.quantity} {p.unitCode}</span>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPickupDeliveryLine(p)}
-                      className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
-                    >
-                      Registrar entrega
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
 
       {/* Modal Registrar entrega pickup (Surface 3) */}
       {pickupDeliveryLine && (
