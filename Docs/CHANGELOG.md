@@ -4,6 +4,9 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-27
+- [bd] Cambio 2 cost code Etapa BD-1 — `ALTER TABLE sm_requests ADD COLUMN cost_code_id UUID, cost_category_id UUID` aplicado en staging (`vonwkciosksqspyljzfy`) via Chat MCP. Data migrada con UPDATE desde primera línea de cada solicitud (`SELECT cost_code_id FROM sm_request_lines WHERE request_id = sr.id ORDER BY line_number LIMIT 1`). Resultado: 6/6 solicitudes seteadas, sanity check MATCH (0 inconsistencias entre primera línea y resto). Solicitud histórica `24-404-SM-150` quedó con `cost_code_id=NULL` (legacy Completada con líneas todas NULL — render `—` en displays). Pendiente Etapa BD-2 (`DROP COLUMN cost_code_id, cost_category_id` en `sm_request_lines`) post-refactor de Code. Trigger `generate_full_code()` verificado: dispara en tabla `cost_codes` master, NO en `sm_request_lines` — BD-2 seguro.
+
 ## 2026-04-26
 - [bd] Cambio 1 Parada — `ALTER TABLE trip_events DROP COLUMN stop_type` aplicado en staging (`vonwkciosksqspyljzfy`) via Chat MCP. Migration `drop_stop_type_from_trip_events`. Justificación: toda Parada es retiro de proveedor por diseño (decisión 17 del rediseño Events V2). Verificado pre-aplicación: 0 filas con stop_type. `oc_reference` NO existe como columna (era prefijo a notes en modal). Pendiente aplicar a prod en el merge final.
 

@@ -2,7 +2,7 @@
 title: Events V2 — Redesign in Progress (v3)
 status: design-closed
 created: 2026-04-23
-updated: 2026-04-26 (v3.1: lowercase fix + bd applied)
+updated: 2026-04-27 (v3.2: cost code BD-1 applied + Q1-Q6 closed)
 supersedes: Docs/reference/EVENTS_V2.md (while this doc is active)
 next_step: Brief para Code (Superpowers, secuencial)
 location_in_repo: Docs/reference/events-v2-redesign-in-progress.md
@@ -123,6 +123,7 @@ Registro cronológico de decisiones tomadas durante el proceso de diseño 2026-0
 | 22 | 2026-04-26 | Orden de ejecución por Code: Parada → Cost code → Pickup, con Superpowers cada uno | Parada es más chico (calibra workflow), cost code es schema migration (antes de pickup), pickup es el más grande |
 | 23 | 2026-04-26 | **Code NO toca BD.** Todos los cambios de schema los aplica Chat (yo) via MCP, con James aprobando antes. Code consume schema vía types regenerados. Convención `[bd-pending]` → `[bd]` en CHANGELOG documenta cada change. | Regla del proyecto, ya en `.claude/rules/supabase-readonly.md` |
 | 24 | 2026-04-26 | Valores reales de `locations.location_type` verificados en BD: `'proyecto'`, `'taller'`, `'otro'` (todos lowercase). Filtros del dropdown deben usar lowercase. Doc v3 inicial decía capitalized — bug que hubiera causado que el filtro no funcione | Verificado via MCP en staging y prod |
+| 25 | 2026-04-27 | Cost code refactor decisiones cerradas en brainstorming: cascada extraída a hook custom `useCostCodeCascade(projectId, initialCostCodeId, initialCostCategoryId)`; prop `LineRow.costCodeDisplay` eliminado completo (cost_code se muestra solo en header); validación `validateForSend` requiere cost_code, edit de solicitud Enviada/Completada/Cancelada NO valida (preserva históricas con `cost_code_id=NULL` como `24-404-SM-150`); helper `createSolicitud` en tests gana opt `costCode` (AD-5 fix mínimo, completo queda fuera). V1 verificado: trigger `generate_full_code()` dispara en tabla `cost_codes` master, NO en `sm_request_lines` — BD-2 100% seguro | Brainstorming + verificaciones V1-V3 con James/Chat |
 
 ---
 
@@ -233,43 +234,39 @@ Después: `cost_code_id` y `cost_category_id` viven en `sm_requests` (per solici
 
 Razón (de los solicitantes): cada solicitud se hace sabiendo que TODO lo que está dentro va para UN cost code. Per-línea era over-engineering.
 
-#### BD — Migración (aplica Chat via MCP, NO Code)
+#### BD — Etapa BD-1 (aplicada por Chat el 2026-04-27, staging)
 
 ```sql
--- 1. Agregar columnas a sm_requests (nullable inicialmente para permitir migración)
-ALTER TABLE sm_requests 
+ALTER TABLE sm_requests
   ADD COLUMN cost_code_id UUID REFERENCES cost_codes(id),
   ADD COLUMN cost_category_id UUID REFERENCES cost_categories(id);
 
--- 2. Migración de data: cada solicitud toma cost_code de su primera línea
 UPDATE sm_requests sr
-SET 
-  cost_code_id = (
-    SELECT cost_code_id FROM sm_request_lines 
-    WHERE request_id = sr.id 
-    ORDER BY line_number LIMIT 1
-  ),
-  cost_category_id = (
-    SELECT cost_category_id FROM sm_request_lines 
-    WHERE request_id = sr.id 
-    ORDER BY line_number LIMIT 1
-  );
+SET
+  cost_code_id = (SELECT cost_code_id FROM sm_request_lines
+                  WHERE request_id = sr.id ORDER BY line_number LIMIT 1),
+  cost_category_id = (SELECT cost_category_id FROM sm_request_lines
+                      WHERE request_id = sr.id ORDER BY line_number LIMIT 1);
+```
 
--- 3. Validar migración: detectar solicitudes con líneas que tenían cost_code distinto al de la primera
-SELECT sr.id, sr.request_id, COUNT(DISTINCT srl.cost_code_id) AS distinct_cost_codes
-FROM sm_requests sr
-JOIN sm_request_lines srl ON srl.request_id = sr.id
-WHERE srl.cost_code_id IS NOT NULL
-GROUP BY sr.id, sr.request_id
-HAVING COUNT(DISTINCT srl.cost_code_id) > 1;
+Resultado: 6/6 solicitudes en staging migradas. Sanity check (líneas con cost_code distinto al de la primera): MATCH (0 inconsistencias). Solicitudes históricas con todas las líneas `cost_code_id=NULL` quedaron con `cost_code_id=NULL` en `sm_requests` (caso `24-404-SM-150` — solicitud Completada legacy, render `—` en displays).
 
--- 4. SOLO DESPUÉS de validación de James, drop columns en sm_request_lines
-ALTER TABLE sm_request_lines 
+**Verificación V1:** Trigger `generate_full_code()` dispara en tabla `cost_codes` (master), NO en `sm_request_lines`. Ningún otro trigger en `sm_request_lines` depende de `cost_code_id` o `cost_category_id`. BD-2 100% seguro.
+
+#### BD — Etapa BD-2 (pendiente, aplica Chat post-refactor de Code)
+
+```sql
+ALTER TABLE sm_request_lines
   DROP COLUMN cost_code_id,
   DROP COLUMN cost_category_id;
 ```
 
-**IMPORTANTE:** El paso 4 NO se ejecuta automáticamente. Chat reporta el resultado del paso 3 a James, James decide si seguir o resolver inconsistencias primero.
+Aplicar solo después de:
+1. Code completa Tasks 1-7 del plan de Cambio 2 (refactor commiteado, build verde, grep regression).
+2. Code reporta a James que el código ya no lee `sm_request_lines.cost_code_id`/`cost_category_id`.
+3. James confirma V3 (reportes externos no dependen de las columnas viejas).
+
+Code regenera `database.ts` post-BD-2 en Task 8 del plan.
 
 #### Cambios de código (Code implementa)
 
