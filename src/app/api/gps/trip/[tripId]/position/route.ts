@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
   // Lookup del viaje. RLS aplica; si el usuario no puede verlo, retorna null.
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('id, status, is_self_pickup, vehicle_id')
+    .select('id, status, vehicle_id')
     .eq('id', tripId)
     .maybeSingle()
 
@@ -36,10 +36,6 @@ export async function GET(_request: Request, context: RouteContext) {
 
   if (trip.status !== 'En Ruta') {
     const body: GpsTripPosition = { status: 'not_in_route' }
-    return NextResponse.json(body)
-  }
-  if (trip.is_self_pickup) {
-    const body: GpsTripPosition = { status: 'pickup' }
     return NextResponse.json(body)
   }
   if (!trip.vehicle_id) {

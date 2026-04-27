@@ -13,6 +13,7 @@
   },
   "include": [
     "src/**",
+    "superpowers/**",
     "Docs/**",
     ".claude/**",
     "CLAUDE.md",
@@ -45,9 +46,7 @@
       "*.jpg",
       "*.jpeg",
       "*.svg",
-      "*.woff*",
-      "Docs/archive/**",
-      "tests/**"
+      "*.woff*"
     ]
   },
   "security": {

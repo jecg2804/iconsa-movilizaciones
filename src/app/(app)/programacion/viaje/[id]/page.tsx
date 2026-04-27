@@ -739,14 +739,12 @@ export default function ViajeDetailPage() {
         />
       </div>
 
-      {/* Mapa en vivo del vehículo (GPS) — solo trips En Ruta no-pickup con GPS */}
-      {trip.status === 'En Ruta' &&
-        !trip.is_self_pickup &&
-        trip.vehicle?.gps_vehicle_id && (
-          <div className="mt-6">
-            <TripLiveMap tripId={trip.id} variant="full" />
-          </div>
-        )}
+      {/* Mapa en vivo del vehículo (GPS) — solo trips En Ruta con GPS */}
+      {trip.status === 'En Ruta' && trip.vehicle?.gps_vehicle_id && (
+        <div className="mt-6">
+          <TripLiveMap tripId={trip.id} variant="full" />
+        </div>
+      )}
 
       {/* Banner material entregado pendiente retorno */}
       {trip.status === 'En Ruta' && tripEvents.some(e => e.event_type === 'Entrega') && (

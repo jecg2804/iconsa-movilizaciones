@@ -28,7 +28,6 @@ export interface AssociatedTrip {
   trailer: { description: string; spectrum_code: string | null } | null
   att_permit: boolean
   escort: boolean
-  is_self_pickup: boolean
   lines: TripLineInfo[]
   events: TripEventInfo[]
 }

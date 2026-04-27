@@ -25,8 +25,6 @@ import { Input } from '@/components/ui/Input'
 import { DispatchModal, type DispatchData } from '@/components/viajes/DispatchModal'
 import { DeliveryModal, type DeliveryData } from '@/components/viajes/DeliveryModal'
 import { RevertModal } from '@/components/viajes/RevertModal'
-import { PreparationModal } from '@/components/viajes/PreparationModal'
-import { PickupModal, type PickupData } from '@/components/viajes/PickupModal'
 import { ParadaModal, type ParadaData } from '@/components/viajes/ParadaModal'
 import { EventTimeline } from '@/components/viajes/EventTimeline'
 import { EventButton } from '@/components/viajes/EventButton'
@@ -486,7 +484,7 @@ export default function Page() {
   const revertedIds = new Set(
     events.filter((e) => e.event_type === 'Reversion' && e.reverts_event_id).map((e) => e.reverts_event_id!),
   )
-  const isPickup = trip?.is_self_pickup === true
+  const isPickup = false  // Pickup ya no existe a nivel trip — Cambio 3 lo movió a línea (T4 borra refs)
   const hasSalida = events.some((e) => e.event_type === 'Salida' && !revertedIds.has(e.id))
   const hasLlegada = events.some((e) => e.event_type === 'Llegada' && !revertedIds.has(e.id))
   const hasEntrega = events.some((e) => e.event_type === 'Entrega' && !revertedIds.has(e.id))
@@ -1321,7 +1319,7 @@ export default function Page() {
   }
 
   // Código de confirmación visible para logistica/admin siempre, PM solo en fleet (no pickup)
-  const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || (role === 'pm' && !trip.is_self_pickup)
+  const canSeeConfirmationCode = role === 'logistica' || role === 'admin' || role === 'pm'
   // Todos los roles con acceso a mis-viajes pueden registrar eventos (incluye PM para entregas)
   const canRegisterEvents = canRegisterEvent(role)
   // PM solo ve Entrega + Incidencia (no puede UPDATE trips → no Salida/Retorno)

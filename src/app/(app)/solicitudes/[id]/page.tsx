@@ -164,7 +164,6 @@ export default function SolicitudDetailPage() {
             confirmation_code,
             att_permit,
             escort,
-            is_self_pickup,
             driver:driver_id(name),
             vehicle:vehicle_id(description, spectrum_code, gps_vehicle_id),
             trailer:trailer_id(description, spectrum_code),
@@ -220,7 +219,6 @@ export default function SolicitudDetailPage() {
           trailer: trailer as { description: string; spectrum_code: string | null } | null,
           att_permit: (t.att_permit as boolean) ?? false,
           escort: (t.escort as boolean) ?? false,
-          is_self_pickup: (t.is_self_pickup as boolean) ?? false,
           lines: lineInfo ? [lineInfo] : [],
           events,
         })

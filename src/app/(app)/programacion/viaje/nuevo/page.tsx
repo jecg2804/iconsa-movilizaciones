@@ -58,7 +58,6 @@ export default function NuevoViajePage() {
   const [ratesLoading, setRatesLoading] = useState(true)
 
   // Estado del formulario
-  const [isPickup, setIsPickup] = useState(false)
   const [tripData, setTripData] = useState<TripInput>({
     scheduled_date: '',
     scheduled_time: null,
@@ -71,7 +70,6 @@ export default function NuevoViajePage() {
     escort: false,
     notes: null,
     is_external: false,
-    is_self_pickup: false,
   })
 
   // Asignaciones de lineas seleccionadas
@@ -299,28 +297,6 @@ export default function NuevoViajePage() {
           onChange={setTripData}
           onRateChange={handleRateChange}
           isTrailerRequired={isCabezal}
-          isPickup={isPickup}
-          onPickupChange={(pickup) => {
-            setIsPickup(pickup)
-            if (pickup) {
-              // Auto-seleccionar tarifa MVLPUP y limpiar conductor/vehículo
-              const mvlpup = rates.find((r) => r.code === 'MVLPUP')
-              setTripData((prev) => ({
-                ...prev,
-                driver_id: null,
-                vehicle_id: null,
-                trailer_id: null,
-                is_self_pickup: true,
-                rate_id: mvlpup?.id ?? prev.rate_id,
-                cost: mvlpup?.rate ?? prev.cost,
-              }))
-            } else {
-              setTripData((prev) => ({
-                ...prev,
-                is_self_pickup: false,
-              }))
-            }
-          }}
         />
       </div>
 

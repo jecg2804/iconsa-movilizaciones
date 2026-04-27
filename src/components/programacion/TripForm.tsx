@@ -68,10 +68,6 @@ interface TripFormProps {
   onRateChange?: (rateId: string | null) => void
   /** Si true, el remolque es obligatorio (vehículo es cabezal) */
   isTrailerRequired?: boolean
-  /** Si es retiro en Chilibre (self-pickup) */
-  isPickup?: boolean
-  /** Callback cuando cambia el toggle de retiro */
-  onPickupChange?: (isPickup: boolean) => void
   /** UUID del viaje (para folder de storage). En modo crear se genera uno temporal. */
   tripId?: string
   /** Adjuntos iniciales del viaje */
@@ -88,8 +84,6 @@ function TripForm({
   onChange,
   onRateChange,
   isTrailerRequired = false,
-  isPickup = false,
-  onPickupChange,
   tripId: tripIdProp,
   initialAttachments,
 }: TripFormProps) {
@@ -149,12 +143,11 @@ function TripForm({
         escort: overrides?.escort !== undefined ? overrides.escort : escort,
         notes: overrides?.notes !== undefined ? overrides.notes : (notes.trim() || null),
         is_external: overrides?.is_external !== undefined ? overrides.is_external : isExternal,
-        is_self_pickup: overrides?.is_self_pickup !== undefined ? overrides.is_self_pickup : isPickup,
         attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
       }
       onChange(data)
     },
-    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, isPickup, attachments, onChange],
+    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, attachments, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -331,31 +324,6 @@ function TripForm({
       </div>
 
       {/* Campos del formulario */}
-      {/* Toggle retiro en Chilibre */}
-      {mode === 'create' && onPickupChange && (
-        <label className="mb-2 flex items-center gap-1.5 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isPickup}
-            onChange={(e) => {
-              const next = e.target.checked
-              // Si al activar pickup hay driver/vehicle/trailer ingresados,
-              // pedir confirmación — el toggle los limpia arriba.
-              const willLoseData = next && (driverId || vehicleId || trailerId)
-              if (willLoseData && typeof window !== 'undefined') {
-                const ok = window.confirm(
-                  'Activar retiro en Chilibre quitará el conductor, vehículo y remolque seleccionados. ¿Continuar?',
-                )
-                if (!ok) return
-              }
-              onPickupChange(next)
-            }}
-            className="accent-navy"
-          />
-          Retiro en Chilibre (sin conductor/vehículo)
-        </label>
-      )}
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Fecha Programada — min = hoy Panamá (solo creación) */}
         <Input
@@ -378,50 +346,45 @@ function TripForm({
           searchable
         />
 
-        {/* Conductor, vehículo, remolque — ocultos en pickup */}
-        {!isPickup && (
-          <>
-            {/* Conductor */}
-            <Select
-              label="Conductor"
-              placeholder="Seleccionar conductor..."
-              options={drivers}
-              value={driverId}
-              onChange={handleDriverChange}
-              disabled={fieldsDisabled}
-              searchable
-            />
+        {/* Conductor */}
+        <Select
+          label="Conductor"
+          placeholder="Seleccionar conductor..."
+          options={drivers}
+          value={driverId}
+          onChange={handleDriverChange}
+          disabled={fieldsDisabled}
+          searchable
+        />
 
-            {/* Vehiculo */}
-            <Select
-              label="Vehiculo (Cabezal)"
-              placeholder="Seleccionar vehiculo..."
-              options={vehicles}
-              value={vehicleId}
-              onChange={handleVehicleChange}
-              disabled={fieldsDisabled}
-              searchable
-            />
+        {/* Vehiculo */}
+        <Select
+          label="Vehiculo (Cabezal)"
+          placeholder="Seleccionar vehiculo..."
+          options={vehicles}
+          value={vehicleId}
+          onChange={handleVehicleChange}
+          disabled={fieldsDisabled}
+          searchable
+        />
 
-            {/* Remolque — requerido si el vehículo es cabezal */}
-            <div>
-              <Select
-                label={isTrailerRequired ? 'Remolque (requerido)' : 'Remolque (opcional)'}
-                placeholder="Seleccionar remolque..."
-                options={trailers}
-                value={trailerId}
-                onChange={handleTrailerChange}
-                disabled={fieldsDisabled}
-                searchable
-              />
-              {isTrailerRequired && !trailerId && !fieldsDisabled && (
-                <p className="mt-1 text-xs text-red-600">
-                  El remolque es obligatorio para vehículos cabezal.
-                </p>
-              )}
-            </div>
-          </>
-        )}
+        {/* Remolque — requerido si el vehículo es cabezal */}
+        <div>
+          <Select
+            label={isTrailerRequired ? 'Remolque (requerido)' : 'Remolque (opcional)'}
+            placeholder="Seleccionar remolque..."
+            options={trailers}
+            value={trailerId}
+            onChange={handleTrailerChange}
+            disabled={fieldsDisabled}
+            searchable
+          />
+          {isTrailerRequired && !trailerId && !fieldsDisabled && (
+            <p className="mt-1 text-xs text-red-600">
+              El remolque es obligatorio para vehículos cabezal.
+            </p>
+          )}
+        </div>
 
         {/* Tarifa */}
         <Select
