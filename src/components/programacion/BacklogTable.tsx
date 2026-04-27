@@ -16,6 +16,8 @@ interface BacklogTableProps {
   onRequestClick?: (requestId: string) => void
   /** Callback "Aprobar pickup" — solo logistica/admin debería pasarlo */
   onApprovePickup?: (lineId: string) => void
+  /** Callback "Aprobar viaje externo" — solo logistica/admin debería pasarlo */
+  onApproveExternal?: (lineId: string) => void
 }
 
 /** Resuelve el nombre de origen de una linea de backlog */
@@ -42,6 +44,7 @@ function BacklogTable({
   onSelectAll,
   onRequestClick,
   onApprovePickup,
+  onApproveExternal,
 }: BacklogTableProps) {
   // Determinar si todas las lineas estan seleccionadas
   const allSelected =
@@ -229,6 +232,18 @@ function BacklogTable({
                   Aprobar pickup
                 </button>
               )}
+
+              {/* Aprobar viaje externo (logistica/admin) */}
+              {onApproveExternal && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onApproveExternal(line.id) }}
+                  title="Aprobar viaje externo (proveedor con factura)"
+                  className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+                >
+                  Aprobar viaje externo
+                </button>
+              )}
             </div>
 
             {/* Mobile layout: visible hasta md */}
@@ -325,6 +340,17 @@ function BacklogTable({
                   className="self-start rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
                 >
                   Aprobar pickup
+                </button>
+              )}
+
+              {/* Aprobar viaje externo (logistica/admin) — mobile */}
+              {onApproveExternal && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onApproveExternal(line.id) }}
+                  className="self-start rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+                >
+                  Aprobar viaje externo
                 </button>
               )}
             </div>

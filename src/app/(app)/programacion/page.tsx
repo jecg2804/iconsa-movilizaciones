@@ -8,7 +8,15 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { usePickup } from '@/hooks/usePickup'
+import { useExternal } from '@/hooks/useExternal'
 import { PickupDeliveryModal, type PendingPickupLine } from '@/components/programacion/PickupDeliveryModal'
+import {
+  ExternalApprovalForm,
+  EMPTY_FORM_VALUES,
+  validateApprovalForm,
+  type ExternalApprovalFormValues,
+  type ExternalApprovalFormErrors,
+} from '@/components/programacion/ExternalApprovalForm'
 import type { Attachment } from '@/lib/supabase/storage'
 import { canCreateTrip } from '@/lib/utils/roles'
 import { TRIP_STATUSES } from '@/lib/utils/constants'
@@ -47,6 +55,14 @@ export default function ProgramacionPage() {
   const [pickupDeliveryLine, setPickupDeliveryLine] = useState<PendingPickupLine | null>(null)
   const [pickupRevertLine, setPickupRevertLine] = useState<PendingPickupLine | null>(null)
   const [people, setPeople] = useState<{ id: string; name: string }[]>([])
+
+  // Cambio 4 — Surface 1: Aprobar viaje externo desde backlog
+  const external = useExternal()
+  const [externalApproveModal, setExternalApproveModal] = useState<{
+    lineId: string
+  } | null>(null)
+  const [externalApproveValues, setExternalApproveValues] = useState<ExternalApprovalFormValues>(EMPTY_FORM_VALUES)
+  const [externalApproveErrors, setExternalApproveErrors] = useState<ExternalApprovalFormErrors>({})
 
   // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
   // Project filter usa 2-step query (trips no tiene project_id directo).
@@ -363,6 +379,44 @@ export default function ProgramacionPage() {
     }
     // Errores se muestran via pickup.error en el modal
   }, [pickupRevertLine, pickup, refetchPendingPickups, refetchBacklog])
+
+  // --- Handlers Aprobar viaje externo (Cambio 4 — Surface 1) ---
+  const handleApproveExternal = useCallback((lineId: string) => {
+    setExternalApproveValues(EMPTY_FORM_VALUES)
+    setExternalApproveErrors({})
+    setExternalApproveModal({ lineId })
+  }, [])
+
+  const closeExternalApproveModal = useCallback(() => {
+    setExternalApproveModal(null)
+    setExternalApproveValues(EMPTY_FORM_VALUES)
+    setExternalApproveErrors({})
+  }, [])
+
+  const confirmApproveExternal = useCallback(async () => {
+    if (!externalApproveModal || !person?.id) return
+    const { valid, errors } = validateApprovalForm(externalApproveValues)
+    if (!valid) {
+      setExternalApproveErrors(errors)
+      return
+    }
+    setExternalApproveErrors({})
+    const result = await external.approveExternal(
+      externalApproveModal.lineId,
+      person.id,
+      externalApproveValues.providerName,
+      parseFloat(externalApproveValues.invoiceAmount),
+      externalApproveValues.invoiceAttachments,
+      externalApproveValues.notes,
+    )
+    if (result.ok) {
+      setExternalApproveModal(null)
+      setExternalApproveValues(EMPTY_FORM_VALUES)
+      setExternalApproveErrors({})
+      refetchBacklog()
+      // refetchPendingExternals() se agregará en T6
+    }
+  }, [externalApproveModal, person, external, externalApproveValues, refetchBacklog])
 
   const handleRequestClick = useCallback(
     (requestId: string) => {
@@ -741,6 +795,7 @@ export default function ProgramacionPage() {
             onSelectAll={handleSelectAll}
             onRequestClick={handleRequestClick}
             onApprovePickup={(role === 'logistica' || role === 'admin') ? handleApprovePickup : undefined}
+            onApproveExternal={(role === 'logistica' || role === 'admin') ? handleApproveExternal : undefined}
           />
         </div>
       </section>
@@ -998,6 +1053,48 @@ export default function ProgramacionPage() {
                 loading={pickup.loading}
               >
                 Aprobar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aprobar viaje externo (Cambio 4 — Surface 1) */}
+      {externalApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-6">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">
+              Aprobar viaje externo
+            </h3>
+
+            <ExternalApprovalForm
+              values={externalApproveValues}
+              onChange={setExternalApproveValues}
+              errors={externalApproveErrors}
+              lineFolderId={`external/${externalApproveModal.lineId}`}
+              disabled={external.loading}
+            />
+
+            {external.error && (
+              <p className="mt-3 text-sm text-red-600">{external.error}</p>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeExternalApproveModal}
+                disabled={external.loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={confirmApproveExternal}
+                loading={external.loading}
+              >
+                Aprobar viaje externo
               </Button>
             </div>
           </div>
