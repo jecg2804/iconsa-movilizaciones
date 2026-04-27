@@ -8,6 +8,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { usePickup } from '@/hooks/usePickup'
+import { PickupDeliveryModal, type PendingPickupLine } from '@/components/programacion/PickupDeliveryModal'
+import type { Attachment } from '@/lib/supabase/storage'
 import { canCreateTrip } from '@/lib/utils/roles'
 import { TRIP_STATUSES } from '@/lib/utils/constants'
 import { formatDate, formatCurrency } from '@/lib/utils/format'
@@ -39,6 +41,11 @@ export default function ProgramacionPage() {
   } = useTrips()
   const pickup = usePickup()
   const [pickupConfirmLineId, setPickupConfirmLineId] = useState<string | null>(null)
+  // Surface 3: Pickups Pendientes de Retiro
+  const [pendingPickups, setPendingPickups] = useState<PendingPickupLine[]>([])
+  const [pickupsLoading, setPickupsLoading] = useState(false)
+  const [pickupDeliveryLine, setPickupDeliveryLine] = useState<PendingPickupLine | null>(null)
+  const [people, setPeople] = useState<{ id: string; name: string }[]>([])
 
   // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
   // Project filter usa 2-step query (trips no tiene project_id directo).
@@ -64,6 +71,74 @@ export default function ProgramacionPage() {
       .order('name')
       .then(({ data }) => setConductors(data ?? []))
   }, [supabase])
+
+  // Personas activas para receptor de pickup (Cambio 3 — Surface 3)
+  useEffect(() => {
+    supabase
+      .from('people')
+      .select('id, name')
+      .eq('status', 'Activo')
+      .order('name')
+      .then(({ data }) => setPeople(data ?? []))
+  }, [supabase])
+
+  // --- Fetch pickups pendientes de retiro (Cambio 3 — Surface 3) ---
+  const refetchPendingPickups = useCallback(async () => {
+    setPickupsLoading(true)
+    try {
+      const { data } = await supabase
+        .from('sm_request_lines')
+        .select(`
+          id, description, line_type, quantity, unit_text,
+          pickup_approved_at,
+          unit:unit_id(code),
+          request:request_id!inner(
+            id, request_id,
+            project:project_id(code, name)
+          )
+        `)
+        .eq('status', 'Pickup Aprobado')
+        .eq('pickup_by_project', true)
+        .is('pickup_completed_at', null)
+        .order('pickup_approved_at', { ascending: true })
+
+      const mapped: PendingPickupLine[] = (data ?? []).map((row: Record<string, unknown>) => {
+        const request = Array.isArray(row.request) ? row.request[0] : row.request
+        const reqRec = (request ?? {}) as Record<string, unknown>
+        const projRaw = reqRec.project as Record<string, unknown> | Record<string, unknown>[] | null
+        const project = Array.isArray(projRaw) ? projRaw[0] : projRaw
+        const unitRaw = row.unit as Record<string, unknown> | Record<string, unknown>[] | null
+        const unit = Array.isArray(unitRaw) ? unitRaw[0] : unitRaw
+        return {
+          id: row.id as string,
+          description: row.description as string,
+          line_type: row.line_type as string,
+          quantity: row.quantity as number,
+          unitCode: ((unit as { code?: string } | null)?.code) ?? ((row.unit_text as string | null) ?? ''),
+          request_id: ((reqRec.request_id as string | null) ?? ''),
+          request_uuid: ((reqRec.id as string | null) ?? ''),
+          project_code: ((project as { code?: string } | null)?.code) ?? null,
+          project_name: ((project as { name?: string } | null)?.name) ?? null,
+          pickup_approved_at: row.pickup_approved_at as string,
+        }
+      })
+      setPendingPickups(mapped)
+    } finally {
+      setPickupsLoading(false)
+    }
+  }, [supabase])
+
+  // Fetch pickups pendientes solo para logistica/admin
+  useEffect(() => {
+    if (role === 'logistica' || role === 'admin') {
+      void refetchPendingPickups()
+    }
+  }, [role, refetchPendingPickups])
+
+  const receiverOptions = useMemo(
+    () => people.map((p) => ({ value: p.id, label: p.name })),
+    [people],
+  )
 
   // Selección de líneas
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
@@ -251,9 +326,31 @@ export default function ProgramacionPage() {
     if (result.ok) {
       setPickupConfirmLineId(null)
       refetchBacklog()
+      void refetchPendingPickups()
     }
     // Errores se muestran via pickup.error en el modal
-  }, [pickupConfirmLineId, person, pickup, refetchBacklog])
+  }, [pickupConfirmLineId, person, pickup, refetchBacklog, refetchPendingPickups])
+
+  const handleCompletePickup = useCallback(async (data: {
+    receivedById: string | null
+    receivedByName: string
+    notes: string
+    attachments: Attachment[]
+  }) => {
+    if (!pickupDeliveryLine) return
+    const result = await pickup.completePickup(
+      pickupDeliveryLine.id,
+      data.receivedById,
+      data.receivedByName,
+      data.notes,
+      data.attachments,
+    )
+    if (result.ok) {
+      setPickupDeliveryLine(null)
+      void refetchPendingPickups()
+    }
+    // Errores via pickup.error en el modal
+  }, [pickupDeliveryLine, pickup, refetchPendingPickups])
 
   const handleRequestClick = useCallback(
     (requestId: string) => {
@@ -765,6 +862,66 @@ export default function ProgramacionPage() {
           />
         </div>
       </section>
+
+      {/* ─── Sección 3: Pickups Pendientes de Retiro (Cambio 3 — Surface 3) ─── */}
+      {(role === 'logistica' || role === 'admin') && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50/30">
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Pickups Pendientes de Retiro</h2>
+              {!pickupsLoading && (
+                <span className="rounded-full bg-amber-200 text-amber-900 px-2 py-0.5 text-xs font-medium">
+                  {pendingPickups.length}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="px-4 pb-4">
+            {pickupsLoading ? (
+              <p className="py-4 text-center text-sm text-iconsa-gray">Cargando pickups...</p>
+            ) : pendingPickups.length === 0 ? (
+              <p className="py-4 text-center text-sm text-iconsa-gray">
+                No hay pickups pendientes de retiro.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {pendingPickups.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-2.5">
+                    <span className="text-base">🤝</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900">{p.description}</p>
+                      <p className="text-xs text-iconsa-gray">
+                        <span className="font-mono">{p.request_id}</span>
+                        {p.project_code && <span> · {p.project_code}</span>}
+                        <span> · {p.quantity} {p.unitCode}</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPickupDeliveryLine(p)}
+                      className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+                    >
+                      Registrar entrega
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Modal Registrar entrega pickup (Surface 3) */}
+      {pickupDeliveryLine && (
+        <PickupDeliveryModal
+          line={pickupDeliveryLine}
+          receiverOptions={receiverOptions}
+          onConfirm={handleCompletePickup}
+          onClose={() => setPickupDeliveryLine(null)}
+          loading={pickup.loading}
+          error={pickup.error}
+        />
+      )}
 
       {/* Modal confirmación Aprobar pickup (Cambio 3 — Surface 1) */}
       {pickupConfirmLineId && (
