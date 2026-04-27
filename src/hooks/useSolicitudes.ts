@@ -65,6 +65,13 @@ export interface LineWithRelations {
   designated_receiver_name: string | null
   created_at: string
   updated_at: string
+  // Cambio 3 — pickup columns
+  pickup_by_project: boolean
+  pickup_approved_at: string | null
+  pickup_approved_by: string | null
+  pickup_completed_at: string | null
+  pickup_received_by_id: string | null
+  pickup_received_by_name: string | null
   equipment: { id: string; spectrum_code: string | null; description: string } | null
   from_location: { id: string; name: string } | null
   to_location: { id: string; name: string } | null
@@ -436,6 +443,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           qty_delivered: (line.qty_delivered as number | null) ?? null,
           created_at: line.created_at as string,
           updated_at: line.updated_at as string,
+          pickup_by_project: (line.pickup_by_project as boolean) ?? false,
+          pickup_approved_at: (line.pickup_approved_at as string | null) ?? null,
+          pickup_approved_by: (line.pickup_approved_by as string | null) ?? null,
+          pickup_completed_at: (line.pickup_completed_at as string | null) ?? null,
+          pickup_received_by_id: (line.pickup_received_by_id as string | null) ?? null,
+          pickup_received_by_name: (line.pickup_received_by_name as string | null) ?? null,
           equipment: eq ? (Array.isArray(eq) ? eq[0] : eq) : null,
           from_location: fromLoc ? (Array.isArray(fromLoc) ? fromLoc[0] : fromLoc) : null,
           to_location: toLoc ? (Array.isArray(toLoc) ? toLoc[0] : toLoc) : null,
@@ -762,9 +775,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
             .eq('request_line_id', line.id)
         }
 
-        // 3. Actualizar todas las lineas Pendiente y Programada a Cancelada
+        // 3. Actualizar líneas Pendiente, Programada y Pickup Aprobado a Cancelada
+        // (Cambio 3 — I1/E8: sin Pickup Aprobado, líneas pickup-aprobadas
+        // quedaban huérfanas en una solicitud Cancelada)
         const lineIdsToCancel = (lines ?? [])
-          .filter((l) => l.status === 'Pendiente' || l.status === 'Programada')
+          .filter((l) => l.status === 'Pendiente' || l.status === 'Programada' || l.status === 'Pickup Aprobado')
           .map((l) => l.id)
 
         if (lineIdsToCancel.length > 0) {

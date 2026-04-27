@@ -19,6 +19,13 @@ interface LineRowProps {
   fromDisplay?: string
   toDisplay?: string
   unitDisplay?: string
+  // Cambio 3 — info de pickup per-línea
+  pickupInfo?: {
+    pickup_by_project: boolean
+    pickup_approved_at: string | null
+    pickup_completed_at: string | null
+    pickup_received_by_name: string | null
+  }
 }
 
 /**
@@ -38,9 +45,16 @@ function LineRow({
   fromDisplay,
   toDisplay,
   unitDisplay,
+  pickupInfo,
 }: LineRowProps) {
   const isEquipo = line.line_type === 'Equipo'
   const status = line.status ?? 'Pendiente'
+
+  // Cambio 3: badges per-línea pickup
+  const showPickupApproved = pickupInfo?.pickup_by_project && status === 'Pickup Aprobado'
+  const showPickupCompleted = pickupInfo?.pickup_completed_at && status === 'Entregada'
+  const formatPanamaDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('es-PA', { timeZone: 'America/Panama' })
 
   // Resolver nombres para mostrar
   const fromName = fromDisplay ?? line.from_text ?? '—'
@@ -102,9 +116,25 @@ function LineRow({
             </span>
           )}
 
-          {/* Badge de estado */}
-          <div className="ml-auto shrink-0">
+          {/* Badge de estado + pickup badges (Cambio 3) */}
+          <div className="ml-auto shrink-0 flex items-center gap-1.5">
             <Badge variant="line" label={status} />
+            {showPickupApproved && pickupInfo && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium"
+                title={pickupInfo.pickup_approved_at ? `Aprobado el ${formatPanamaDate(pickupInfo.pickup_approved_at)}` : 'Aprobado como pickup'}
+              >
+                🤝 PICKUP
+              </span>
+            )}
+            {showPickupCompleted && pickupInfo && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs font-medium"
+                title={`Retirado por ${pickupInfo.pickup_received_by_name ?? '—'} el ${pickupInfo.pickup_completed_at ? formatPanamaDate(pickupInfo.pickup_completed_at) : '—'}`}
+              >
+                🤝 RETIRADO
+              </span>
+            )}
           </div>
 
           {/* Acciones */}
@@ -166,7 +196,25 @@ function LineRow({
               {line.description}
             </span>
           </div>
-          <Badge variant="line" label={status} />
+          <div className="flex items-center gap-1 flex-wrap">
+            <Badge variant="line" label={status} />
+            {showPickupApproved && pickupInfo && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-medium"
+                title={pickupInfo.pickup_approved_at ? `Aprobado el ${formatPanamaDate(pickupInfo.pickup_approved_at)}` : 'Aprobado como pickup'}
+              >
+                🤝
+              </span>
+            )}
+            {showPickupCompleted && pickupInfo && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[10px] font-medium"
+                title={`Retirado por ${pickupInfo.pickup_received_by_name ?? '—'} el ${pickupInfo.pickup_completed_at ? formatPanamaDate(pickupInfo.pickup_completed_at) : '—'}`}
+              >
+                🤝✓
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Segunda linea: ruta */}

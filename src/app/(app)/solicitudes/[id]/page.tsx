@@ -619,6 +619,12 @@ export default function SolicitudDetailPage() {
                   fromDisplay={names.fromDisplay}
                   toDisplay={names.toDisplay}
                   unitDisplay={names.unitDisplay}
+                  pickupInfo={originalLine ? {
+                    pickup_by_project: originalLine.pickup_by_project,
+                    pickup_approved_at: originalLine.pickup_approved_at,
+                    pickup_completed_at: originalLine.pickup_completed_at,
+                    pickup_received_by_name: originalLine.pickup_received_by_name,
+                  } : undefined}
                 />
               )
             })}
