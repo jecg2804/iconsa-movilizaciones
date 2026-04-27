@@ -253,10 +253,10 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
             assignment.quantity_assigned,
             assignment.qty_delivered ?? 0,
           )}
-          className="shrink-0 rounded p-1.5 text-amber-700 hover:bg-amber-50 transition-colors"
+          className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
           title="Convertir a pickup"
         >
-          🤝
+          Convertir a pickup
         </button>
       )}
 

@@ -224,9 +224,9 @@ function BacklogTable({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onApprovePickup(line.id) }}
                   title="Aprobar como retiro por proyecto"
-                  className="shrink-0 rounded p-1 text-amber-600 hover:bg-amber-50 transition-colors"
+                  className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
                 >
-                  🤝
+                  Aprobar pickup
                 </button>
               )}
             </div>
@@ -322,9 +322,9 @@ function BacklogTable({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onApprovePickup(line.id) }}
-                  className="text-xs font-medium text-amber-700 hover:underline self-start"
+                  className="self-start rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
                 >
-                  🤝 Aprobar pickup
+                  Aprobar pickup
                 </button>
               )}
             </div>
