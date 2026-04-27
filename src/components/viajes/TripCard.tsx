@@ -85,7 +85,7 @@ export function TripCard({ trip, onClick }: TripCardProps) {
             <Badge variant="custom" label="Retiro" bg="bg-amber-100" text="text-amber-800" />
           )}
           {trip.att_permit && (
-            <Badge variant="custom" label="ATT" bg="bg-purple-100" text="text-purple-800" />
+            <Badge variant="custom" label="ATTT" bg="bg-purple-100" text="text-purple-800" />
           )}
           {trip.escort && (
             <Badge variant="custom" label="Escolta" bg="bg-orange-100" text="text-orange-800" />

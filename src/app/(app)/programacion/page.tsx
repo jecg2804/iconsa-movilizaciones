@@ -377,7 +377,7 @@ export default function ProgramacionPage() {
         render: (row) => (
           <span className="flex items-center gap-1">
             {row.att_permit && (
-              <span title="Requiere permiso ATT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
+              <span title="Requiere permiso ATTT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
                 <Lock className="h-3 w-3" />
               </span>
             )}
@@ -436,7 +436,7 @@ export default function ProgramacionPage() {
           </span>
           <span className="flex items-center gap-1">
             {row.att_permit && (
-              <span title="Permiso ATT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
+              <span title="Permiso ATTT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
                 <Lock className="h-3 w-3" />
               </span>
             )}

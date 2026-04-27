@@ -302,7 +302,7 @@ function TripForm({
               {attPermit && (
                 <Badge
                   variant="custom"
-                  label="ATT"
+                  label="ATTT"
                   bg="bg-purple-100"
                   text="text-purple-800"
                 />
@@ -446,9 +446,9 @@ function TripForm({
           placeholder="0.00"
         />
 
-        {/* Toggles: ATT Permit + Escolta + Externo — fila completa en mobile, columna par en desktop */}
+        {/* Toggles: ATTT Permit + Escolta + Externo — fila completa en mobile, columna par en desktop */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6 md:col-span-2">
-          {/* Requiere Permiso ATT */}
+          {/* Requiere Permiso ATTT */}
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -458,7 +458,7 @@ function TripForm({
               className="rounded border-gray-300 text-navy focus:ring-navy disabled:cursor-not-allowed"
             />
             <span className="text-sm font-medium text-gray-700">
-              Requiere Permiso ATT
+              Requiere Permiso ATTT
             </span>
           </label>
 
@@ -508,7 +508,7 @@ function TripForm({
           )}
           {attPermit && attachments.length === 0 && !isReadonly && (
             <p className="mt-1 text-xs text-blue-600">
-              ℹ️ Este viaje requiere permiso ATT. Puede adjuntarlo cuando esté disponible.
+              ℹ️ Este viaje requiere permiso ATTT. Puede adjuntarlo cuando esté disponible.
             </p>
           )}
         </div>
