@@ -1,11 +1,24 @@
 ---
 title: Events V2 — Redesign in Progress (v3)
-status: design-closed
+status: shipped
 created: 2026-04-23
-updated: 2026-04-27 (v3.2: cost code BD-1 applied + Q1-Q6 closed)
+updated: 2026-04-27 (v3.3: Cambio 3 Pickup shipped, los 3 Cambios cerrados)
 supersedes: Docs/reference/EVENTS_V2.md (while this doc is active)
-next_step: Brief para Code (Superpowers, secuencial)
+next_step: Merge v2 (jaime/dev → main) con script BD consolidado
 location_in_repo: Docs/reference/events-v2-redesign-in-progress.md
+shipped_cambios:
+  cambio_1_parada:
+    status: shipped
+    shipped_date: 2026-04-26
+    shipped_commits: ba8e5ea..7cde973
+  cambio_2_cost_code:
+    status: shipped
+    shipped_date: 2026-04-27
+    shipped_commits: 94fcf4a..e9c3c2f
+  cambio_3_pickup:
+    status: shipped
+    shipped_date: 2026-04-27
+    shipped_commits: c3ed958..e5355b8
 ---
 
 # Events V2 — Redesign in Progress (v3)

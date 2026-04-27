@@ -1,6 +1,6 @@
 # Backlog — MovimientOS
 
-Última actualización: 2026-04-15 (sprint prod cherry-pick cerrado, staging-track siguiente)
+Última actualización: 2026-04-27 (Cambio 3 Pickup nuevo shippeado — Events V2 v2 completo en jaime/dev; cierra J1, D4, AD-1)
 
 ---
 
@@ -13,28 +13,24 @@ ninguno activo — se abre fresh.
 **Design discussions pre-requisito (no bloquean todo pero cada una
 gatea su item correspondiente):**
 
-- **AD-1 Pickup architecture** — ¿PickupOrder entity separada (como
-  recomienda `Docs/reference/Self-pickup.md`) vs fix rápido en Trip
-  entity? Prerequisito para J1. La semántica actual de forzar pickup
-  dentro de Trip genera edge cases (vehicle_id null, driver_id null,
-  custody transfer coupling).
+- ~~**AD-1 Pickup architecture**~~ — **CERRADO 2026-04-27 por Cambio 3.**
+  Pickup ya no vive a nivel Trip — es bandera per-línea
+  (`sm_request_lines.pickup_by_project`). La pregunta de PickupOrder vs
+  Trip se resolvió eliminando el coupling con Trip por completo. Los
+  edge cases (vehicle_id null, driver_id null, custody transfer) ya no
+  aplican.
 - ~~**J2 requires_code default**~~ — **CERRADO 2026-04-16.** Decisión
   de James + jefe: códigos de confirmación son **siempre obligatorios**.
   El feature `requires_code` per-line se elimina. Implementación pendiente.
-- **J9 cost code architectural** — ¿mover `cost_code_id` /
-  `cost_category_id` / extra de `sm_request_lines` a `sm_requests`?
-  Requiere data analysis primero: contar cuántas solicitudes tienen
-  líneas con cost_codes distintos. Si <5% de las solicitudes tienen
-  split, migración forzada viable. Si >20%, hay que mantener ambos
-  niveles o decidir merge strategy.
+- ~~**J9 cost code architectural**~~ — **CERRADO 2026-04-27 por Cambio 2.**
+  cost_code_id + cost_category_id movidos a `sm_requests`.
 
 **Items de implementación (tras design discussion correspondiente):**
 
-- **J1 Pickup flow bloqueado** — TripForm valida `driver_id` y
-  `vehicle_id` como required incluso cuando `is_self_pickup=true`
-  (el toggle los limpia en UI pero `validate()` en
-  `nuevo/page.tsx:200-213` no los hace opcionales). Fix corto o
-  profundo depende de AD-1.
+- ~~**J1 Pickup flow bloqueado**~~ — **CERRADO 2026-04-27 por Cambio 3.**
+  La validación obsoleta fue eliminada junto con todo el modelo viejo
+  de pickup-via-Trip. `validate()` en nuevo/page.tsx ya no necesita
+  branching — driver_id y vehicle_id son siempre requeridos.
 - **J2 Eliminar `requires_code` del código** — códigos son siempre
   obligatorios (decisión 2026-04-16). Eliminar: checkbox en LineEditor
   "Opciones avanzadas", bulk checkbox en solicitudes/nueva, lógica
@@ -44,7 +40,6 @@ gatea su item correspondiente):**
   pero ignorarse (o DROP posterior).
 - **J5 Overarching event design** — seguir refinando el rediseño de
   EVENTS V2 con features que no existen en prod.
-- **J9 Cost code refactor** — solo después del data analysis.
 - **G1 Reversion guard** — `handleRevert` en `mis-viajes/[id]/page.tsx`
   NO valida que `registered_by === current_user.id`. Gate actual solo
   por rol. Un logistica puede revertir eventos de OTRO logistica.
@@ -71,6 +66,23 @@ sprint v1/v2 — re-verificar contra `CHANGELOG.md` 2026-04-15 antes de
 asignar a implementación. En particular G3 (notifyEntregaConObservaciones)
 y G8 (pickup badges) fueron marcados como resueltos en el triaje
 original, cross-checkear G6 (dashboard links) y otros.
+
+**Pickup post-Cambio 3 (follow-ups opcionales):**
+
+- `convertLineToPickup` → RPC SQL atómica: actualmente DELETE
+  trip_line_assignments + UPDATE sm_request_lines son 2 queries
+  separadas. Riesgo bajo en v1 (1 Charris operando) pero polish post-
+  merge: convertir a `convert_line_to_pickup(line_id, assignment_id,
+  charris_id)` con SECURITY DEFINER y transacción server-side.
+- Tests E2E del flow nuevo (3 superficies). Bloqueado por AD-5
+  (helpers `createSolicitud`/`createTrip` rotos). Hacer cuando AD-5
+  se cierre.
+- Filtrar dropdown de receptor en PickupDeliveryModal por proyecto
+  destino — actualmente trae todas las personas activas. Polish menor.
+- A6 confirmar con Charris: ¿Charris (logistica) registra entrega o
+  almacenista? v1 asume Charris.
+- A5 confirmar con Charris: ¿Pickup parcial necesario? v1 NO soporta
+  — proyecto retira todo o nada.
 
 ---
 
@@ -146,7 +158,7 @@ original, cross-checkear G6 (dashboard links) y otros.
 
 | # | Item | Impacto | Status |
 |---|------|---------|--------|
-| AD-1 | Self-pickup forzado en Trip entity — debería ser PickupOrder separado | Semántica rota (Trip sin driver/vehicle) | ⏳ Deferred |
+| AD-1 | Self-pickup forzado en Trip entity — debería ser PickupOrder separado | Semántica rota (Trip sin driver/vehicle) | ✅ Cerrado 2026-04-27 (Cambio 3 — pickup ya no vive a nivel Trip) |
 | AD-2 | custody_transfers table — tabla creada en staging, trigger no activo | Trigger acoplado a trip_events | ⏳ Tabla lista, falta conectar |
 | AD-3 | Fulfillment a nivel Trip, no línea — bloquea hybrid fulfillment | 2 solicitudes para fleet+pickup | ⏳ Depende de AD-1 |
 | AD-4 | PM ve código en pickup | Rompe verificación | ✅ Fixed |
@@ -165,6 +177,7 @@ original, cross-checkear G6 (dashboard links) y otros.
 | F1.1 | Parada Level 1 | ✅ Completado (446b0c7) |
 | F1.2 | Fix qty_dispatched bug en backlog | ✅ Completado |
 | F1.3 | Retorno no-op + guard + dashboard "Entregas pendientes en viajes cerrados" + idempotencia handlers | ✅ Completado (2026-04-13) |
+| F1.3b | Pickup nuevo (modelo bandera-en-línea) — 3 superficies UX (aprobar backlog, convertir línea, registrar entrega) + cleanup completo del modelo viejo | ✅ Completado 2026-04-27 (Cambio 3) |
 | F1.4 | Retorno reconciliación per-line (diferido — esperar métricas reales de uso antes de implementar) | ⏳ Deferred |
 | F1.5 | GPS Integration (Skydata API) | 🟡 Plan en desarrollo |
 | F1.6 | Observaciones de entrega visibles — cerrar loop de `delivery_observations`. Conductor reporta damaged/wrong_qty/wrong_item/rejected + notas pero nadie lo ve después. Scope: mostrar en EventTimeline, sección en solicitud detail, dashboard widget, resolver con notas. Requiere 3 columnas BD nullables (`resolved_at`, `resolved_by`, `resolution_notes`). | ⏳ Nice-to-have, baja prioridad |

@@ -5,7 +5,7 @@
 > autocargo al inicio de cada sesión para recuperar el hilo sin leer
 > todo el plan file.
 
-**Última actualización:** 2026-04-20 (GPS MVP + constraint fix + ActiveTripPanel shippeados)
+**Última actualización:** 2026-04-27 (Cambio 3 Pickup nuevo shippeado — Events V2 v2 completo en jaime/dev)
 
 ## Root task
 
@@ -30,14 +30,20 @@ Perfeccionar movilizaciones
      │   18 event_types superset)
      ├─ [✅] ActiveTripPanel (5 commits jaime/dev, consolidación operativa
      │   en /solicitudes/[id] — mapa único arriba, card histórica sin mapa)
-     └─ [⏳] Siguiente: staging-track Events V2 polish
-         ├─ [✅] J2 Códigos entrega — DECIDIDO: siempre obligatorios
-         │   (eliminar requires_code del código, implementación pendiente)
-         ├─ J1 Pickup bloqueado + design discussion AD-1
+     ├─ [✅] Events V2 v2 — 3 Cambios atómicos shippeados en jaime/dev
+     │   ├─ [✅] Cambio 1 Parada redesign (2026-04-26)
+     │   ├─ [✅] Cambio 2 Cost code refactor (2026-04-27, J9 cerrado)
+     │   └─ [✅] Cambio 3 Pickup nuevo (2026-04-27, J1+D4+AD-1 cerrados)
+     └─ [⏳] Siguiente: merge v2 staging → prod + post-merge polish
+         ├─ Pre-merge: script BD consolidado (cambio1 stop_type DROP +
+         │   cambio2 BD-1+BD-2 + cambio3_pickup_redesign + cambio3_pickup
+         │   _add_attachments_to_lines + GPS gps_vehicle_id +
+         │   notification_log valid_event_type superset)
          ├─ J5 Overarching event design (en discusión activa)
-         ├─ J9 Cost code a nivel solicitud (refactor estructural)
          ├─ G-items sobrevivientes (G4 notifyLineaRechazada,
          │   G5 timeline per-line, G11 DeliveryModal partial warning)
+         ├─ Pickup post-merge: convertLineToPickup → RPC SQL atómica
+         │   (deuda técnica conocida), tests E2E del flow nuevo (AD-5)
          ├─ GPS Skydata integration (en discusión activa)
          └─ Fulfillment methods: fleet/pickup/third_party (en discusión)
 ```
