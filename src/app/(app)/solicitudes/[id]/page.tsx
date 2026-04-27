@@ -47,8 +47,6 @@ function lineToInput(line: LineWithRelations): LineInput {
     quantity: line.quantity,
     unit_id: line.unit_id,
     unit_text: line.unit_text,
-    cost_code_id: line.cost_code_id,
-    cost_category_id: line.cost_category_id,
     category: line.category,
     material_category: line.material_category,
     po_reference: line.po_reference,
@@ -111,11 +109,11 @@ export default function SolicitudDetailPage() {
   // Viajes asociados a esta solicitud
   const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
 
-  // Datos auxiliares (people, units, costCodes) — se cargan inline
+  // Datos auxiliares (people, units) — se cargan inline.
+  // costCodes ahora se cargan dentro del SolicitudForm via useCostCodeCascade (Cambio 2).
   const [people, setPeople] = useState<SelectOption[]>([])
   const [approvers, setApprovers] = useState<SelectOption[]>([])
   const [units, setUnits] = useState<SelectOption[]>([])
-  const [costCodes, setCostCodes] = useState<SelectOption[]>([])
 
   // --- Cargar solicitud ---
   useEffect(() => {
@@ -263,29 +261,7 @@ export default function SolicitudDetailPage() {
     fetchUnits()
   }, [supabase])
 
-  // --- Cargar cost codes filtrados por proyecto ---
-  useEffect(() => {
-    async function fetchCostCodes() {
-      if (!header.project_id) {
-        setCostCodes([])
-        return
-      }
-      const { data } = await supabase
-        .from('cost_codes')
-        .select('id, phase_code, phase_description, full_code')
-        .eq('project_id', header.project_id)
-        .order('phase_code')
-      setCostCodes(
-        (data ?? []).map((cc) => ({
-          value: cc.id,
-          label: cc.full_code
-            ? `${cc.full_code} — ${cc.phase_description ?? ''}`
-            : `${cc.phase_code} — ${cc.phase_description ?? ''}`,
-        })),
-      )
-    }
-    fetchCostCodes()
-  }, [supabase, header.project_id])
+  // (Carga de cost_codes movida al hook useCostCodeCascade dentro de SolicitudForm — Cambio 2)
 
   // --- Modo del formulario ---
   const mode = useMemo<FormMode>(() => {
@@ -420,11 +396,14 @@ export default function SolicitudDetailPage() {
     if (!solicitud) return
     setSendError(null)
 
-    // Validaciones
+    // Validaciones (Borrador → Enviada). Cambio 2: cost_code/category requeridos al enviar.
+    // Edits a solicitudes ya Enviadas/Completadas/Canceladas NO pasan por aquí, preserva históricas con NULL.
     if (!header.project_id) { setSendError('Seleccione un proyecto'); return }
     if (!header.requester_id) { setSendError('Seleccione el solicitante'); return }
     if (!header.date_required) { setSendError('Ingrese la fecha requerida'); return }
     if (lines.length === 0) { setSendError('Agregue al menos una linea a la solicitud'); return }
+    if (!header.cost_code_id) { setSendError('Seleccione el código de costo (Fase)'); return }
+    if (!header.cost_category_id) { setSendError('Seleccione la categoría de costo'); return }
 
     // Primero guardar los cambios pendientes
     const saveSuccess = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
@@ -477,11 +456,6 @@ export default function SolicitudDetailPage() {
         fromDisplay: originalLine?.from_location?.name ?? line.from_text ?? '',
         toDisplay: originalLine?.to_location?.name ?? line.to_text ?? '',
         unitDisplay: originalLine?.unit?.code ?? line.unit_text ?? '',
-        costCodeDisplay: (() => {
-          const phase = originalLine?.cost_code?.full_code ?? originalLine?.cost_code?.phase_code ?? ''
-          const cat = originalLine?.cost_category?.code ?? ''
-          return cat ? `${phase}-${cat}` : phase
-        })(),
       }
     },
     [solicitud],
@@ -583,6 +557,8 @@ export default function SolicitudDetailPage() {
             dateCompleted: solicitud.date_completed ?? undefined,
             dateCancelled: solicitud.date_cancelled ?? undefined,
             fulfillmentType: solicitud.fulfillment_type ?? 'fleet',
+            costCodeId: solicitud.cost_code_id ?? null,
+            costCategoryId: solicitud.cost_category_id ?? null,
           }}
           projects={projectOptions}
           people={people}
@@ -647,7 +623,6 @@ export default function SolicitudDetailPage() {
                   fromDisplay={names.fromDisplay}
                   toDisplay={names.toDisplay}
                   unitDisplay={names.unitDisplay}
-                  costCodeDisplay={names.costCodeDisplay}
                 />
               )
             })}
@@ -661,7 +636,6 @@ export default function SolicitudDetailPage() {
               equipment={equipmentOptions}
               locations={locationOptions}
               units={units}
-              costCodes={costCodes}
               projectId={header.project_id}
               isEditing={false}
               onSave={handleAddLine}
@@ -678,7 +652,6 @@ export default function SolicitudDetailPage() {
               equipment={equipmentOptions}
               locations={locationOptions}
               units={units}
-              costCodes={costCodes}
               projectId={header.project_id}
               initialData={lines[editingLineIndex]}
               isEditing

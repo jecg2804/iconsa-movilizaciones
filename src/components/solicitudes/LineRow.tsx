@@ -19,7 +19,6 @@ interface LineRowProps {
   fromDisplay?: string
   toDisplay?: string
   unitDisplay?: string
-  costCodeDisplay?: string
 }
 
 /**
@@ -39,7 +38,6 @@ function LineRow({
   fromDisplay,
   toDisplay,
   unitDisplay,
-  costCodeDisplay,
 }: LineRowProps) {
   const isEquipo = line.line_type === 'Equipo'
   const status = line.status ?? 'Pendiente'
@@ -48,7 +46,6 @@ function LineRow({
   const fromName = fromDisplay ?? line.from_text ?? '—'
   const toName = toDisplay ?? line.to_text ?? '—'
   const unitName = unitDisplay ?? line.unit_text ?? '—'
-  const costCode = costCodeDisplay ?? '—'
 
   return (
     <>
@@ -91,10 +88,7 @@ function LineRow({
             )}
           </span>
 
-          {/* Codigo de costo */}
-          <span className="shrink-0 font-mono text-xs text-iconsa-gray" title={costCode}>
-            {costCode}
-          </span>
+          {/* Cost code eliminado de líneas — ahora vive en header (Cambio 2) */}
 
           {/* Campos opcionales */}
           {line.po_reference && (
@@ -208,9 +202,6 @@ function LineRow({
                 </span>
               )}
             </span>
-            {costCode !== '—' && (
-              <span className="font-mono text-iconsa-gray">{costCode}</span>
-            )}
           </div>
 
           {(editable || canDelete || onDuplicate) && (

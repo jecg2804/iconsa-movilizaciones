@@ -32,13 +32,6 @@ interface UnitRow {
   description: string | null
 }
 
-interface CostCodeRow {
-  id: string
-  phase_code: string
-  phase_description: string | null
-  full_code: string | null
-}
-
 // --- Helpers ---
 
 /** Resuelve el label de una opcion por su ID */
@@ -65,7 +58,6 @@ export default function NuevaSolicitudPage() {
   const [people, setPeople] = useState<PersonRow[]>([])
   const [approvers, setApprovers] = useState<PersonRow[]>([])
   const [units, setUnits] = useState<UnitRow[]>([])
-  const [costCodes, setCostCodes] = useState<CostCodeRow[]>([])
   const [peopleLoading, setPeopleLoading] = useState(true)
   const [unitsLoading, setUnitsLoading] = useState(true)
 
@@ -116,22 +108,7 @@ export default function NuevaSolicitudPage() {
     fetchUnits()
   }, [supabase])
 
-  // --- Fetch codigos de costo cuando cambia el proyecto ---
-  useEffect(() => {
-    async function fetchCostCodes() {
-      if (!header.project_id) {
-        setCostCodes([])
-        return
-      }
-      const { data } = await supabase
-        .from('cost_codes')
-        .select('id, phase_code, phase_description, full_code')
-        .eq('project_id', header.project_id)
-        .order('full_code')
-      setCostCodes(data ?? [])
-    }
-    fetchCostCodes()
-  }, [supabase, header.project_id])
+  // (Carga de cost_codes movida al hook useCostCodeCascade dentro de SolicitudForm — Cambio 2)
 
   // --- Inicializar requester_id con la persona logueada ---
   useEffect(() => {
@@ -183,13 +160,7 @@ export default function NuevaSolicitudPage() {
     }))
   }, [units])
 
-  const costCodeOptions: SelectOption[] = useMemo(() => {
-    return costCodes.map((cc) => ({
-      value: cc.id,
-      label: cc.full_code ?? cc.phase_code,
-      sublabel: cc.phase_description ?? undefined,
-    }))
-  }, [costCodes])
+  // (costCodeOptions eliminado — el hook useCostCodeCascade en SolicitudForm los carga directamente — Cambio 2)
 
   // --- Handlers de lineas ---
 
@@ -283,9 +254,15 @@ export default function NuevaSolicitudPage() {
     if (lines.length === 0) {
       errors.lines = 'Agregue al menos una linea a la solicitud'
     }
+    if (!header.cost_code_id) {
+      errors.cost_code = 'Seleccione el código de costo (Fase)'
+    }
+    if (!header.cost_category_id) {
+      errors.cost_category = 'Seleccione la categoría de costo'
+    }
     setHeaderErrors(errors)
     return Object.keys(errors).length === 0
-  }, [header.project_id, header.requester_id, header.date_required, lines.length])
+  }, [header.project_id, header.requester_id, header.date_required, header.cost_code_id, header.cost_category_id, lines.length])
 
   // --- Guardar borrador ---
   const handleSaveDraft = guard(async () => {
@@ -457,7 +434,6 @@ export default function NuevaSolicitudPage() {
                     ? getDisplayName(unitOptions, line.unit_id)
                     : (line.unit_text ?? undefined)
                 }
-                costCodeDisplay={getDisplayName(costCodeOptions, line.cost_code_id)}
               />
             ))}
           </div>
@@ -470,7 +446,6 @@ export default function NuevaSolicitudPage() {
               equipment={equipmentOptions}
               locations={locationOptions}
               units={unitOptions}
-              costCodes={costCodeOptions}
               projectId={header.project_id}
               initialData={editingLineIndex !== null ? lines[editingLineIndex] : undefined}
               isEditing={editingLineIndex !== null}

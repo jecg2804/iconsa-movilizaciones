@@ -29,10 +29,14 @@ export interface SolicitudWithRelations {
   notes: string | null
   attachments: unknown
   fulfillment_type: string | null
+  cost_code_id: string | null
+  cost_category_id: string | null
   created_at: string | null
   updated_at: string | null
   project: { id: string; code: string; name: string } | null
   requester: { id: string; name: string } | null
+  cost_code: { id: string; phase_code: string; phase_description: string | null; full_code: string | null } | null
+  cost_category: { id: string; code: string; description: string | null } | null
   lines: LineWithRelations[]
 }
 
@@ -51,8 +55,6 @@ export interface LineWithRelations {
   quantity: number
   unit_id: string | null
   unit_text: string | null
-  cost_code_id: string | null
-  cost_category_id: string | null
   category: string | null
   material_category: string | null
   po_reference: string | null
@@ -68,8 +70,6 @@ export interface LineWithRelations {
   from_location: { id: string; name: string } | null
   to_location: { id: string; name: string } | null
   unit: { id: string; code: string; description: string | null } | null
-  cost_code: { id: string; phase_code: string; phase_description: string | null; full_code: string | null } | null
-  cost_category: { id: string; code: string; description: string | null } | null
 }
 
 export interface SolicitudInput {
@@ -80,6 +80,8 @@ export interface SolicitudInput {
   notes?: string | null
   attachments?: unknown[] | null
   fulfillment_type?: string | null
+  cost_code_id?: string | null
+  cost_category_id?: string | null
 }
 
 export interface LineInput {
@@ -95,8 +97,6 @@ export interface LineInput {
   quantity: number
   unit_id: string | null
   unit_text: string | null
-  cost_code_id: string | null
-  cost_category_id: string | null
   category: string | null
   material_category: string | null
   po_reference: string | null
@@ -222,8 +222,6 @@ function lineInputToRow(
     quantity: line.quantity,
     unit_id: line.unit_id,
     unit_text: line.unit_text,
-    cost_code_id: line.cost_code_id,
-    cost_category_id: line.cost_category_id,
     category: line.category,
     material_category: line.material_category,
     po_reference: line.po_reference,
@@ -273,6 +271,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           *,
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
+          cost_code:cost_codes!sm_requests_cost_code_id_fkey(id, phase_code, phase_description, full_code),
+          cost_category:cost_categories!sm_requests_cost_category_id_fkey(id, code, description),
           lines:sm_request_lines(id, status, line_type, description, quantity, notes, from_text, to_text, unit_text, from_location:locations!sm_request_lines_from_location_id_fkey(name), to_location:locations!sm_request_lines_to_location_id_fkey(name), unit:units(code))
         `, { count: 'exact' })
         .order(sortCol, { ascending: sortAsc })
@@ -320,6 +320,10 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         // Supabase devuelve el join como objeto o array segun cardinalidad
         const project = Array.isArray(row.project) ? row.project[0] : row.project
         const requester = Array.isArray(row.requester) ? row.requester[0] : row.requester
+        const rawCostCode = (row as Record<string, unknown>).cost_code as SolicitudWithRelations['cost_code'] | SolicitudWithRelations['cost_code'][] | null
+        const rawCostCategory = (row as Record<string, unknown>).cost_category as SolicitudWithRelations['cost_category'] | SolicitudWithRelations['cost_category'][] | null
+        const costCode = Array.isArray(rawCostCode) ? rawCostCode[0] ?? null : rawCostCode
+        const costCategory = Array.isArray(rawCostCategory) ? rawCostCategory[0] ?? null : rawCostCategory
         const lines = Array.isArray(row.lines) ? row.lines : []
 
         return {
@@ -338,10 +342,14 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           notes: row.notes,
           attachments: row.attachments,
           fulfillment_type: row.fulfillment_type ?? 'fleet',
+          cost_code_id: ((row as Record<string, unknown>).cost_code_id as string | null) ?? null,
+          cost_category_id: ((row as Record<string, unknown>).cost_category_id as string | null) ?? null,
           created_at: row.created_at,
           updated_at: row.updated_at,
           project: project as SolicitudWithRelations['project'],
           requester: requester as SolicitudWithRelations['requester'],
+          cost_code: costCode,
+          cost_category: costCategory,
           // Para la lista, las lineas solo traen id y status (sin relaciones completas)
           lines: lines as unknown as LineWithRelations[],
         }
@@ -371,14 +379,14 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           *,
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
+          cost_code:cost_codes!sm_requests_cost_code_id_fkey(id, phase_code, phase_description, full_code),
+          cost_category:cost_categories!sm_requests_cost_category_id_fkey(id, code, description),
           lines:sm_request_lines(
             *,
             equipment:equipment!sm_request_lines_equipment_id_fkey(id, spectrum_code, description),
             from_location:locations!sm_request_lines_from_location_id_fkey(id, name),
             to_location:locations!sm_request_lines_to_location_id_fkey(id, name),
-            unit:units!sm_request_lines_unit_id_fkey(id, code, description),
-            cost_code:cost_codes!sm_request_lines_cost_code_id_fkey(id, phase_code, phase_description, full_code),
-            cost_category:cost_categories!sm_request_lines_cost_category_id_fkey(id, code, description)
+            unit:units!sm_request_lines_unit_id_fkey(id, code, description)
           )
         `)
         .eq('id', id)
@@ -397,15 +405,13 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         (a, b) => (a as { line_number: number }).line_number - (b as { line_number: number }).line_number,
       )
 
-      // Mapear lineas con sus relaciones
+      // Mapear lineas con sus relaciones (cost_code/category ahora son del header — Cambio 2)
       const lines: LineWithRelations[] = sortedLines.map((rawLine) => {
         const line = rawLine as Record<string, unknown>
         const eq = line.equipment as LineWithRelations['equipment']
         const fromLoc = line.from_location as LineWithRelations['from_location']
         const toLoc = line.to_location as LineWithRelations['to_location']
         const unit = line.unit as LineWithRelations['unit']
-        const costCode = line.cost_code as LineWithRelations['cost_code']
-        const costCategory = line.cost_category as LineWithRelations['cost_category']
 
         return {
           id: line.id as string,
@@ -422,13 +428,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           quantity: line.quantity as number,
           unit_id: (line.unit_id as string | null) ?? null,
           unit_text: (line.unit_text as string | null) ?? null,
-          cost_code_id: (line.cost_code_id as string | null) ?? null,
-          cost_category_id: (line.cost_category_id as string | null) ?? null,
           category: (line.category as string | null) ?? null,
           material_category: (line.material_category as string | null) ?? null,
           po_reference: (line.po_reference as string | null) ?? null,
           notes: (line.notes as string | null) ?? null,
-                designated_receiver_id: (line.designated_receiver_id as string | null) ?? null,
+          designated_receiver_id: (line.designated_receiver_id as string | null) ?? null,
           designated_receiver_name: (line.designated_receiver_name as string | null) ?? null,
           status: line.status as string,
           qty_scheduled: (line.qty_scheduled as number | null) ?? null,
@@ -439,10 +443,13 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           from_location: fromLoc ? (Array.isArray(fromLoc) ? fromLoc[0] : fromLoc) : null,
           to_location: toLoc ? (Array.isArray(toLoc) ? toLoc[0] : toLoc) : null,
           unit: unit ? (Array.isArray(unit) ? unit[0] : unit) : null,
-          cost_code: costCode ? (Array.isArray(costCode) ? costCode[0] : costCode) : null,
-          cost_category: costCategory ? (Array.isArray(costCategory) ? costCategory[0] : costCategory) : null,
         }
       })
+
+      const rawCostCode = (data as Record<string, unknown>).cost_code as SolicitudWithRelations['cost_code'] | SolicitudWithRelations['cost_code'][] | null
+      const rawCostCategory = (data as Record<string, unknown>).cost_category as SolicitudWithRelations['cost_category'] | SolicitudWithRelations['cost_category'][] | null
+      const costCode = Array.isArray(rawCostCode) ? rawCostCode[0] ?? null : rawCostCode
+      const costCategory = Array.isArray(rawCostCategory) ? rawCostCategory[0] ?? null : rawCostCategory
 
       return {
         id: data.id,
@@ -460,10 +467,14 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         notes: data.notes,
         attachments: data.attachments,
         fulfillment_type: data.fulfillment_type ?? 'fleet',
+        cost_code_id: ((data as Record<string, unknown>).cost_code_id as string | null) ?? null,
+        cost_category_id: ((data as Record<string, unknown>).cost_category_id as string | null) ?? null,
         created_at: data.created_at,
         updated_at: data.updated_at,
         project: project as SolicitudWithRelations['project'],
         requester: requester as SolicitudWithRelations['requester'],
+        cost_code: costCode,
+        cost_category: costCategory,
         lines,
       }
     },
@@ -493,6 +504,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           notes: header.notes ?? null,
           attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
           fulfillment_type: header.fulfillment_type ?? 'fleet',
+          cost_code_id: header.cost_code_id ?? null,
+          cost_category_id: header.cost_category_id ?? null,
           created_by: personId ?? null,
         }
 
@@ -605,6 +618,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.notes !== undefined) headerUpdate.notes = header.notes
         if (header.attachments !== undefined) headerUpdate.attachments = header.attachments
         if (header.fulfillment_type !== undefined) headerUpdate.fulfillment_type = header.fulfillment_type
+        if (header.cost_code_id !== undefined) headerUpdate.cost_code_id = header.cost_code_id
+        if (header.cost_category_id !== undefined) headerUpdate.cost_category_id = header.cost_category_id
         if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
@@ -665,8 +680,6 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 quantity: line.quantity,
                 unit_id: line.unit_id,
                 unit_text: line.unit_text,
-                cost_code_id: line.cost_code_id,
-                cost_category_id: line.cost_category_id,
                 category: line.category,
                 material_category: line.material_category,
                 po_reference: line.po_reference,
