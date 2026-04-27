@@ -72,6 +72,15 @@ export interface LineWithRelations {
   pickup_completed_at: string | null
   pickup_received_by_id: string | null
   pickup_received_by_name: string | null
+  // Cambio 4 — external columns
+  external_by_provider: boolean
+  external_approved_at: string | null
+  external_approved_by: string | null
+  external_completed_at: string | null
+  external_provider_name: string | null
+  external_invoice_amount: number | null
+  external_received_by_id: string | null
+  external_received_by_name: string | null
   equipment: { id: string; spectrum_code: string | null; description: string } | null
   from_location: { id: string; name: string } | null
   to_location: { id: string; name: string } | null
@@ -449,6 +458,14 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           pickup_completed_at: (line.pickup_completed_at as string | null) ?? null,
           pickup_received_by_id: (line.pickup_received_by_id as string | null) ?? null,
           pickup_received_by_name: (line.pickup_received_by_name as string | null) ?? null,
+          external_by_provider: (line.external_by_provider as boolean) ?? false,
+          external_approved_at: (line.external_approved_at as string | null) ?? null,
+          external_approved_by: (line.external_approved_by as string | null) ?? null,
+          external_completed_at: (line.external_completed_at as string | null) ?? null,
+          external_provider_name: (line.external_provider_name as string | null) ?? null,
+          external_invoice_amount: (line.external_invoice_amount as number | null) ?? null,
+          external_received_by_id: (line.external_received_by_id as string | null) ?? null,
+          external_received_by_name: (line.external_received_by_name as string | null) ?? null,
           equipment: eq ? (Array.isArray(eq) ? eq[0] : eq) : null,
           from_location: fromLoc ? (Array.isArray(fromLoc) ? fromLoc[0] : fromLoc) : null,
           to_location: toLoc ? (Array.isArray(toLoc) ? toLoc[0] : toLoc) : null,
@@ -775,11 +792,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
             .eq('request_line_id', line.id)
         }
 
-        // 3. Actualizar líneas Pendiente, Programada y Pickup Aprobado a Cancelada
-        // (Cambio 3 — I1/E8: sin Pickup Aprobado, líneas pickup-aprobadas
-        // quedaban huérfanas en una solicitud Cancelada)
+        // 3. Actualizar líneas Pendiente, Programada, Pickup Aprobado y Externo Aprobado a Cancelada
+        // (Cambio 3 fix I1/E8 + Cambio 4 paralelo: sin estos status, líneas
+        // pickup-aprobadas o externo-aprobadas quedaban huérfanas en solicitud Cancelada)
         const lineIdsToCancel = (lines ?? [])
-          .filter((l) => l.status === 'Pendiente' || l.status === 'Programada' || l.status === 'Pickup Aprobado')
+          .filter((l) => l.status === 'Pendiente' || l.status === 'Programada' || l.status === 'Pickup Aprobado' || l.status === 'Externo Aprobado')
           .map((l) => l.id)
 
         if (lineIdsToCancel.length > 0) {

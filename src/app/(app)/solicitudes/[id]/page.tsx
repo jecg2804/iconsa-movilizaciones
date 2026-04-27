@@ -625,6 +625,15 @@ export default function SolicitudDetailPage() {
                     pickup_completed_at: originalLine.pickup_completed_at,
                     pickup_received_by_name: originalLine.pickup_received_by_name,
                   } : undefined}
+                  externalInfo={originalLine ? {
+                    external_by_provider: originalLine.external_by_provider,
+                    external_approved_at: originalLine.external_approved_at,
+                    external_completed_at: originalLine.external_completed_at,
+                    external_provider_name: originalLine.external_provider_name,
+                    external_invoice_amount: originalLine.external_invoice_amount,
+                    external_received_by_id: originalLine.external_received_by_id,
+                    external_received_by_name: originalLine.external_received_by_name,
+                  } : undefined}
                 />
               )
             })}
