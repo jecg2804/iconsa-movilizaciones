@@ -2005,8 +2005,6 @@ export type Database = {
       sm_request_lines: {
         Row: {
           category: string | null
-          cost_category_id: string | null
-          cost_code_id: string | null
           created_at: string | null
           delivered_at: string | null
           description: string
@@ -2037,8 +2035,6 @@ export type Database = {
         }
         Insert: {
           category?: string | null
-          cost_category_id?: string | null
-          cost_code_id?: string | null
           created_at?: string | null
           delivered_at?: string | null
           description: string
@@ -2069,8 +2065,6 @@ export type Database = {
         }
         Update: {
           category?: string | null
-          cost_category_id?: string | null
-          cost_code_id?: string | null
           created_at?: string | null
           delivered_at?: string | null
           description?: string
@@ -2100,20 +2094,6 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "sm_request_lines_cost_category_id_fkey"
-            columns: ["cost_category_id"]
-            isOneToOne: false
-            referencedRelation: "cost_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sm_request_lines_cost_code_id_fkey"
-            columns: ["cost_code_id"]
-            isOneToOne: false
-            referencedRelation: "cost_codes"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "sm_request_lines_designated_receiver_id_fkey"
             columns: ["designated_receiver_id"]
