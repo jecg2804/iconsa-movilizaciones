@@ -77,6 +77,17 @@ export async function createSolicitud(
       quantity?: number
       unit?: RegExp
     }>
+    /**
+     * Cost code del header (Cambio 2). La validación bloquea
+     * Borrador→Enviada sin cost_code/category. Si se omite, el
+     * helper console.warn y los envíos posteriores fallarán
+     * salvo que el test lo seteé manualmente.
+     */
+    costCode?: {
+      extra?: RegExp
+      fase: RegExp
+      categoria: RegExp
+    }
     send?: boolean // default true — send the solicitud (Borrador → Enviada)
   },
 ): Promise<{ dbId: string; displayId: string }> {
@@ -89,6 +100,29 @@ export async function createSolicitud(
 
   // Set date
   await page.getByRole('textbox', { name: 'Fecha Requerida' }).fill(opts.date ?? '2026-04-15')
+
+  // Cost code header (Cambio 2 — required para envío)
+  if (opts.costCode) {
+    // Esperar render de los Selectors del header (depende del proyecto)
+    await page.waitForTimeout(800)
+
+    // Extra (solo si el proyecto tiene extras y la opt lo provee)
+    if (opts.costCode.extra) {
+      await pick(page, /Extra \/ Sección/, opts.costCode.extra)
+      await page.waitForTimeout(400)
+    }
+
+    // Fase
+    await pick(page, /Fase \/ Código de Costo/, opts.costCode.fase)
+    await page.waitForTimeout(400)
+
+    // Categoría
+    await pick(page, /Categoría de Costo/, opts.costCode.categoria)
+    await page.waitForTimeout(300)
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn('[createSolicitud] No costCode provisto. El envío Borrador→Enviada fallará por validación cost_code requerido.')
+  }
 
   // Add each line
   for (const line of opts.lines) {
