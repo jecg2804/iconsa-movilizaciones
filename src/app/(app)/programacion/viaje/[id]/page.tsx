@@ -448,7 +448,6 @@ export default function ViajeDetailPage() {
         quantity: l.quantity,
         unit_id: l.unit?.id ?? null,
         unit_text: l.unit_text ?? null,
-        cost_code_id: null,
         category: null,
         status: adjustedQtyScheduled > 0 ? 'Programada' : 'Pendiente',
         notes: l.notes ?? null,

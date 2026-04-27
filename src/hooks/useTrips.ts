@@ -28,7 +28,6 @@ export interface BacklogLine {
   quantity: number
   unit_id: string | null
   unit_text: string | null
-  cost_code_id: string | null
   category: string | null
   status: string
   notes: string | null
@@ -452,7 +451,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           quantity,
           unit_id,
           unit_text,
-          cost_code_id,
           category,
           notes,
           status,
@@ -521,7 +519,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           quantity: row.quantity as number,
           unit_id: (row.unit_id as string | null) ?? null,
           unit_text: (row.unit_text as string | null) ?? null,
-          cost_code_id: (row.cost_code_id as string | null) ?? null,
           category: (row.category as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
           status: row.status as string,
