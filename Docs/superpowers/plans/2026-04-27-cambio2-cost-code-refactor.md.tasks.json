@@ -1,0 +1,61 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-27-cambio2-cost-code-refactor.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Master spec v3.2 + CHANGELOG entry [bd]",
+      "status": "pending",
+      "description": "**Goal:** Documentar BD-1 ya aplicada + decisiones Q1-Q6 + V1 verificado en master spec, y entry CHANGELOG.\n\n**Files:**\n- Modify: Docs/reference/events-v2-redesign-in-progress-v3.md (frontmatter + Sección 2 Decisión 25 + Sección 3 Cambio 2 BD block)\n- Modify: Docs/CHANGELOG.md (entry [bd] bajo ## 2026-04-27)\n\n**Verify:** git diff --stat HEAD muestra 2 archivos modificados.\n\n```json:metadata\n{\"files\": [\"Docs/reference/events-v2-redesign-in-progress-v3.md\", \"Docs/CHANGELOG.md\"], \"verifyCommand\": \"git diff --stat HEAD\", \"acceptanceCriteria\": [\"Frontmatter v3.2\", \"Decisión 25 Q1-Q6+V1\", \"Sección 3 BD block reescrito (BD-1 done, BD-2 pending)\", \"CHANGELOG [bd] entry\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Regenerar database.ts post-BD-1",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** Sincronizar tipos generados con staging post-BD-1. Verificar V2. Restaurar Row<T> helper.\n\n**Files:**\n- Modify: src/lib/types/database.ts\n\n**Verify:** sm_requests.Row con cost_code_id/cost_category_id; sm_request_lines.Row los mantiene (pre-BD-2); npm run build pasa.\n\n```json:metadata\n{\"files\": [\"src/lib/types/database.ts\"], \"verifyCommand\": \"grep -E 'cost_code_id|cost_category_id' src/lib/types/database.ts && npm run build\", \"acceptanceCriteria\": [\"Regen contra staging\", \"sm_requests.Row con cost_code/category\", \"sm_request_lines.Row mantiene columnas (pre-BD-2)\", \"Row<T> restaurado\", \"build pasa\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Hook useCostCodeCascade (nuevo archivo)",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Crear el hook custom con la cascada Proyecto → [Extra] → Fase → Categoría. Standalone, no usado todavía.\n\n**Files:**\n- Create: src/hooks/useCostCodeCascade.ts\n\n**Verify:** archivo existe, npm run build pasa, hook no usado en otros componentes.\n\n```json:metadata\n{\"files\": [\"src/hooks/useCostCodeCascade.ts\"], \"verifyCommand\": \"ls src/hooks/useCostCodeCascade.ts && npm run build\", \"acceptanceCriteria\": [\"Hook acepta projectId+initialCostCodeId+initialCostCategoryId\", \"Retorna interface estable con extras+costCodes+categories+setters+loading\", \"Reset al cambiar projectId\", \"Reset category al cambiar costCodeId\", \"Detecta extra del costCode inicial\", \"build pasa\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: Refactor cost_code a nivel solicitud (atomic large)",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Mover cost_code/cost_category de per-línea a per-solicitud en data layer + UI atómicamente. 8 sub-bloques (A-H) ejecutados secuencialmente, commit al final.\n\n**Files:**\n- Modify: src/hooks/useSolicitudes.ts (tipos, queries, mappers, INSERT/UPDATE)\n- Modify: src/components/solicitudes/SolicitudForm.tsx (state + Selectors via hook + propagate)\n- Modify: src/components/solicitudes/LineEditor.tsx (eliminar todo lo de cost_code)\n- Modify: src/components/solicitudes/LineRow.tsx (eliminar prop costCodeDisplay)\n- Modify: src/app/(app)/solicitudes/nueva/page.tsx (validateForSend, props, eliminar carga local)\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx (initialData, validate, props)\n\n**Verify:** grep line.cost_code_id|line.cost_category_id|costCodeDisplay → 0 matches; build pasa.\n\n```json:metadata\n{\"files\": [\"src/hooks/useSolicitudes.ts\", \"src/components/solicitudes/SolicitudForm.tsx\", \"src/components/solicitudes/LineEditor.tsx\", \"src/components/solicitudes/LineRow.tsx\", \"src/app/(app)/solicitudes/nueva/page.tsx\", \"src/app/(app)/solicitudes/[id]/page.tsx\"], \"verifyCommand\": \"grep -rn 'line.cost_code_id|line.cost_category_id|costCodeDisplay' src/ && npm run build\", \"acceptanceCriteria\": [\"SolicitudInput gana cost_code_id/cost_category_id opcionales\", \"SolicitudWithRelations con JOIN cost_code+cost_category\", \"LineInput sin cost_code\", \"LineWithRelations sin cost_code\", \"fetchSolicitud SELECT con JOIN sm_requests\", \"mapLineToInsert sin cost_code\", \"createSolicitud/updateSolicitud header con cost_code\", \"SolicitudForm consume hook + Selectors\", \"LineEditor sin state/cascada/Selectors\", \"LineRow sin prop costCodeDisplay\", \"validateForSend requiere cost_code\", \"build pasa\", \"grep cero matches\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: Cleanup useTrips.BacklogLine.cost_code_id (código muerto)",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Eliminar BacklogLine.cost_code_id (código muerto sin consumers) + literal hardcoded en programacion/viaje/[id]/page.tsx:451.\n\n**Files:**\n- Modify: src/hooks/useTrips.ts (tipo + SELECT + mapper)\n- Modify: src/app/(app)/programacion/viaje/[id]/page.tsx:451\n\n**Verify:** grep cost_code_id en useTrips/programacion → 0 matches; build pasa.\n\n```json:metadata\n{\"files\": [\"src/hooks/useTrips.ts\", \"src/app/(app)/programacion/viaje/[id]/page.tsx\"], \"verifyCommand\": \"grep -n cost_code_id src/hooks/useTrips.ts 'src/app/(app)/programacion/viaje/[id]/page.tsx' && npm run build\", \"acceptanceCriteria\": [\"BacklogLine sin cost_code_id\", \"SELECT backlog sin cost_code_id\", \"Mapper sin cost_code_id\", \"Literal en :451 sin cost_code_id\", \"build pasa\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 6: Helper createSolicitud — opt costCode para header",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Arreglar tests/helpers.ts:createSolicitud para que setee cost_code en header. Fix mínimo (Q6); AD-5 completo fuera.\n\n**Files:**\n- Modify: tests/helpers.ts\n\n**Verify:** grep costCode en helpers; build pasa.\n\n```json:metadata\n{\"files\": [\"tests/helpers.ts\"], \"verifyCommand\": \"grep -n 'costCode\\\\b' tests/helpers.ts && npm run build\", \"acceptanceCriteria\": [\"createSolicitud acepta opt costCode={extra?, fase, categoria}\", \"Si se provee, llena Selectors del header\", \"Si no, console.warn (no bloquea)\", \"build pasa\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 7: Verificación + reportar a James para BD-2",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Confirmar codebase listo para BD-2. Reportar a James para que aplique DROP COLUMN en staging. NO commit.\n\n**Files:** N/A\n\n**Verify:** build verde + grep regression + 6 commits listed + git status clean + reporte a James.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"npm run build && grep -rn 'line.cost_code_id|line.cost_category_id|costCodeDisplay' src/ tests/ && git log --oneline jaime/dev | head -10 && git status\", \"acceptanceCriteria\": [\"build pasa\", \"grep cero matches\", \"6 commits Cambio 2 listados\", \"git status clean\", \"Reporte verbal a James con hashes y autorización para BD-2\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 8: Regenerar database.ts post-BD-2 + cleanup final (gated por James)",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** Sincronizar tipos post-BD-2. Code ya no consume las columnas viejas. CHANGELOG entry para BD-2.\n\n**Files:**\n- Modify (regenerate): src/lib/types/database.ts\n- Modify: Docs/CHANGELOG.md (entry [bd] BD-2)\n\n**Verify:** sm_request_lines.Row sin cost_code_id/cost_category_id; sm_requests.Row los mantiene; build pasa sin cambios de código.\n\n**GATE:** James debe haber aplicado BD-2 antes de ejecutar este task.\n\n```json:metadata\n{\"files\": [\"src/lib/types/database.ts\", \"Docs/CHANGELOG.md\"], \"verifyCommand\": \"grep -A 25 'sm_request_lines:' src/lib/types/database.ts && npm run build\", \"acceptanceCriteria\": [\"James confirmó BD-2 aplicada\", \"Regen contra staging\", \"sm_request_lines.Row sin cost_code_id/cost_category_id\", \"sm_requests.Row mantiene columnas\", \"Row<T> restaurado\", \"build pasa\", \"CHANGELOG entry BD-2\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-27T00:00:00Z"
+}
