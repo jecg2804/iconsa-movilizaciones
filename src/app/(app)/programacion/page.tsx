@@ -10,6 +10,8 @@ import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
 import { usePickup } from '@/hooks/usePickup'
 import { useExternal } from '@/hooks/useExternal'
 import { PickupDeliveryModal, type PendingPickupLine } from '@/components/programacion/PickupDeliveryModal'
+import { ExternalDeliveryModal, type PendingExternalLine } from '@/components/programacion/ExternalDeliveryModal'
+import { getFileUrl } from '@/lib/supabase/storage'
 import {
   ExternalApprovalForm,
   EMPTY_FORM_VALUES,
@@ -63,6 +65,12 @@ export default function ProgramacionPage() {
   } | null>(null)
   const [externalApproveValues, setExternalApproveValues] = useState<ExternalApprovalFormValues>(EMPTY_FORM_VALUES)
   const [externalApproveErrors, setExternalApproveErrors] = useState<ExternalApprovalFormErrors>({})
+
+  // Cambio 4 — Surface 3: Viajes Externos Pendientes
+  const [pendingExternals, setPendingExternals] = useState<PendingExternalLine[]>([])
+  const [externalsLoading, setExternalsLoading] = useState(false)
+  const [externalDeliveryLine, setExternalDeliveryLine] = useState<PendingExternalLine | null>(null)
+  const [externalRevertLine, setExternalRevertLine] = useState<PendingExternalLine | null>(null)
 
   // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
   // Project filter usa 2-step query (trips no tiene project_id directo).
@@ -151,6 +159,66 @@ export default function ProgramacionPage() {
       void refetchPendingPickups()
     }
   }, [role, refetchPendingPickups])
+
+  // --- Fetch externos pendientes (Cambio 4 — Surface 3) ---
+  const refetchPendingExternals = useCallback(async () => {
+    setExternalsLoading(true)
+    try {
+      const { data } = await supabase
+        .from('sm_request_lines')
+        .select(`
+          id, description, line_type, quantity, unit_text,
+          external_approved_at, external_provider_name, external_invoice_amount,
+          external_invoice_attachments, external_notes,
+          unit:unit_id(code),
+          request:request_id!inner(
+            id, request_id,
+            project:project_id(code, name)
+          )
+        `)
+        .eq('status', 'Externo Aprobado')
+        .eq('external_by_provider', true)
+        .is('external_completed_at', null)
+        .order('external_approved_at', { ascending: true })
+
+      const mapped: PendingExternalLine[] = (data ?? []).map((row: Record<string, unknown>) => {
+        const request = Array.isArray(row.request) ? row.request[0] : row.request
+        const reqRec = (request ?? {}) as Record<string, unknown>
+        const projRaw = reqRec.project as Record<string, unknown> | Record<string, unknown>[] | null
+        const project = Array.isArray(projRaw) ? projRaw[0] : projRaw
+        const unitRaw = row.unit as Record<string, unknown> | Record<string, unknown>[] | null
+        const unit = Array.isArray(unitRaw) ? unitRaw[0] : unitRaw
+        const attachmentsRaw = row.external_invoice_attachments
+        const attachments = Array.isArray(attachmentsRaw) ? (attachmentsRaw as unknown as Attachment[]) : []
+        return {
+          id: row.id as string,
+          description: row.description as string,
+          line_type: row.line_type as string,
+          quantity: row.quantity as number,
+          unitCode: ((unit as { code?: string } | null)?.code) ?? ((row.unit_text as string | null) ?? ''),
+          request_id: ((reqRec.request_id as string | null) ?? ''),
+          request_uuid: ((reqRec.id as string | null) ?? ''),
+          project_code: ((project as { code?: string } | null)?.code) ?? null,
+          project_name: ((project as { name?: string } | null)?.name) ?? null,
+          external_approved_at: row.external_approved_at as string,
+          external_provider_name: row.external_provider_name as string,
+          external_invoice_amount: row.external_invoice_amount as number,
+          external_invoice_attachments: attachments,
+          external_notes: (row.external_notes as string | null) ?? null,
+        }
+      })
+      setPendingExternals(mapped)
+    } finally {
+      setExternalsLoading(false)
+    }
+  }, [supabase])
+
+  // Fetch externos pendientes solo para logistica/admin
+  useEffect(() => {
+    if (role === 'logistica' || role === 'admin') {
+      void refetchPendingExternals()
+    }
+  }, [role, refetchPendingExternals])
 
   const receiverOptions = useMemo(
     () => people.map((p) => ({ value: p.id, label: p.name })),
@@ -414,9 +482,40 @@ export default function ProgramacionPage() {
       setExternalApproveValues(EMPTY_FORM_VALUES)
       setExternalApproveErrors({})
       refetchBacklog()
-      // refetchPendingExternals() se agregará en T6
+      void refetchPendingExternals()
     }
-  }, [externalApproveModal, person, external, externalApproveValues, refetchBacklog])
+  }, [externalApproveModal, person, external, externalApproveValues, refetchBacklog, refetchPendingExternals])
+
+  // --- Handlers Confirmar entrega externo + Devolver al backlog (Cambio 4 — Surface 3) ---
+  const handleCompleteExternal = useCallback(async (data: {
+    receivedById: string | null
+    receivedByName: string
+    notes: string
+    additionalAttachments: Attachment[]
+  }) => {
+    if (!externalDeliveryLine) return
+    const result = await external.completeExternal(
+      externalDeliveryLine.id,
+      data.receivedById,
+      data.receivedByName || null,
+      data.notes || null,
+      data.additionalAttachments,
+    )
+    if (result.ok) {
+      setExternalDeliveryLine(null)
+      void refetchPendingExternals()
+    }
+  }, [externalDeliveryLine, external, refetchPendingExternals])
+
+  const confirmRevertExternal = useCallback(async () => {
+    if (!externalRevertLine) return
+    const result = await external.revertExternalToBacklog(externalRevertLine.id)
+    if (result.ok) {
+      setExternalRevertLine(null)
+      void refetchPendingExternals()
+      refetchBacklog()
+    }
+  }, [externalRevertLine, external, refetchPendingExternals, refetchBacklog])
 
   const handleRequestClick = useCallback(
     (requestId: string) => {
@@ -711,6 +810,82 @@ export default function ProgramacionPage() {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ─── Sección Viajes Externos Pendientes (Cambio 4 — Surface 3) ─── */}
+      {(role === 'logistica' || role === 'admin') && (externalsLoading || pendingExternals.length > 0) && (
+        <section className="rounded-xl border border-blue-200 bg-blue-50/30">
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Viajes Externos Pendientes</h2>
+              {!externalsLoading && (
+                <span className="rounded-full bg-blue-200 text-blue-900 px-2 py-0.5 text-xs font-medium">
+                  {pendingExternals.length}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="px-4 pb-4">
+            {externalsLoading ? (
+              <p className="py-4 text-center text-sm text-iconsa-gray">Cargando externos...</p>
+            ) : (
+              <div className="space-y-2">
+                {pendingExternals.map((p) => {
+                  const firstInvoicePath = p.external_invoice_attachments[0]?.path ?? null
+                  const handleOpenInvoice = async () => {
+                    if (!firstInvoicePath) return
+                    const url = await getFileUrl(firstInvoicePath)
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+                  }
+                  return (
+                    <div key={p.id} className="flex items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-2.5 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900">{p.description}</p>
+                        <p className="text-xs text-iconsa-gray">
+                          <span className="font-mono">{p.request_id}</span>
+                          {p.project_code && <span> · {p.project_code}</span>}
+                          <span> · {p.quantity} {p.unitCode}</span>
+                          <span> · {p.external_provider_name}</span>
+                          <span> · {formatCurrency(p.external_invoice_amount)}</span>
+                        </p>
+                        {p.external_notes && (
+                          <p className="mt-0.5 text-xs italic text-gray-500 truncate" title={p.external_notes}>
+                            {p.external_notes}
+                          </p>
+                        )}
+                      </div>
+                      {firstInvoicePath && (
+                        <button
+                          type="button"
+                          onClick={handleOpenInvoice}
+                          className="shrink-0 rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
+                          title="Ver factura"
+                        >
+                          Ver factura
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setExternalRevertLine(p)}
+                        className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                        title="Devolver línea al backlog"
+                      >
+                        Devolver al backlog
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExternalDeliveryLine(p)}
+                        className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+                      >
+                        Confirmar entrega
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -1095,6 +1270,51 @@ export default function ProgramacionPage() {
                 loading={external.loading}
               >
                 Aprobar viaje externo
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar entrega externo (Cambio 4 — Surface 3) */}
+      {externalDeliveryLine && (
+        <ExternalDeliveryModal
+          line={externalDeliveryLine}
+          receiverOptions={receiverOptions}
+          onConfirm={handleCompleteExternal}
+          onClose={() => setExternalDeliveryLine(null)}
+          loading={external.loading}
+          error={external.error}
+        />
+      )}
+
+      {/* Modal Devolver al backlog externo (Cambio 4 — Surface 3 revert) */}
+      {externalRevertLine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">¿Devolver al backlog?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              La línea volverá a estado Pendiente y aparecerá en el backlog. La factura subida queda preservada para evitar archivos huérfanos en Storage. Podrás programarla en un viaje, aprobarla como pickup, o aprobarla de nuevo como externo.
+            </p>
+            {external.error && (
+              <p className="mt-2 text-sm text-red-600">{external.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExternalRevertLine(null)}
+                disabled={external.loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={confirmRevertExternal}
+                loading={external.loading}
+              >
+                Devolver
               </Button>
             </div>
           </div>
