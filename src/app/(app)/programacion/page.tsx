@@ -45,6 +45,7 @@ export default function ProgramacionPage() {
   const [pendingPickups, setPendingPickups] = useState<PendingPickupLine[]>([])
   const [pickupsLoading, setPickupsLoading] = useState(false)
   const [pickupDeliveryLine, setPickupDeliveryLine] = useState<PendingPickupLine | null>(null)
+  const [pickupRevertLine, setPickupRevertLine] = useState<PendingPickupLine | null>(null)
   const [people, setPeople] = useState<{ id: string; name: string }[]>([])
 
   // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
@@ -352,6 +353,17 @@ export default function ProgramacionPage() {
     // Errores via pickup.error en el modal
   }, [pickupDeliveryLine, pickup, refetchPendingPickups])
 
+  const confirmRevertPickup = useCallback(async () => {
+    if (!pickupRevertLine) return
+    const result = await pickup.revertPickupToBacklog(pickupRevertLine.id)
+    if (result.ok) {
+      setPickupRevertLine(null)
+      void refetchPendingPickups()
+      refetchBacklog()
+    }
+    // Errores se muestran via pickup.error en el modal
+  }, [pickupRevertLine, pickup, refetchPendingPickups, refetchBacklog])
+
   const handleRequestClick = useCallback(
     (requestId: string) => {
       router.push(`/solicitudes/${requestId}`)
@@ -628,6 +640,14 @@ export default function ProgramacionPage() {
                         <span> · {p.quantity} {p.unitCode}</span>
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setPickupRevertLine(p)}
+                      className="shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                      title="Devolver línea al backlog"
+                    >
+                      Devolver al backlog
+                    </button>
                     <button
                       type="button"
                       onClick={() => setPickupDeliveryLine(p)}
@@ -916,6 +936,39 @@ export default function ProgramacionPage() {
           loading={pickup.loading}
           error={pickup.error}
         />
+      )}
+
+      {/* Modal confirmación Devolver al backlog (Cambio 3 polish — revert pickup) */}
+      {pickupRevertLine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">¿Devolver al backlog?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              La línea volverá a estado Pendiente y aparecerá en el backlog. Podrás programarla en un viaje o aprobarla como pickup de nuevo.
+            </p>
+            {pickup.error && (
+              <p className="mt-2 text-sm text-red-600">{pickup.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPickupRevertLine(null)}
+                disabled={pickup.loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={confirmRevertPickup}
+                loading={pickup.loading}
+              >
+                Devolver
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal confirmación Aprobar pickup (Cambio 3 — Surface 1) */}

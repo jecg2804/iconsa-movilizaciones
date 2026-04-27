@@ -20,6 +20,11 @@ export interface CompletePickupResult {
   error?: string
 }
 
+export interface RevertPickupResult {
+  ok: boolean
+  error?: string
+}
+
 /**
  * Hook de operaciones pickup (Cambio 3).
  * Pickup es una bandera a nivel de línea (sm_request_lines.pickup_by_project),
@@ -272,11 +277,74 @@ export function usePickup() {
     [supabase],
   )
 
+  /**
+   * Reverso de pickup: línea Pickup Aprobado → Pendiente.
+   * Disponible solo desde la sección "Pickups Pendientes de Retiro" (UI ya
+   * filtra por status='Pickup Aprobado' AND pickup_completed_at IS NULL).
+   *
+   * UPDATE con WHERE clauses defensivas (atomic): si la línea cambió de
+   * estado entre el render del UI y el confirm del modal (race condition con
+   * cancelación de solicitud o registro de entrega), el UPDATE no matchea
+   * y retornamos error claro al cliente.
+   *
+   * NO toca: pickup_completed_at, pickup_received_by_id, pickup_received_by_name
+   * (ya son NULL por la condición de UI). NO toca qty_scheduled, qty_delivered
+   * (ambos en 0 por el flow original). NO toca trip_line_assignments (el trip
+   * ya cambió o se canceló durante el flow original).
+   *
+   * cascade_request_status trigger se dispara solo y reevalúa solicitud padre:
+   * - Si todas las líneas no-canceladas vuelven a Pendiente → solicitud='Enviada'
+   * - Si hay otras Programada/Pickup Aprobado/En Transito → solicitud sigue
+   *   'En Proceso'
+   */
+  const revertPickupToBacklog = useCallback(
+    async (lineId: string): Promise<RevertPickupResult> => {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const { data, error: updateError } = await supabase
+          .from('sm_request_lines')
+          .update({
+            status: 'Pendiente',
+            pickup_by_project: false,
+            pickup_approved_at: null,
+            pickup_approved_by: null,
+          })
+          .eq('id', lineId)
+          .eq('status', 'Pickup Aprobado')
+          .is('pickup_completed_at', null)
+          .select('id')
+
+        if (updateError) {
+          setError(updateError.message)
+          return { ok: false, error: updateError.message }
+        }
+
+        if (!data || data.length === 0) {
+          const msg = 'La línea ya no está disponible para devolver al backlog (puede haber cambiado de estado).'
+          setError(msg)
+          return { ok: false, error: msg }
+        }
+
+        return { ok: true }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Error al devolver línea al backlog'
+        setError(message)
+        return { ok: false, error: message }
+      } finally {
+        setLoading(false)
+      }
+    },
+    [supabase],
+  )
+
   return {
     loading,
     error,
     approvePickupFromBacklog,
     convertLineToPickup,
     completePickup,
+    revertPickupToBacklog,
   }
 }
