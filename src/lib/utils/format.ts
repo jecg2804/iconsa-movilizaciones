@@ -143,3 +143,58 @@ export function formatTimePanama(timestamp: string | null | undefined): string {
     timeZone: 'America/Panama',
   })
 }
+
+/**
+ * Genera tooltip extendido para badges de status en line cards.
+ * Incluye contexto per-status (provider para externo, fecha aprobación
+ * para pickup, scheduled date para programada, etc.).
+ *
+ * @param status - Status canónico de la línea
+ * @param info - Objeto con campos opcionales para contexto extendido
+ */
+export function statusContextString(
+  status: string,
+  info?: {
+    pickup_approved_at?: string | null
+    pickup_received_by_name?: string | null
+    pickup_completed_at?: string | null
+    external_provider_name?: string | null
+    external_invoice_amount?: number | null
+    external_approved_at?: string | null
+    external_completed_at?: string | null
+    external_received_by_name?: string | null
+    qty_delivered?: number | null
+    quantity?: number
+    delivered_at?: string | null
+  },
+): string {
+  if (!info) return status
+  switch (status) {
+    case 'Pickup Aprobado':
+      return info.pickup_approved_at
+        ? `Pickup Aprobado el ${formatDate(info.pickup_approved_at)}`
+        : status
+    case 'Externo Aprobado':
+      if (info.external_provider_name && info.external_invoice_amount != null) {
+        return `Externo: ${info.external_provider_name}, ${formatCurrency(info.external_invoice_amount)}, aprobado ${info.external_approved_at ? formatDate(info.external_approved_at) : '—'}`
+      }
+      return status
+    case 'Entregada':
+      if (info.external_completed_at) {
+        const receiver = info.external_received_by_name ?? '(no captado)'
+        return `Entregada externo: ${info.quantity ?? '—'} el ${formatDate(info.external_completed_at)}, receptor ${receiver}`
+      }
+      if (info.pickup_completed_at) {
+        const receiver = info.pickup_received_by_name ?? '—'
+        return `Entregada pickup: ${info.quantity ?? '—'} el ${formatDate(info.pickup_completed_at)}, receptor ${receiver}`
+      }
+      if (info.delivered_at) {
+        return `Entregada: ${info.qty_delivered ?? info.quantity ?? '—'} de ${info.quantity ?? '—'} el ${formatDate(info.delivered_at)}`
+      }
+      return status
+    case 'Parcial':
+      return `Parcial: ${info.qty_delivered ?? 0} de ${info.quantity ?? '—'} entregadas`
+    default:
+      return status
+  }
+}

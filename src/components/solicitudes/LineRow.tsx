@@ -121,15 +121,15 @@ function LineRow({
           </span>
 
           {/* Descripcion */}
-          <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+          <span className="min-w-0 font-medium text-gray-900" title={line.description}>
             {line.description}
           </span>
 
           {/* Ruta: desde → hasta */}
           <span className="flex min-w-0 items-center gap-1.5 text-iconsa-gray">
-            <span className="max-w-[120px] truncate" title={fromName}>{fromName}</span>
+            <span title={fromName}>{fromName}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <span className="max-w-[120px] truncate" title={toName}>{toName}</span>
+            <span title={toName}>{toName}</span>
           </span>
 
           {/* Cantidad + unidad + progreso entrega */}
@@ -248,7 +248,7 @@ function LineRow({
             ) : (
               <Package className="h-4 w-4 shrink-0 text-gold" />
             )}
-            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+            <span className="min-w-0 text-sm font-medium text-gray-900" title={line.description}>
               {line.description}
             </span>
           </div>
@@ -291,9 +291,9 @@ function LineRow({
 
         {/* Segunda linea: ruta */}
         <div className="flex items-center gap-1.5 text-xs text-iconsa-gray">
-          <span className="max-w-[130px] truncate">{fromName}</span>
+          <span title={fromName}>{fromName}</span>
           <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-          <span className="max-w-[130px] truncate">{toName}</span>
+          <span title={toName}>{toName}</span>
         </div>
 
         {/* Campos opcionales */}

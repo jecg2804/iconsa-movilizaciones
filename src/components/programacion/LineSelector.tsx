@@ -74,7 +74,7 @@ function LineInfo({ line }: { line: BacklogLine }) {
             <Package className="h-4 w-4 text-gold" />
           )}
         </span>
-        <span className="text-sm font-medium text-gray-900 truncate">
+        <span className="text-sm font-medium text-gray-900" title={line.description}>
           {line.description}
         </span>
         <button
@@ -84,25 +84,19 @@ function LineInfo({ line }: { line: BacklogLine }) {
         >
           {requestDisplayId}
         </button>
-        {line.request.project?.name && (
-          <span className="text-xs font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded shrink-0"
-            title={line.request.project.code ?? undefined}>
-            {line.request.project.name}
-          </span>
-        )}
       </div>
 
       {/* Ruta + fecha requerida + solicitante */}
       <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
-        <span className="truncate max-w-30">{fromName}</span>
+        <span title={fromName}>{fromName}</span>
         <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-        <span className="truncate max-w-30">{toName}</span>
+        <span title={toName}>{toName}</span>
         <span className="text-gray-300 mx-0.5">·</span>
         <span className={`font-medium ${dateColor}`}>{formatDate(line.request.date_required)}</span>
         {line.request.requester?.name && (
           <>
             <span className="text-gray-300 mx-0.5">·</span>
-            <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+            <span title={line.request.requester.name}>{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
           </>
         )}
       </div>

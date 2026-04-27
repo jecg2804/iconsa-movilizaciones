@@ -194,7 +194,7 @@ export function PendingDeliveriesAlert() {
                     <span className="text-iconsa-gray">·</span>
                     <span className="font-mono text-iconsa-gray">{l.request_code}</span>
                   </div>
-                  <p className="mt-0.5 text-gray-900 truncate">{l.line_description}</p>
+                  <p className="mt-0.5 text-gray-900" title={l.line_description}>{l.line_description}</p>
                   <p className="mt-0.5 text-xs text-iconsa-gray">
                     Despachado {l.qty_dispatched} · Entregado {l.qty_delivered} de {l.quantity} {l.unit_code}
                   </p>

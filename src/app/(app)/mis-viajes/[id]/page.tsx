@@ -73,7 +73,7 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
 
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="truncate text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium text-gray-900" title={line?.description ?? undefined}>
             {line?.description ?? '—'}
           </span>
           <button
@@ -87,9 +87,9 @@ function AssignmentRow({ assignment }: { assignment: TripWithRelations['assignme
 
         {line && (
           <div className="flex items-center gap-1 text-xs text-iconsa-gray">
-            <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
+            <span title={fromName}>{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-            <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
+            <span title={toName}>{toName}</span>
           </div>
         )}
 

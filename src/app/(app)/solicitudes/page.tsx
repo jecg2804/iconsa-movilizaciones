@@ -573,13 +573,13 @@ export default function SolicitudesPage() {
                     ) : (
                       <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
                     )}
-                    <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+                    <span className="min-w-0 font-medium text-gray-900" title={line.description}>
                       {line.description}
                     </span>
                     <span className="flex items-center gap-1 text-iconsa-gray">
-                      <span className="max-w-[100px] truncate">{fromName}</span>
+                      <span title={fromName}>{fromName}</span>
                       <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                      <span className="max-w-[100px] truncate">{toName}</span>
+                      <span title={toName}>{toName}</span>
                     </span>
                     <span className="shrink-0 text-gray-600">{formatQty(line.quantity)} {unitName}</span>
                     <Badge label={line.status} variant="line" />

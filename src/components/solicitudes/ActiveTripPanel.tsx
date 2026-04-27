@@ -84,7 +84,7 @@ export default function ActiveTripPanel({ trip, role }: ActiveTripPanelProps) {
                   <Package className="h-4 w-4 text-gold" />
                 )}
               </span>
-              <span className="truncate">{line.description}</span>
+              <span title={line.description}>{line.description}</span>
               <span className="shrink-0 text-xs text-iconsa-gray">
                 ×{formatQty(line.quantity_assigned)}
               </span>

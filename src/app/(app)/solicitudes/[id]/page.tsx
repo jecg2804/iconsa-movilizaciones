@@ -739,7 +739,7 @@ export default function SolicitudDetailPage() {
                         <span className="text-xs">
                           {line.line_type === 'Equipo' ? '🔧' : '📦'}
                         </span>
-                        <span className="truncate">{line.description}</span>
+                        <span title={line.description}>{line.description}</span>
                         <span className="shrink-0 text-xs text-iconsa-gray">
                           ×{formatQty(line.quantity_assigned)}
                         </span>

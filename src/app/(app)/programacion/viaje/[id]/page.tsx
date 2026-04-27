@@ -152,7 +152,7 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
               <Package className="h-4 w-4 text-gold" />
             )}
           </span>
-          <span className="truncate text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium text-gray-900" title={line?.description ?? undefined}>
             {line?.description ?? 'Cargando...'}
           </span>
           <button
@@ -162,20 +162,14 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
           >
             {requestDisplayId}
           </button>
-          {line?.request?.project?.name && (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600"
-              title={line.request.project.code ?? undefined}>
-              {line.request.project.name}
-            </span>
-          )}
         </div>
 
         {/* Ruta + fecha requerida + solicitante */}
         {line && (
           <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
-            <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
+            <span title={fromName}>{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-            <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
+            <span title={toName}>{toName}</span>
             {line.request.date_required && (
               <>
                 <span className="text-gray-300 mx-0.5">·</span>
@@ -187,7 +181,7 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
             {line.request.requester?.name && (
               <>
                 <span className="text-gray-300 mx-0.5">·</span>
-                <span className="truncate max-w-24">{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+                <span title={line.request.requester.name}>{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
               </>
             )}
           </div>

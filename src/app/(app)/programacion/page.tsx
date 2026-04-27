@@ -786,10 +786,9 @@ export default function ProgramacionPage() {
                 {pendingPickups.map((p) => (
                   <div key={p.id} className="flex items-center gap-3 rounded-lg border border-amber-200 bg-white px-4 py-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{p.description}</p>
+                      <p className="text-sm font-medium text-gray-900" title={p.description}>{p.description}</p>
                       <p className="text-xs text-iconsa-gray">
                         <span className="font-mono">{p.request_id}</span>
-                        {p.project_code && <span> · {p.project_code}</span>}
                         <span> · {p.quantity} {p.unitCode}</span>
                       </p>
                     </div>
@@ -844,10 +843,9 @@ export default function ProgramacionPage() {
                   return (
                     <div key={p.id} className="flex items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-2.5 flex-wrap">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900">{p.description}</p>
+                        <p className="text-sm font-medium text-gray-900" title={p.description}>{p.description}</p>
                         <p className="text-xs text-iconsa-gray">
                           <span className="font-mono">{p.request_id}</span>
-                          {p.project_code && <span> · {p.project_code}</span>}
                           <span> · {p.quantity} {p.unitCode}</span>
                           <span> · {p.external_provider_name}</span>
                           <span> · {formatCurrency(p.external_invoice_amount)}</span>
@@ -1128,7 +1126,7 @@ export default function ProgramacionPage() {
                         ) : (
                           <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
                         )}
-                        <span className="font-medium text-gray-900 truncate max-w-[250px]" title={line.description}>
+                        <span className="font-medium text-gray-900" title={line.description}>
                           {line.description}
                         </span>
                         <span className="text-gray-300">·</span>
