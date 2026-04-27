@@ -94,7 +94,6 @@ export default function SolicitudDetailPage() {
     project_id: '',
     requester_id: '',
     date_required: '',
-    fulfillment_type: 'fleet',
   })
   const [lines, setLines] = useState<LineInput[]>([])
   const [deletedLineIds, setDeletedLineIds] = useState<string[]>([])
@@ -554,7 +553,6 @@ export default function SolicitudDetailPage() {
             dateSubmitted: solicitud.date_submitted ?? undefined,
             dateCompleted: solicitud.date_completed ?? undefined,
             dateCancelled: solicitud.date_cancelled ?? undefined,
-            fulfillmentType: solicitud.fulfillment_type ?? 'fleet',
             costCodeId: solicitud.cost_code_id ?? null,
             costCategoryId: solicitud.cost_category_id ?? null,
           }}

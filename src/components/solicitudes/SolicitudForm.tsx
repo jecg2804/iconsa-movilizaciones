@@ -28,7 +28,6 @@ interface SolicitudFormProps {
     dateSubmitted?: string | null
     dateCompleted?: string | null
     dateCancelled?: string | null
-    fulfillmentType?: string | null
     costCodeId?: string | null
     costCategoryId?: string | null
   }
@@ -80,7 +79,6 @@ function SolicitudForm({
   )
   const [notes, setNotes] = useState<string>(initialData?.notes ?? '')
   const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments ?? [])
-  const [fulfillmentType, setFulfillmentType] = useState<string>(initialData?.fulfillmentType ?? 'fleet')
   // UUID estable para folder de storage (en modo crear, genera uno temporal)
   const folderIdRef = useRef(solicitudId ?? crypto.randomUUID())
 
@@ -101,13 +99,12 @@ function SolicitudForm({
         date_required: overrides?.date_required ?? dateRequired,
         notes: overrides?.notes !== undefined ? overrides.notes : notes || null,
         attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
-        fulfillment_type: overrides?.fulfillment_type ?? fulfillmentType,
         cost_code_id: overrides?.cost_code_id !== undefined ? overrides.cost_code_id : cascade.costCodeId,
         cost_category_id: overrides?.cost_category_id !== undefined ? overrides.cost_category_id : cascade.costCategoryId,
       }
       onChange(data)
     },
-    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, fulfillmentType, cascade.costCodeId, cascade.costCategoryId, onChange],
+    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, cascade.costCodeId, cascade.costCategoryId, onChange],
   )
 
   // Propagar el estado inicial al montar

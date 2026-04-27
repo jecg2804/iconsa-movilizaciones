@@ -331,9 +331,6 @@ export default function SolicitudesPage() {
           <div>
             <div className="flex items-center gap-1 flex-wrap">
               <Badge label={row.status} variant="status" />
-              {row.fulfillment_type === 'pickup' && (
-                <Badge variant="custom" label="Retiro" bg="bg-amber-100" text="text-amber-800" />
-              )}
             </div>
             {row.status === 'En Proceso' && row.lines?.length > 0 && (
               <p className="text-xs text-iconsa-gray mt-0.5">
@@ -390,9 +387,6 @@ export default function SolicitudesPage() {
             )}
           </span>
           <Badge label={row.status} variant="status" />
-          {row.fulfillment_type === 'pickup' && (
-            <Badge variant="custom" label="Retiro" bg="bg-amber-100" text="text-amber-800" />
-          )}
         </div>
         <div className="text-sm text-gray-900">
           {row.project ? (

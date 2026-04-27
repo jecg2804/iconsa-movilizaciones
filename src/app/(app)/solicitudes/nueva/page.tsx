@@ -67,7 +67,6 @@ export default function NuevaSolicitudPage() {
     requester_id: '',
     date_required: '',
     notes: null,
-    fulfillment_type: 'fleet',
   })
   const [lines, setLines] = useState<LineInput[]>([])
   const [showLineEditor, setShowLineEditor] = useState(false)

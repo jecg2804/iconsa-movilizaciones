@@ -28,7 +28,6 @@ export interface SolicitudWithRelations {
   priority: string | null
   notes: string | null
   attachments: unknown
-  fulfillment_type: string | null
   cost_code_id: string | null
   cost_category_id: string | null
   created_at: string | null
@@ -79,7 +78,6 @@ export interface SolicitudInput {
   date_required: string
   notes?: string | null
   attachments?: unknown[] | null
-  fulfillment_type?: string | null
   cost_code_id?: string | null
   cost_category_id?: string | null
 }
@@ -341,7 +339,6 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           priority: row.priority,
           notes: row.notes,
           attachments: row.attachments,
-          fulfillment_type: row.fulfillment_type ?? 'fleet',
           cost_code_id: ((row as Record<string, unknown>).cost_code_id as string | null) ?? null,
           cost_category_id: ((row as Record<string, unknown>).cost_category_id as string | null) ?? null,
           created_at: row.created_at,
@@ -466,7 +463,6 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         priority: data.priority,
         notes: data.notes,
         attachments: data.attachments,
-        fulfillment_type: data.fulfillment_type ?? 'fleet',
         cost_code_id: ((data as Record<string, unknown>).cost_code_id as string | null) ?? null,
         cost_category_id: ((data as Record<string, unknown>).cost_category_id as string | null) ?? null,
         created_at: data.created_at,
@@ -503,7 +499,6 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           date_required: header.date_required,
           notes: header.notes ?? null,
           attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
-          fulfillment_type: header.fulfillment_type ?? 'fleet',
           cost_code_id: header.cost_code_id ?? null,
           cost_category_id: header.cost_category_id ?? null,
           created_by: personId ?? null,
@@ -617,7 +612,6 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
         if (header.attachments !== undefined) headerUpdate.attachments = header.attachments
-        if (header.fulfillment_type !== undefined) headerUpdate.fulfillment_type = header.fulfillment_type
         if (header.cost_code_id !== undefined) headerUpdate.cost_code_id = header.cost_code_id
         if (header.cost_category_id !== undefined) headerUpdate.cost_category_id = header.cost_category_id
         if (personId) headerUpdate.updated_by = personId
