@@ -1138,18 +1138,16 @@ export default function Page() {
         if (error) throw error
         if (!event?.id) throw new Error('Event ID missing after insert')
 
-        // 2. Si hay líneas afectadas, INSERT trip_event_lines (throw on error, fix N7)
-        if (data.lines && data.lines.length > 0) {
-          const { error: lineError } = await supabase.from('trip_event_lines').insert(
-            data.lines.map((l) => ({
-              trip_event_id: event.id,
-              request_line_id: l.request_line_id,
-              quantity: l.quantity,
-              line_status: l.line_status,
-            }))
-          )
-          if (lineError) throw lineError
-        }
+        // 2. INSERT trip_event_lines — data.lines siempre tiene ≥1 (validado en modal)
+        const { error: lineError } = await supabase.from('trip_event_lines').insert(
+          data.lines.map((l) => ({
+            trip_event_id: event.id,
+            request_line_id: l.request_line_id,
+            quantity: l.quantity,
+            line_status: l.line_status,
+          }))
+        )
+        if (lineError) throw lineError
 
         // NO cambiar status de trip ni líneas — Parada es informacional
         // NO notificaciones (se agregan después)

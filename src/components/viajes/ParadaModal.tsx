@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { MapPin, Wrench, Package, ChevronDown, ChevronUp } from 'lucide-react'
+import { MapPin, Wrench, Package } from 'lucide-react'
 import type { TripWithRelations } from '@/hooks/useTrips'
 import { Button } from '@/components/ui/Button'
 import FileUploader from '@/components/ui/FileUploader'
@@ -10,8 +10,7 @@ import type { Attachment } from '@/lib/supabase/storage'
 
 export interface ParadaData {
   location: string
-  lines?: { request_line_id: string; line_status: string; quantity: number; notes?: string }[]
-  oc_reference?: string
+  lines: { request_line_id: string; line_status: string; quantity: number; notes?: string }[]
   notes: string
   attachments: Attachment[]
 }
@@ -29,32 +28,78 @@ const LINE_STATUSES = [
   { value: 'no_disponible', label: 'No disponible' },
 ] as const
 
+const OTHER_OPTION = '__OTHER__'
+
+interface LocationOption {
+  label: string
+}
+
 export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalProps) {
-  const [location, setLocation] = useState('')
-  const [ocReference, setOcReference] = useState('')
+  // Selección del dropdown: '' (sin elegir), label de opción, o OTHER_OPTION
+  const [selectedOption, setSelectedOption] = useState<string>('')
+  // Free-text aplica solo cuando selectedOption === OTHER_OPTION
+  const [freeText, setFreeText] = useState('')
   const [notes, setNotes] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [showLines, setShowLines] = useState(false)
   const [selectedLines, setSelectedLines] = useState<Record<string, { checked: boolean; status: string; notes: string }>>({})
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
-  // Auto-suggest locations from trip line origins/destinations (proveedores, etc.)
-  const suggestedLocations = useMemo(() => {
-    const locs = new Set<string>()
+  // Construir opciones del dropdown desde las líneas del trip.
+  // Filtro lowercase 'proyecto' / 'taller' per Decisión 24 (BD verificada).
+  // Entradas con location_type=null o 'otro' pasan al dropdown.
+  // Dedup por label (Q4 confirmado en brainstorming).
+  const dropdownOptions = useMemo<LocationOption[]>(() => {
+    const seen = new Set<string>()
+    const opts: LocationOption[] = []
     for (const a of trip.assignments) {
-      if (a.line?.from_text) locs.add(a.line.from_text)
-      if (a.line?.to_text) locs.add(a.line.to_text)
-      if (a.line?.from_location?.name) locs.add(a.line.from_location.name)
-      if (a.line?.to_location?.name) locs.add(a.line.to_location.name)
+      const line = a.line
+      if (!line) continue
+      const fromLabel = line.from_location?.name ?? line.from_text
+      const fromType = line.from_location?.location_type ?? null
+      if (fromLabel && fromType !== 'proyecto' && fromType !== 'taller') {
+        if (!seen.has(fromLabel)) {
+          seen.add(fromLabel)
+          opts.push({ label: fromLabel })
+        }
+      }
+      const toLabel = line.to_location?.name ?? line.to_text
+      const toType = line.to_location?.location_type ?? null
+      if (toLabel && toType !== 'proyecto' && toType !== 'taller') {
+        if (!seen.has(toLabel)) {
+          seen.add(toLabel)
+          opts.push({ label: toLabel })
+        }
+      }
     }
-    return Array.from(locs).filter(Boolean)
+    return opts
   }, [trip.assignments])
 
-  const canConfirm = location.trim().length > 0 && !loading
+  const finalLocation =
+    selectedOption === OTHER_OPTION ? freeText.trim() : selectedOption
+  const checkedLineEntries = Object.entries(selectedLines).filter(([, v]) => v.checked)
+  const linesValid = checkedLineEntries.length >= 1
+  const attachmentsValid = attachments.length >= 1
+  const locationValid = finalLocation.length > 0
+
+  const canConfirm = locationValid && linesValid && attachmentsValid && !loading
+
+  const handleSelectChange = useCallback((value: string) => {
+    setSelectedOption(value)
+    if (value !== OTHER_OPTION) {
+      // Limpiar free-text al volver al dropdown (E2 confirmado)
+      setFreeText('')
+    }
+  }, [])
 
   const handleLineToggle = useCallback((lineId: string, checked: boolean) => {
     setSelectedLines(prev => ({
       ...prev,
-      [lineId]: { ...prev[lineId], checked, status: prev[lineId]?.status || 'completo', notes: prev[lineId]?.notes || '' },
+      [lineId]: {
+        ...prev[lineId],
+        checked,
+        status: prev[lineId]?.status || 'completo',
+        notes: prev[lineId]?.notes || '',
+      },
     }))
   }, [])
 
@@ -73,31 +118,26 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
   }, [])
 
   const handleConfirm = useCallback(async () => {
-    const checkedLines = Object.entries(selectedLines)
-      .filter(([, v]) => v.checked)
-      .map(([id, v]) => {
-        const assignment = trip.assignments.find(a => a.request_line_id === id)
-        return {
-          request_line_id: id,
-          line_status: v.status,
-          quantity: assignment?.quantity_assigned ?? 0,
-          notes: v.notes.trim() || undefined,
-        }
-      })
+    setSubmitAttempted(true)
+    if (!canConfirm) return
 
-    // Si hay OC reference, prepend a notes
-    const fullNotes = ocReference.trim()
-      ? `OC: ${ocReference.trim()}${notes.trim() ? ' — ' + notes.trim() : ''}`
-      : notes.trim()
+    const checkedLines = checkedLineEntries.map(([id, v]) => {
+      const assignment = trip.assignments.find(a => a.request_line_id === id)
+      return {
+        request_line_id: id,
+        line_status: v.status,
+        quantity: assignment?.quantity_assigned ?? 0,
+        notes: v.notes.trim() || undefined,
+      }
+    })
 
     await onConfirm({
-      location: location.trim(),
-      lines: checkedLines.length > 0 ? checkedLines : undefined,
-      oc_reference: ocReference.trim() || undefined,
-      notes: fullNotes,
+      location: finalLocation,
+      lines: checkedLines,
+      notes: notes.trim(),
       attachments,
     })
-  }, [location, selectedLines, ocReference, notes, attachments, trip.assignments, onConfirm])
+  }, [canConfirm, checkedLineEntries, finalLocation, notes, attachments, trip.assignments, onConfirm])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
@@ -112,117 +152,122 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
         <div className="space-y-4">
           {/* Ubicación */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="parada-location-select" className="mb-1 block text-sm font-medium text-gray-700">
               Ubicación <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Ej: TUBOTEC SA - Milla 8"
-              list="location-suggestions"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-            />
-            <datalist id="location-suggestions">
-              {suggestedLocations.map((loc) => (
-                <option key={loc} value={loc} />
+            <select
+              id="parada-location-select"
+              value={selectedOption}
+              onChange={(e) => handleSelectChange(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            >
+              <option value="">Seleccionar...</option>
+              {dropdownOptions.map((opt) => (
+                <option key={opt.label} value={opt.label}>📍 {opt.label}</option>
               ))}
-            </datalist>
+              <option value={OTHER_OPTION}>✏️ Otra ubicación (escribir libre)</option>
+            </select>
+            {selectedOption === OTHER_OPTION && (
+              <input
+                type="text"
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                placeholder="Escriba la ubicación"
+                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              />
+            )}
+            {submitAttempted && !locationValid && (
+              <p className="mt-1 text-xs text-red-600">La ubicación es requerida.</p>
+            )}
           </div>
 
-          {/* Líneas afectadas (colapsable) */}
-          {trip.assignments.length > 0 && (
-            <div className="rounded-lg border border-gray-200">
-              <button
-                type="button"
-                onClick={() => setShowLines(!showLines)}
-                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <span>Líneas afectadas (opcional)</span>
-                {showLines ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              {showLines && (
-                <div className="space-y-2 border-t border-gray-200 p-3">
-                  {trip.assignments.map((a) => {
-                    const lineState = selectedLines[a.request_line_id]
-                    return (
-                      <div key={a.request_line_id} className="space-y-1">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={lineState?.checked ?? false}
-                            onChange={(e) => handleLineToggle(a.request_line_id, e.target.checked)}
-                            className="accent-cyan-600"
-                          />
-                          {a.line?.line_type === 'Equipo' ? (
-                            <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
-                          ) : (
-                            <Package className="h-3.5 w-3.5 shrink-0 text-iconsa-gold" />
-                          )}
-                          <span className="flex-1 text-sm text-gray-700 truncate">
-                            {a.line?.description ?? 'Línea'}
-                          </span>
-                          <span className="text-xs text-iconsa-gray">
-                            {formatQty(a.quantity_assigned)} {a.line?.unit?.code ?? ''}
-                          </span>
-                        </label>
-                        {lineState?.checked && (
-                          <div className="ml-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                            <select
-                              value={lineState.status}
-                              onChange={(e) => handleLineStatusChange(a.request_line_id, e.target.value)}
-                              className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-cyan-500 focus:outline-none"
-                            >
-                              {LINE_STATUSES.map((ls) => (
-                                <option key={ls.value} value={ls.value}>{ls.label}</option>
-                              ))}
-                            </select>
-                            <input
-                              type="text"
-                              value={lineState.notes}
-                              onChange={(e) => handleLineNotesChange(a.request_line_id, e.target.value)}
-                              placeholder="Notas (ej: faltan 65 tubos)"
-                              className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs placeholder:text-gray-400 focus:border-cyan-500 focus:outline-none"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+          {/* Líneas afectadas (siempre visible, requeridas ≥1) */}
+          <div className="rounded-lg border border-gray-200">
+            <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+              Líneas afectadas <span className="text-red-500">*</span>
+              <span className="ml-1 text-xs font-normal text-gray-500">(marcar al menos una)</span>
             </div>
-          )}
-
-          {/* Referencia OC */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Referencia OC (opcional)
-            </label>
-            <input
-              type="text"
-              value={ocReference}
-              onChange={(e) => setOcReference(e.target.value)}
-              placeholder="Ej: 29902"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-            />
+            <div className="space-y-2 p-3">
+              {trip.assignments.length === 0 && (
+                <p className="text-sm italic text-gray-500">El viaje no tiene líneas asignadas.</p>
+              )}
+              {trip.assignments.map((a) => {
+                const lineState = selectedLines[a.request_line_id]
+                return (
+                  <div key={a.request_line_id} className="space-y-1">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        data-testid={`parada-line-${a.request_line_id}`}
+                        checked={lineState?.checked ?? false}
+                        onChange={(e) => handleLineToggle(a.request_line_id, e.target.checked)}
+                        className="accent-cyan-600"
+                      />
+                      {a.line?.line_type === 'Equipo' ? (
+                        <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                      ) : (
+                        <Package className="h-3.5 w-3.5 shrink-0 text-iconsa-gold" />
+                      )}
+                      <span className="flex-1 truncate text-sm text-gray-700">
+                        {a.line?.description ?? 'Línea'}
+                      </span>
+                      <span className="text-xs text-iconsa-gray">
+                        {formatQty(a.quantity_assigned)} {a.line?.unit?.code ?? ''}
+                      </span>
+                    </label>
+                    {lineState?.checked && (
+                      <div className="ml-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                        <select
+                          aria-label="Estado de la línea"
+                          value={lineState.status}
+                          onChange={(e) => handleLineStatusChange(a.request_line_id, e.target.value)}
+                          className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-cyan-500 focus:outline-none"
+                        >
+                          {LINE_STATUSES.map((ls) => (
+                            <option key={ls.value} value={ls.value}>{ls.label}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={lineState.notes}
+                          onChange={(e) => handleLineNotesChange(a.request_line_id, e.target.value)}
+                          placeholder="Notas (ej: faltan 65 tubos)"
+                          className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs placeholder:text-gray-400 focus:border-cyan-500 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {submitAttempted && !linesValid && (
+              <p className="border-t border-gray-200 px-3 py-2 text-xs text-red-600">
+                Marcar al menos una línea afectada.
+              </p>
+            )}
           </div>
 
-          {/* Adjuntos */}
-          <FileUploader
-            attachments={attachments}
-            folder={`events/${trip.id}`}
-            onChange={setAttachments}
-            label="Documentos"
-            hint="Factura, nota de entrega, foto (max 10MB)"
-          />
-
-          {/* Notas */}
+          {/* Foto de factura (requerida ≥1) */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Notas (opcional)
+            <FileUploader
+              attachments={attachments}
+              folder={`events/${trip.id}`}
+              onChange={setAttachments}
+              label="Foto de factura *"
+              hint="Foto / PDF (max 10MB). Al menos 1 archivo requerido."
+            />
+            {submitAttempted && !attachmentsValid && (
+              <p className="mt-1 text-xs text-red-600">Subir al menos un archivo (foto de factura).</p>
+            )}
+          </div>
+
+          {/* Notas generales (opcional) */}
+          <div>
+            <label htmlFor="parada-notes" className="mb-1 block text-sm font-medium text-gray-700">
+              Notas generales (opcional)
             </label>
             <textarea
+              id="parada-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ej: Material parcial, restan 65 tubos PVC para el jueves"
@@ -233,7 +278,7 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
         </div>
 
         <div className="mt-5 flex gap-2">
-          <Button variant="primary" onClick={handleConfirm} loading={loading} disabled={!canConfirm}>
+          <Button variant="primary" onClick={handleConfirm} loading={loading} disabled={loading}>
             Registrar Parada
           </Button>
           <Button variant="ghost" onClick={onClose} disabled={loading}>
