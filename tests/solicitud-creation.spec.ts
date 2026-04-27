@@ -40,7 +40,6 @@ test.describe('Solicitud Creation', () => {
     // Verify in BD
     const { data } = await db.from('sm_requests').select('*').eq('id', result.dbId).single()
     expect(data!.status).toBe('Enviada')
-    expect(data!.fulfillment_type).toBe('fleet')
 
     const { data: lines } = await db
       .from('sm_request_lines')
@@ -129,17 +128,4 @@ test.describe('Solicitud Creation', () => {
     expect(data!.status).toBe('Borrador')
   })
 
-  // --- Fulfillment type defaults to fleet ---
-
-  test('fulfillment_type defaults to fleet', async () => {
-    const result = await createSolicitud(page, {
-      lines: [
-        { type: 'Material', description: 'TEST Fleet Default', from: { dropdown: /Taller Chilibre/ }, to: { dropdown: /Muelle 14/ }, quantity: 1 },
-      ],
-    })
-    createdIds.push(result.dbId)
-
-    const { data } = await db.from('sm_requests').select('fulfillment_type').eq('id', result.dbId).single()
-    expect(data!.fulfillment_type).toBe('fleet')
-  })
 })

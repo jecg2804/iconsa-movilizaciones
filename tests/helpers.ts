@@ -247,7 +247,6 @@ export async function createSolicitud(
 export async function createTrip(
   page: Page,
   opts?: {
-    isPickup?: boolean
     conductor?: RegExp
     vehicle?: RegExp
     date?: string
@@ -282,28 +281,12 @@ export async function createTrip(
   // Wait for form
   await expect(page.getByText('Cargando formulario')).not.toBeVisible({ timeout: 15000 })
 
-  // Toggle pickup checkbox
-  const retiroLabel = page.getByText('Retiro en Chilibre')
-  if (await retiroLabel.isVisible().catch(() => false)) {
-    const retiroCheckbox = page.locator('input[type="checkbox"]').first()
-    const isChecked = await retiroCheckbox.isChecked()
-    if (opts?.isPickup && !isChecked) {
-      await retiroLabel.click()
-      await page.waitForTimeout(500)
-    } else if (!opts?.isPickup && isChecked) {
-      await retiroLabel.click()
-      await page.waitForTimeout(500)
-    }
-  }
-
   // Date
   await page.locator('input[type="date"]').first().fill(opts?.date ?? '2026-04-15')
 
-  // Conductor
-  if (!opts?.isPickup) {
-    await pick(page, /Conductor/, opts?.conductor ?? /Rafael|Conductor|Diaz/)
-    await pick(page, /Veh/, opts?.vehicle ?? /CAB|VOL|PIC/)
-  }
+  // Conductor + Vehículo (siempre requeridos — pickup ya no existe a nivel trip post-Cambio 3)
+  await pick(page, /Conductor/, opts?.conductor ?? /Rafael|Conductor|Diaz/)
+  await pick(page, /Veh/, opts?.vehicle ?? /CAB|VOL|PIC/)
 
   // Assign lines — click "Agregar" buttons
   await page.waitForTimeout(1000)
@@ -501,43 +484,6 @@ export async function registerEntrega(
 
   // Confirm
   const confirmBtn = page.getByRole('button', { name: 'Confirmar Entrega' })
-  await expect(confirmBtn).toBeEnabled({ timeout: 5000 })
-  await confirmBtn.click()
-  await page.waitForTimeout(3000)
-}
-
-// --- Register Preparación (pickup flow) ---
-export async function registerPreparation(page: Page) {
-  const prepBtn = page.getByRole('button', { name: 'Registrar Preparación' })
-  await expect(prepBtn).toBeVisible({ timeout: 5000 })
-  await prepBtn.click()
-  await page.waitForTimeout(1500)
-
-  const confirmBtn = page.getByRole('button', { name: 'Material Listo' })
-  await expect(confirmBtn).toBeVisible({ timeout: 3000 })
-  await confirmBtn.click()
-  await page.waitForTimeout(2000)
-}
-
-// --- Register Retiro (pickup flow — completa el trip) ---
-export async function registerRetiro(
-  page: Page,
-  opts: { confirmationCode: string },
-) {
-  // Botón principal del trip cuando es pickup → abre PickupModal
-  const retiroBtn = page.getByRole('button', { name: 'Confirmar Retiro' }).first()
-  await expect(retiroBtn).toBeVisible({ timeout: 5000 })
-  await retiroBtn.click()
-  await page.waitForTimeout(1500)
-
-  // Código de confirmación (obligatorio en PickupModal)
-  const codeInput = page.getByPlaceholder('4 dígitos')
-  await expect(codeInput).toBeVisible({ timeout: 3000 })
-  await codeInput.fill(opts.confirmationCode)
-  await page.waitForTimeout(500)
-
-  // Confirmar interno del modal
-  const confirmBtn = page.getByRole('button', { name: 'Confirmar Retiro' }).last()
   await expect(confirmBtn).toBeEnabled({ timeout: 5000 })
   await confirmBtn.click()
   await page.waitForTimeout(3000)

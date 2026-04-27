@@ -36,7 +36,7 @@ test.describe.serial('Trip Creation', () => {
 
     const { data } = await db
       .from('trips')
-      .select('id, trip_id, status, driver_id, vehicle_id, scheduled_date, confirmation_code, is_self_pickup')
+      .select('id, trip_id, status, driver_id, vehicle_id, scheduled_date, confirmation_code')
       .eq('id', tripDbId)
       .single()
 
@@ -45,7 +45,6 @@ test.describe.serial('Trip Creation', () => {
     expect(data!.driver_id).not.toBeNull()
     expect(data!.vehicle_id).not.toBeNull()
     expect(data!.confirmation_code).toMatch(/^\d{4}$/)
-    expect(data!.is_self_pickup).toBe(false)
   })
 
   test('BD: Lines are Programada with qty_scheduled > 0', async () => {
@@ -155,16 +154,4 @@ test.describe.serial('Pickup Trip', () => {
     await page.close()
   })
 
-  test.skip('Create pickup trip → is_self_pickup=true in BD (checkbox selector WIP)', async () => {
-    const trip = await createTrip(page, { isPickup: true, solicitudId: sol.dbId })
-
-    const { data } = await db
-      .from('trips')
-      .select('is_self_pickup, driver_id, vehicle_id')
-      .eq('id', trip.dbId)
-      .single()
-
-    expect(data!.is_self_pickup).toBe(true)
-    // Pickup trips may have null driver/vehicle
-  })
 })
