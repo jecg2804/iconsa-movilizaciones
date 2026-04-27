@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
+import { usePickup } from '@/hooks/usePickup'
 import { canCreateTrip } from '@/lib/utils/roles'
 import { TRIP_STATUSES } from '@/lib/utils/constants'
 import { formatDate, formatCurrency } from '@/lib/utils/format'
@@ -23,11 +24,12 @@ type LineTypeFilter = (typeof LINE_TYPES)[number]
 export default function ProgramacionPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { role, loading: authLoading } = useAuth()
+  const { person, role, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
   const {
     backlog,
     backlogLoading,
+    refetchBacklog,
     trips,
     tripsTotalCount,
     listLoading,
@@ -35,6 +37,8 @@ export default function ProgramacionPage() {
     filters: tripFilters,
     setFilters: setTripFilters,
   } = useTrips()
+  const pickup = usePickup()
+  const [pickupConfirmLineId, setPickupConfirmLineId] = useState<string | null>(null)
 
   // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
   // Project filter usa 2-step query (trips no tiene project_id directo).
@@ -235,6 +239,21 @@ export default function ProgramacionPage() {
     const ids = Array.from(selectedLineIds).join(',')
     router.push(`/programacion/viaje/nuevo?lines=${ids}`)
   }, [selectedLineIds, router])
+
+  // --- Handlers Pickup (Cambio 3) ---
+  const handleApprovePickup = useCallback((lineId: string) => {
+    setPickupConfirmLineId(lineId)
+  }, [])
+
+  const confirmApprovePickup = useCallback(async () => {
+    if (!pickupConfirmLineId || !person?.id) return
+    const result = await pickup.approvePickupFromBacklog(pickupConfirmLineId, person.id)
+    if (result.ok) {
+      setPickupConfirmLineId(null)
+      refetchBacklog()
+    }
+    // Errores se muestran via pickup.error en el modal
+  }, [pickupConfirmLineId, person, pickup, refetchBacklog])
 
   const handleRequestClick = useCallback(
     (requestId: string) => {
@@ -561,6 +580,7 @@ export default function ProgramacionPage() {
             onToggleSelect={handleToggleSelect}
             onSelectAll={handleSelectAll}
             onRequestClick={handleRequestClick}
+            onApprovePickup={(role === 'logistica' || role === 'admin') ? handleApprovePickup : undefined}
           />
         </div>
       </section>
@@ -745,6 +765,39 @@ export default function ProgramacionPage() {
           />
         </div>
       </section>
+
+      {/* Modal confirmación Aprobar pickup (Cambio 3 — Surface 1) */}
+      {pickupConfirmLineId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Aprobar pickup</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              ¿Aprobar como retiro por proyecto? La línea pasará a "Pickups Pendientes de Retiro" y dejará de aparecer en el backlog.
+            </p>
+            {pickup.error && (
+              <p className="mt-2 text-sm text-red-600">{pickup.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPickupConfirmLineId(null)}
+                disabled={pickup.loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={confirmApprovePickup}
+                loading={pickup.loading}
+              >
+                Aprobar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

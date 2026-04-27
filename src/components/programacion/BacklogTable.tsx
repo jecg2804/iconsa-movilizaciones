@@ -14,6 +14,8 @@ interface BacklogTableProps {
   onSelectAll?: (selected: boolean) => void
   /** Callback cuando se hace click en el ID de solicitud */
   onRequestClick?: (requestId: string) => void
+  /** Callback "Aprobar pickup" — solo logistica/admin debería pasarlo */
+  onApprovePickup?: (lineId: string) => void
 }
 
 /** Resuelve el nombre de origen de una linea de backlog */
@@ -39,6 +41,7 @@ function BacklogTable({
   onToggleSelect,
   onSelectAll,
   onRequestClick,
+  onApprovePickup,
 }: BacklogTableProps) {
   // Determinar si todas las lineas estan seleccionadas
   const allSelected =
@@ -214,6 +217,18 @@ function BacklogTable({
                   {formatDaysUntilDue(line.request.date_required)}
                 </span>
               </span>
+
+              {/* Aprobar pickup (logistica/admin) */}
+              {onApprovePickup && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onApprovePickup(line.id) }}
+                  title="Aprobar como retiro por proyecto"
+                  className="shrink-0 rounded p-1 text-amber-600 hover:bg-amber-50 transition-colors"
+                >
+                  🤝
+                </button>
+              )}
             </div>
 
             {/* Mobile layout: visible hasta md */}
@@ -301,6 +316,17 @@ function BacklogTable({
                   </span>
                 </span>
               </div>
+
+              {/* Aprobar pickup (logistica/admin) — mobile */}
+              {onApprovePickup && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onApprovePickup(line.id) }}
+                  className="text-xs font-medium text-amber-700 hover:underline self-start"
+                >
+                  🤝 Aprobar pickup
+                </button>
+              )}
             </div>
           </div>
         )
