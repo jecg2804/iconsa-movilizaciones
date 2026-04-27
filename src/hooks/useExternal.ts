@@ -88,7 +88,7 @@ export function useExternal() {
           return { ok: false, error: msg }
         }
         if (invoiceAttachments.length === 0) {
-          const msg = 'Adjuntá al menos una cotización o factura.'
+          const msg = 'Adjunta al menos una cotización o factura.'
           setError(msg)
           return { ok: false, error: msg }
         }
@@ -174,7 +174,7 @@ export function useExternal() {
           return { ok: false, error: msg }
         }
         if (invoiceAttachments.length === 0) {
-          const msg = 'Adjuntá al menos una cotización o factura.'
+          const msg = 'Adjunta al menos una cotización o factura.'
           setError(msg)
           return { ok: false, error: msg }
         }

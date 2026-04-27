@@ -196,10 +196,9 @@ function TripForm({
 
   const handleRateChange = useCallback(
     (val: string | null) => {
-      // J6: si hay tarifa seleccionada, costo siempre se auto-rellena y queda
-      // read-only. Si el usuario quiere un costo custom, debe deseleccionar la
-      // tarifa primero. Sin confirmación — el campo no es editable mientras
-      // haya rate.
+      // Cambio 4 (revert J6): seleccionar rate pre-rellena cost del rate.amount
+      // pero el campo SIGUE editable como override manual. Movimientos internos
+      // o casos especiales pueden requerir cost custom incluso con rate.
       if (val) {
         const selectedRate = rates.find((r) => r.value === val)
         if (selectedRate?.amount != null) {
@@ -383,7 +382,7 @@ function TripForm({
           searchable
         />
 
-        {/* Costo — read-only cuando hay tarifa seleccionada (J6) */}
+        {/* Costo — siempre editable; rate solo pre-rellena (Cambio 4 — revert J6) */}
         <Input
           label="Costo (B/.)"
           type="number"
@@ -391,11 +390,11 @@ function TripForm({
           min="0"
           value={cost}
           onChange={handleCostChange}
-          disabled={fieldsDisabled || !!rateId}
+          disabled={fieldsDisabled}
           placeholder="0.00"
         />
 
-        {/* Toggles: ATTT Permit + Escolta + Externo — fila completa en mobile, columna par en desktop */}
+        {/* Toggles: ATTT Permit + Escolta — fila completa en mobile, columna par en desktop */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6 md:col-span-2">
           {/* Requiere Permiso ATTT */}
           <label className="flex items-center gap-2 cursor-pointer">
