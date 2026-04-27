@@ -1,0 +1,82 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-27-cambio3-pickup-redesign.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Regenerar database.ts",
+      "status": "pending",
+      "description": "**Goal:** Sincronizar tipos TypeScript con schema staging post-Cambio 3 BD.\n\n**Files:**\n- Modify: `src/lib/types/database.ts`\n\n**Acceptance:**\n- 6 columnas pickup nuevas en sm_request_lines\n- trips.Row sin is_self_pickup, sm_requests.Row sin fulfillment_type\n- Functions sin complete_pickup_trip\n- Row<T> helper restaurado\n\n**Verify:** `grep -E \"is_self_pickup|fulfillment_type|complete_pickup_trip\" src/lib/types/database.ts` → 0 matches\n\n```json:metadata\n{\"files\": [\"src/lib/types/database.ts\"], \"verifyCommand\": \"grep -E 'is_self_pickup|fulfillment_type|complete_pickup_trip' src/lib/types/database.ts\", \"acceptanceCriteria\": [\"6 columnas pickup nuevas\", \"sin columnas viejas\", \"Row<T> helper presente\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Eliminar is_self_pickup consumers + DELETE PreparationModal/PickupModal",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Eliminar todas las refs a is_self_pickup (10 archivos) + borrar PreparationModal.tsx + PickupModal.tsx + simplificar TripCard + GPS branch.\n\n**Files:**\n- Delete: PreparationModal.tsx, PickupModal.tsx\n- Modify: useTrips.ts, useMyTrips.ts, TripForm.tsx, programacion/viaje/nuevo+[id]/page.tsx, mis-viajes/[id]/page.tsx, solicitudes/[id]/page.tsx, solicitudes/types.ts, TripCard.tsx, gps/trip/[tripId]/position/route.ts\n\n**Acceptance:**\n- `grep -rn \"is_self_pickup\" src/ tests/` → 0 matches en src\n- Modals borrados\n- npm run build verde (puede tener errores de Preparacion/Retiro/fulfillment_type — esos son T3/T4)\n\n**Verify:** `grep -rn \"is_self_pickup|PreparationModal|PickupModal|PICKUP_STEPS\" src/`\n\n```json:metadata\n{\"files\": [\"src/hooks/useTrips.ts\", \"src/hooks/useMyTrips.ts\", \"src/components/programacion/TripForm.tsx\", \"src/app/(app)/programacion/viaje/nuevo/page.tsx\", \"src/app/(app)/programacion/viaje/[id]/page.tsx\", \"src/app/(app)/mis-viajes/[id]/page.tsx\", \"src/app/(app)/solicitudes/[id]/page.tsx\", \"src/components/solicitudes/types.ts\", \"src/components/viajes/TripCard.tsx\", \"src/app/api/gps/trip/[tripId]/position/route.ts\"], \"verifyCommand\": \"grep -rn 'is_self_pickup|PreparationModal|PickupModal' src/\", \"acceptanceCriteria\": [\"0 refs a is_self_pickup en src\", \"modals borrados\", \"GPS branch pickup eliminado\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Eliminar fulfillment_type consumers + badge Retiro",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Eliminar fulfillment_type (5 archivos) + eliminar badge Retiro en lista solicitudes (Q1=c).\n\n**Files:**\n- Modify: useSolicitudes.ts, SolicitudForm.tsx, solicitudes/page.tsx, solicitudes/[id]/page.tsx, solicitudes/nueva/page.tsx\n\n**Acceptance:**\n- `grep -rn \"fulfillment_type|fulfillmentType\" src/` → 0 matches\n- npm run build verde (post-T2/T3/T4)\n\n**Verify:** `grep -rn \"fulfillment_type|fulfillmentType\" src/`\n\n```json:metadata\n{\"files\": [\"src/hooks/useSolicitudes.ts\", \"src/components/solicitudes/SolicitudForm.tsx\", \"src/app/(app)/solicitudes/page.tsx\", \"src/app/(app)/solicitudes/[id]/page.tsx\", \"src/app/(app)/solicitudes/nueva/page.tsx\"], \"verifyCommand\": \"grep -rn 'fulfillment_type|fulfillmentType' src/\", \"acceptanceCriteria\": [\"0 refs a fulfillment_type\", \"badge Retiro eliminado en lista solicitudes\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Eliminar event types Preparacion/Retiro + handlers + branch revert",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Eliminar event types Preparacion/Retiro de TS union, icons/colors EventTimeline, handlePreparation, handlePickup, branch Retiro de handleRevert, filter Llegada guard, render modals, simplificar nextMainEvent y filter Parada.\n\n**Files:**\n- Modify: useTripEvents.ts, EventTimeline.tsx, mis-viajes/[id]/page.tsx\n\n**Acceptance:**\n- `grep -n \"'Preparacion'|'Retiro'|handlePreparation|handlePickup|hasPreparacion|hasRetiro|isPickup\" src/app/(app)/mis-viajes/[id]/page.tsx` → 0 matches\n- npm run build verde\n\n**Verify:** `npm run build && grep -n \"'Preparacion'|'Retiro'\" src/`\n\n```json:metadata\n{\"files\": [\"src/hooks/useTripEvents.ts\", \"src/components/viajes/EventTimeline.tsx\", \"src/app/(app)/mis-viajes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build && grep -n \\\"'Preparacion'|'Retiro'\\\" src/\", \"acceptanceCriteria\": [\"event types eliminados\", \"handlers eliminados\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Hook usePickup.ts con 3 funciones",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Crear src/hooks/usePickup.ts con approvePickupFromBacklog, convertLineToPickup (con auto-cancel-trip), completePickup.\n\n**Files:**\n- Create: src/hooks/usePickup.ts\n\n**Acceptance:**\n- Hook exporta 3 funciones async + loading/error\n- approvePickupFromBacklog setea status='Pickup Aprobado' + flags\n- convertLineToPickup: bloquea qty_delivered>0 (E2/Q7), DELETE assignment + UPDATE atómico, auto-cancel trip si último\n- completePickup: XOR receptor (Q6), qty_delivered=quantity total (Q4), notes append\n\n**Verify:** `npm run build && grep -n \"export function approvePickup\" src/hooks/usePickup.ts`\n\n```json:metadata\n{\"files\": [\"src/hooks/usePickup.ts\"], \"verifyCommand\": \"npm run build && grep -E 'approvePickupFromBacklog|convertLineToPickup|completePickup' src/hooks/usePickup.ts\", \"acceptanceCriteria\": [\"3 funciones exportadas\", \"validaciones E2/Q4/Q6/Q7 implementadas\", \"auto-cancel trip cuando count=0\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: UI Surface 1 — Aprobar pickup desde backlog",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Acción \"Aprobar pickup\" en BacklogTable + modal confirmación mínimo (Q8). Solo logistica/admin (Decisión 21).\n\n**Files:**\n- Modify: BacklogTable.tsx, programacion/page.tsx\n\n**Acceptance:**\n- Botón visible solo logistica/admin\n- Modal de confirmación → línea desaparece del backlog\n- npm run build verde\n\n**Verify:** Build verde + manual smoke test (en autonomous: solo build)\n\n```json:metadata\n{\"files\": [\"src/components/programacion/BacklogTable.tsx\", \"src/app/(app)/programacion/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"botón aprobar pickup en backlog\", \"modal confirmación mínimo\", \"gate por rol\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: UI Surface 2 — Convertir línea Programada a pickup",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Acción \"Convertir a pickup\" en AssignmentRow + modal con dos variantes (última línea cancela trip, otras solo sacan línea) + bloqueo qty_delivered>0.\n\n**Files:**\n- Modify: programacion/viaje/[id]/page.tsx\n\n**Acceptance:**\n- Botón visible solo canEditFullTrip (logistica/admin + trip Programado)\n- Modal con dos variantes según count assignments\n- Bloqueo client-side si qty_delivered>0\n- Auto-redirect a /programacion si trip cancelado\n\n**Verify:** Build verde + smoke test con Solicitud B (data brief)\n\n```json:metadata\n{\"files\": [\"src/app/(app)/programacion/viaje/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"botón convertir en AssignmentRow\", \"modal dos variantes\", \"auto-cancel trip\", \"bloqueo qty_delivered>0\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: UI Surface 3 — Pickups Pendientes de Retiro + modal Registrar entrega",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Sección nueva en /programacion + modal con receptor (XOR) + notas opc + attachments opc.\n\n**Files:**\n- Create: src/components/programacion/PickupDeliveryModal.tsx\n- Modify: src/app/(app)/programacion/page.tsx\n\n**Acceptance:**\n- Sección visible solo logistica/admin\n- Filtro server-side: Pickup Aprobado AND pickup_by_project AND pickup_completed_at IS NULL\n- Modal con receptor XOR validation (Q6)\n- qty_delivered = quantity total (Q4)\n\n**Verify:** Build verde + smoke test con Solicitud A\n\n```json:metadata\n{\"files\": [\"src/components/programacion/PickupDeliveryModal.tsx\", \"src/app/(app)/programacion/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"sección Pickups Pendientes\", \"modal con XOR receptor\", \"filtro server-side correcto\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: Badge LineRow + fix cancelSolicitud",
+      "status": "pending",
+      "blockedBy": [3, 5],
+      "description": "**Goal:** Badge \"PICKUP APROBADO\" en LineRow + tooltip + badge \"RETIRADO\" si completed. Fix cancelSolicitud para incluir Pickup Aprobado en filtro (I1/E8).\n\n**Files:**\n- Modify: useSolicitudes.ts (cancelSolicitud filter + LineWithRelations interface + mapper)\n- Modify: solicitudes/[id]/page.tsx (pasar pickupInfo)\n- Modify: LineRow.tsx (render badges)\n\n**Acceptance:**\n- Badge amarillo cuando Pickup Aprobado\n- Badge verde con tooltip cuando completado\n- cancelSolicitud cancela líneas Pickup Aprobado\n- npm run build verde\n\n**Verify:** `grep -n \"Pickup Aprobado\" src/components/solicitudes/LineRow.tsx src/hooks/useSolicitudes.ts`\n\n```json:metadata\n{\"files\": [\"src/hooks/useSolicitudes.ts\", \"src/app/(app)/solicitudes/[id]/page.tsx\", \"src/components/solicitudes/LineRow.tsx\"], \"verifyCommand\": \"grep -n 'Pickup Aprobado' src/components/solicitudes/LineRow.tsx src/hooks/useSolicitudes.ts\", \"acceptanceCriteria\": [\"badges renderizados\", \"cancelSolicitud incluye Pickup Aprobado\", \"LineWithRelations extendido\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: Cleanup tests legacy",
+      "status": "pending",
+      "blockedBy": [2, 3, 4],
+      "description": "**Goal:** DELETE tests/pickup-flow.spec.ts + limpiar refs en programacion-viaje.spec.ts, solicitud-creation.spec.ts, helpers.ts.\n\n**Files:**\n- Delete: tests/pickup-flow.spec.ts\n- Modify: tests/programacion-viaje.spec.ts, tests/solicitud-creation.spec.ts, tests/helpers.ts\n\n**Acceptance:**\n- pickup-flow.spec.ts borrado\n- 0 refs a is_self_pickup, fulfillment_type, registerPreparation, registerRetiro en tests/\n- npx playwright test --list parsea sin errores\n\n**Verify:** `grep -rn \"is_self_pickup|fulfillment_type|registerPreparation|registerRetiro\" tests/ && npx playwright test --list 2>&1 | tail -20`\n\n```json:metadata\n{\"files\": [\"tests/pickup-flow.spec.ts\", \"tests/programacion-viaje.spec.ts\", \"tests/solicitud-creation.spec.ts\", \"tests/helpers.ts\"], \"verifyCommand\": \"grep -rn 'is_self_pickup|fulfillment_type|registerPreparation|registerRetiro' tests/\", \"acceptanceCriteria\": [\"pickup-flow.spec.ts borrado\", \"0 refs a campos legacy en tests\", \"helpers limpios\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: Docs CHANGELOG + spec frontmatter + TRAIL + grep regression + reporte final",
+      "status": "pending",
+      "blockedBy": [6, 7, 8, 9, 10],
+      "description": "**Goal:** Cerrar Cambio 3 con docs vivos + grep regression + reporte exhaustivo.\n\n**Files:**\n- Modify: Docs/CHANGELOG.md, Docs/reference/events-v2-redesign-in-progress-v3.md (frontmatter), Docs/TRAIL.md, Docs/BACKLOG.md\n- Delete: Docs/superpowers/plans/2026-04-27-cambio3-pickup-redesign.md (+ .tasks.json) per plan-lifecycle\n\n**Acceptance:**\n- CHANGELOG entry [feat] + [bd]\n- Spec frontmatter Cambio 3: status=shipped + shipped_commits\n- TRAIL.md actualizado\n- BACKLOG cierra J1, D4, AD-1\n- grep regression vacío (10 patrones)\n- npm run build verde\n- Reporte exhaustivo a stdout\n- Plan file borrado al final\n\n**Verify:** `npm run build && grep -rn \"is_self_pickup|fulfillment_type|complete_pickup_trip|PreparationModal|PickupModal|PICKUP_STEPS|handlePreparation|handlePickup|registerPreparation|registerRetiro\" src/ tests/`\n\n```json:metadata\n{\"files\": [\"Docs/CHANGELOG.md\", \"Docs/reference/events-v2-redesign-in-progress-v3.md\", \"Docs/TRAIL.md\", \"Docs/BACKLOG.md\"], \"verifyCommand\": \"npm run build && grep -rn 'is_self_pickup|fulfillment_type|complete_pickup_trip|PreparationModal|PickupModal|PICKUP_STEPS|handlePreparation|handlePickup|registerPreparation|registerRetiro' src/ tests/\", \"acceptanceCriteria\": [\"CHANGELOG entry agregada\", \"spec frontmatter shipped\", \"TRAIL actualizado\", \"BACKLOG items cerrados\", \"grep regression vacío\", \"reporte final\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-27T00:00:00Z"
+}
