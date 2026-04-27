@@ -2176,6 +2176,8 @@ export type Database = {
         Row: {
           approved_by: string | null
           attachments: Json | null
+          cost_category_id: string | null
+          cost_code_id: string | null
           created_at: string | null
           created_by: string | null
           date_cancelled: string | null
@@ -2198,6 +2200,8 @@ export type Database = {
         Insert: {
           approved_by?: string | null
           attachments?: Json | null
+          cost_category_id?: string | null
+          cost_code_id?: string | null
           created_at?: string | null
           created_by?: string | null
           date_cancelled?: string | null
@@ -2220,6 +2224,8 @@ export type Database = {
         Update: {
           approved_by?: string | null
           attachments?: Json | null
+          cost_category_id?: string | null
+          cost_code_id?: string | null
           created_at?: string | null
           created_by?: string | null
           date_cancelled?: string | null
@@ -2245,6 +2251,20 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_requests_cost_category_id_fkey"
+            columns: ["cost_category_id"]
+            isOneToOne: false
+            referencedRelation: "cost_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_requests_cost_code_id_fkey"
+            columns: ["cost_code_id"]
+            isOneToOne: false
+            referencedRelation: "cost_codes"
             referencedColumns: ["id"]
           },
           {
