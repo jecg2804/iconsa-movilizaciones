@@ -17,6 +17,14 @@ import {
   type ModifiedAssignment,
 } from '@/hooks/useTrips'
 import { usePickup } from '@/hooks/usePickup'
+import { useExternal } from '@/hooks/useExternal'
+import {
+  ExternalApprovalForm,
+  EMPTY_FORM_VALUES,
+  validateApprovalForm,
+  type ExternalApprovalFormValues,
+  type ExternalApprovalFormErrors,
+} from '@/components/programacion/ExternalApprovalForm'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { notifyViajeEditado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
@@ -105,9 +113,10 @@ interface AssignmentRowProps {
   onRemove: (assignmentId: string) => void
   onQtyChange?: (assignmentId: string, newQty: number) => void
   onConvertToPickup?: (lineId: string, assignmentId: string, quantityAssigned: number, qtyDelivered: number) => void
+  onConvertToExternal?: (lineId: string, assignmentId: string, quantityAssigned: number, qtyDelivered: number) => void
 }
 
-function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange, onConvertToPickup }: AssignmentRowProps) {
+function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange, onConvertToPickup, onConvertToExternal }: AssignmentRowProps) {
   const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
@@ -259,6 +268,23 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
         </button>
       )}
 
+      {/* Convertir a externo (Cambio 4 — Surface 2) */}
+      {onConvertToExternal && line && (
+        <button
+          type="button"
+          onClick={() => onConvertToExternal(
+            assignment.request_line_id,
+            assignment.id,
+            assignment.quantity_assigned,
+            assignment.qty_delivered ?? 0,
+          )}
+          className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+          title="Convertir a viaje externo"
+        >
+          Convertir a externo
+        </button>
+      )}
+
       {/* Boton quitar (solo en modo edicion para viajes Programados) */}
       {canRemove && (
         <button
@@ -310,6 +336,18 @@ export default function ViajeDetailPage() {
     qtyDelivered: number
     willCancelTrip: boolean
   } | null>(null)
+
+  // Hook de externo (Cambio 4)
+  const external = useExternal()
+  const [externalConvertModal, setExternalConvertModal] = useState<{
+    lineId: string
+    assignmentId: string
+    quantityAssigned: number
+    qtyDelivered: number
+    willCancelTrip: boolean
+  } | null>(null)
+  const [externalConvertValues, setExternalConvertValues] = useState<ExternalApprovalFormValues>(EMPTY_FORM_VALUES)
+  const [externalConvertErrors, setExternalConvertErrors] = useState<ExternalApprovalFormErrors>({})
 
   // Estado del viaje cargado
   const [trip, setTrip] = useState<TripWithRelations | null>(null)
@@ -699,6 +737,59 @@ export default function ViajeDetailPage() {
     // Errores via pickup.error en el modal
   }, [pickupModalState, person, trip, pickup, fetchTrip, id, refetchBacklog, router])
 
+  // --- Convertir línea a externo (Cambio 4 — Surface 2) ---
+  const handleConvertToExternal = useCallback(
+    (lineId: string, assignmentId: string, quantityAssigned: number, qtyDelivered: number) => {
+      const willCancelTrip = existingAssignments.length === 1
+      setExternalConvertValues(EMPTY_FORM_VALUES)
+      setExternalConvertErrors({})
+      setExternalConvertModal({ lineId, assignmentId, quantityAssigned, qtyDelivered, willCancelTrip })
+    },
+    [existingAssignments.length],
+  )
+
+  const closeExternalConvertModal = useCallback(() => {
+    setExternalConvertModal(null)
+    setExternalConvertValues(EMPTY_FORM_VALUES)
+    setExternalConvertErrors({})
+  }, [])
+
+  const confirmConvertToExternal = useCallback(async () => {
+    if (!externalConvertModal || !person?.id || !trip) return
+    if (externalConvertModal.qtyDelivered > 0) return
+    const { valid, errors } = validateApprovalForm(externalConvertValues)
+    if (!valid) {
+      setExternalConvertErrors(errors)
+      return
+    }
+    setExternalConvertErrors({})
+    const result = await external.convertLineToExternal(
+      externalConvertModal.lineId,
+      externalConvertModal.assignmentId,
+      externalConvertModal.quantityAssigned,
+      trip.id,
+      person.id,
+      externalConvertValues.providerName,
+      parseFloat(externalConvertValues.invoiceAmount),
+      externalConvertValues.invoiceAttachments,
+      externalConvertValues.notes,
+    )
+    if (result.ok) {
+      closeExternalConvertModal()
+      if (result.tripCancelled) {
+        router.push('/programacion')
+        return
+      }
+      const updated = await fetchTrip(id)
+      if (updated) {
+        setTrip(updated)
+        setExistingAssignments(updated.assignments)
+        setOriginalAssignments(new Map(updated.assignments.map((a: TripAssignment) => [a.id, a.quantity_assigned])))
+      }
+      refetchBacklog()
+    }
+  }, [externalConvertModal, person, trip, external, externalConvertValues, fetchTrip, id, refetchBacklog, router, closeExternalConvertModal])
+
   // --- Estado de carga global ---
   const isLoading =
     pageLoading || authLoading || vehiclesLoading || driversLoading || ratesLoading
@@ -848,6 +939,7 @@ export default function ViajeDetailPage() {
                 onRemove={handleRemoveExisting}
                 onQtyChange={handleExistingQtyChange}
                 onConvertToPickup={canEditFullTrip ? handleConvertToPickup : undefined}
+                onConvertToExternal={canEditFullTrip ? handleConvertToExternal : undefined}
               />
             ))}
           </div>
@@ -1059,6 +1151,69 @@ export default function ViajeDetailPage() {
                 disabled={pickupModalState.qtyDelivered > 0}
               >
                 {pickupModalState.willCancelTrip ? 'Sí, cancelar viaje' : 'Convertir a pickup'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Convertir a externo (Cambio 4 — Surface 2) */}
+      {externalConvertModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-6">
+            <h3 className={`mb-2 text-lg font-semibold ${externalConvertModal.willCancelTrip ? 'text-red-700' : 'text-gray-900'}`}>
+              {externalConvertModal.willCancelTrip ? 'Cancelar viaje y convertir a externo' : 'Convertir a viaje externo'}
+            </h3>
+
+            {externalConvertModal.qtyDelivered > 0 ? (
+              <p className="mt-2 mb-4 text-sm text-red-600">
+                No se puede convertir a externo una línea con entregas previas registradas
+                ({externalConvertModal.qtyDelivered} de {externalConvertModal.quantityAssigned} entregado).
+                Cancela la línea o termina el flow actual.
+              </p>
+            ) : externalConvertModal.willCancelTrip ? (
+              <p className="mt-2 mb-4 text-sm text-gray-600">
+                Esta es la última línea del viaje{' '}
+                <span className="font-mono font-bold">{trip?.trip_id ?? trip?.id.slice(0, 8)}</span>.
+                Convertirla a viaje externo CANCELARÁ el viaje. Completa los datos del proveedor y confirma.
+              </p>
+            ) : (
+              <p className="mt-2 mb-4 text-sm text-gray-600">
+                La línea saldrá del viaje y pasará a &quot;Viajes Externos Pendientes&quot; con la factura del proveedor. Completa los datos abajo.
+              </p>
+            )}
+
+            {externalConvertModal.qtyDelivered === 0 && (
+              <ExternalApprovalForm
+                values={externalConvertValues}
+                onChange={setExternalConvertValues}
+                errors={externalConvertErrors}
+                lineFolderId={`external/${externalConvertModal.lineId}`}
+                disabled={external.loading}
+              />
+            )}
+
+            {external.error && (
+              <p className="mt-3 text-sm text-red-600">{external.error}</p>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeExternalConvertModal}
+                disabled={external.loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant={externalConvertModal.willCancelTrip ? 'danger' : 'primary'}
+                size="sm"
+                onClick={confirmConvertToExternal}
+                loading={external.loading}
+                disabled={externalConvertModal.qtyDelivered > 0}
+              >
+                {externalConvertModal.willCancelTrip ? 'Sí, cancelar viaje y convertir' : 'Convertir a externo'}
               </Button>
             </div>
           </div>
