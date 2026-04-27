@@ -16,6 +16,7 @@ import {
   type BacklogLine,
   type ModifiedAssignment,
 } from '@/hooks/useTrips'
+import { usePickup } from '@/hooks/usePickup'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { notifyViajeEditado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
@@ -104,9 +105,10 @@ interface AssignmentRowProps {
   canEdit: boolean
   onRemove: (assignmentId: string) => void
   onQtyChange?: (assignmentId: string, newQty: number) => void
+  onConvertToPickup?: (lineId: string, assignmentId: string, quantityAssigned: number, qtyDelivered: number) => void
 }
 
-function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
+function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange, onConvertToPickup }: AssignmentRowProps) {
   const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
@@ -241,6 +243,23 @@ function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, 
         )}
       </div>
 
+      {/* Convertir a pickup (Cambio 3 — Surface 2) */}
+      {onConvertToPickup && line && (
+        <button
+          type="button"
+          onClick={() => onConvertToPickup(
+            assignment.request_line_id,
+            assignment.id,
+            assignment.quantity_assigned,
+            assignment.qty_delivered ?? 0,
+          )}
+          className="shrink-0 rounded p-1.5 text-amber-700 hover:bg-amber-50 transition-colors"
+          title="Convertir a pickup"
+        >
+          🤝
+        </button>
+      )}
+
       {/* Boton quitar (solo en modo edicion para viajes Programados) */}
       {canRemove && (
         <button
@@ -282,6 +301,16 @@ export default function ViajeDetailPage() {
     saving,
     saveError,
   } = useTrips()
+
+  // Hook de pickup (Cambio 3)
+  const pickup = usePickup()
+  const [pickupModalState, setPickupModalState] = useState<{
+    lineId: string
+    assignmentId: string
+    quantityAssigned: number
+    qtyDelivered: number
+    willCancelTrip: boolean
+  } | null>(null)
 
   // Estado del viaje cargado
   const [trip, setTrip] = useState<TripWithRelations | null>(null)
@@ -635,6 +664,43 @@ export default function ViajeDetailPage() {
     }
   })
 
+  // --- Convertir línea a pickup (Cambio 3 — Surface 2) ---
+  const handleConvertToPickup = useCallback(
+    (lineId: string, assignmentId: string, quantityAssigned: number, qtyDelivered: number) => {
+      const willCancelTrip = existingAssignments.length === 1
+      setPickupModalState({ lineId, assignmentId, quantityAssigned, qtyDelivered, willCancelTrip })
+    },
+    [existingAssignments.length],
+  )
+
+  const confirmConvertToPickup = useCallback(async () => {
+    if (!pickupModalState || !person?.id || !trip) return
+    const result = await pickup.convertLineToPickup(
+      pickupModalState.lineId,
+      pickupModalState.assignmentId,
+      pickupModalState.quantityAssigned,
+      trip.id,
+      person.id,
+    )
+    if (result.ok) {
+      setPickupModalState(null)
+      // Si trip cancelado, redirect a /programacion
+      if (result.tripCancelled) {
+        router.push('/programacion')
+        return
+      }
+      // Si no, refetch trip + backlog
+      const updated = await fetchTrip(id)
+      if (updated) {
+        setTrip(updated)
+        setExistingAssignments(updated.assignments)
+        setOriginalAssignments(new Map(updated.assignments.map((a: TripAssignment) => [a.id, a.quantity_assigned])))
+      }
+      refetchBacklog()
+    }
+    // Errores via pickup.error en el modal
+  }, [pickupModalState, person, trip, pickup, fetchTrip, id, refetchBacklog, router])
+
   // --- Estado de carga global ---
   const isLoading =
     pageLoading || authLoading || vehiclesLoading || driversLoading || ratesLoading
@@ -784,6 +850,7 @@ export default function ViajeDetailPage() {
                 canEdit={canEditFullTrip}
                 onRemove={handleRemoveExisting}
                 onQtyChange={handleExistingQtyChange}
+                onConvertToPickup={canEditFullTrip ? handleConvertToPickup : undefined}
               />
             ))}
           </div>
@@ -945,6 +1012,56 @@ export default function ViajeDetailPage() {
                 loading={saving}
               >
                 Si, cancelar movilización
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Convertir línea a pickup (Cambio 3 — Surface 2) */}
+      {pickupModalState && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {pickupModalState.willCancelTrip ? 'Cancelar viaje y convertir a pickup' : 'Convertir a pickup'}
+            </h3>
+            {pickupModalState.qtyDelivered > 0 ? (
+              <p className="mt-2 text-sm text-red-600">
+                No se puede convertir a pickup una línea con entregas previas registradas
+                ({pickupModalState.qtyDelivered} de {pickupModalState.quantityAssigned} entregado).
+                Cancelá la línea o terminá el flow actual.
+              </p>
+            ) : pickupModalState.willCancelTrip ? (
+              <p className="mt-2 text-sm text-gray-600">
+                Esta es la última línea del viaje{' '}
+                <span className="font-mono font-bold">{trip?.trip_id ?? trip?.id.slice(0, 8)}</span>.
+                Convertirla a pickup CANCELARÁ el viaje. ¿Confirmar?
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">
+                ¿Convertir esta línea a pickup? Saldrá del viaje y pasará a "Pickups Pendientes de Retiro".
+              </p>
+            )}
+            {pickup.error && (
+              <p className="mt-2 text-sm text-red-600">{pickup.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPickupModalState(null)}
+                disabled={pickup.loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant={pickupModalState.willCancelTrip ? 'danger' : 'primary'}
+                size="sm"
+                onClick={confirmConvertToPickup}
+                loading={pickup.loading}
+                disabled={pickupModalState.qtyDelivered > 0}
+              >
+                {pickupModalState.willCancelTrip ? 'Sí, cancelar viaje' : 'Convertir a pickup'}
               </Button>
             </div>
           </div>
