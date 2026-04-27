@@ -2004,6 +2004,7 @@ export type Database = {
       }
       sm_request_lines: {
         Row: {
+          attachments: Json
           category: string | null
           created_at: string | null
           delivered_at: string | null
@@ -2019,6 +2020,12 @@ export type Database = {
           line_type: string
           material_category: string | null
           notes: string | null
+          pickup_approved_at: string | null
+          pickup_approved_by: string | null
+          pickup_by_project: boolean
+          pickup_completed_at: string | null
+          pickup_received_by_id: string | null
+          pickup_received_by_name: string | null
           po_reference: string | null
           purchase_order_line_id: string | null
           qty_delivered: number | null
@@ -2034,6 +2041,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          attachments?: Json
           category?: string | null
           created_at?: string | null
           delivered_at?: string | null
@@ -2049,6 +2057,12 @@ export type Database = {
           line_type: string
           material_category?: string | null
           notes?: string | null
+          pickup_approved_at?: string | null
+          pickup_approved_by?: string | null
+          pickup_by_project?: boolean
+          pickup_completed_at?: string | null
+          pickup_received_by_id?: string | null
+          pickup_received_by_name?: string | null
           po_reference?: string | null
           purchase_order_line_id?: string | null
           qty_delivered?: number | null
@@ -2064,6 +2078,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          attachments?: Json
           category?: string | null
           created_at?: string | null
           delivered_at?: string | null
@@ -2079,6 +2094,12 @@ export type Database = {
           line_type?: string
           material_category?: string | null
           notes?: string | null
+          pickup_approved_at?: string | null
+          pickup_approved_by?: string | null
+          pickup_by_project?: boolean
+          pickup_completed_at?: string | null
+          pickup_received_by_id?: string | null
+          pickup_received_by_name?: string | null
           po_reference?: string | null
           purchase_order_line_id?: string | null
           qty_delivered?: number | null
@@ -2113,6 +2134,20 @@ export type Database = {
             columns: ["from_location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_request_lines_pickup_approved_by_fkey"
+            columns: ["pickup_approved_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sm_request_lines_pickup_received_by_id_fkey"
+            columns: ["pickup_received_by_id"]
+            isOneToOne: false
+            referencedRelation: "people"
             referencedColumns: ["id"]
           },
           {
@@ -2165,7 +2200,6 @@ export type Database = {
           date_created: string | null
           date_required: string
           date_submitted: string | null
-          fulfillment_type: string | null
           id: string
           initial_priority: string | null
           notes: string | null
@@ -2189,7 +2223,6 @@ export type Database = {
           date_created?: string | null
           date_required: string
           date_submitted?: string | null
-          fulfillment_type?: string | null
           id?: string
           initial_priority?: string | null
           notes?: string | null
@@ -2213,7 +2246,6 @@ export type Database = {
           date_created?: string | null
           date_required?: string
           date_submitted?: string | null
-          fulfillment_type?: string | null
           id?: string
           initial_priority?: string | null
           notes?: string | null
@@ -2508,7 +2540,6 @@ export type Database = {
           escort: boolean | null
           id: string
           is_external: boolean | null
-          is_self_pickup: boolean | null
           notes: string | null
           rate_id: string | null
           route_summary: string | null
@@ -2536,7 +2567,6 @@ export type Database = {
           escort?: boolean | null
           id?: string
           is_external?: boolean | null
-          is_self_pickup?: boolean | null
           notes?: string | null
           rate_id?: string | null
           route_summary?: string | null
@@ -2564,7 +2594,6 @@ export type Database = {
           escort?: boolean | null
           id?: string
           is_external?: boolean | null
-          is_self_pickup?: boolean | null
           notes?: string | null
           rate_id?: string | null
           route_summary?: string | null
@@ -3052,7 +3081,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      complete_pickup_trip: { Args: { p_trip_id: string }; Returns: undefined }
       get_my_app_role: { Args: never; Returns: string }
     }
     Enums: {
