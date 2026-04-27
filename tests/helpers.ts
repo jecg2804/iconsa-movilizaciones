@@ -356,29 +356,76 @@ export async function dispatch(page: Page) {
 }
 
 // --- Register Parada ---
+/**
+ * Registra una Parada en el trip detail page (Cambio 1 redesign).
+ *
+ * - Si useOther=true: selecciona "Otra ubicación" y rellena freeText.
+ * - Si useOther=false (default): selecciona la opción de location del dropdown
+ *   por label regex.
+ * - lineIds: ids de líneas a marcar (≥1 requerido por el modal).
+ *   Usa data-testid={parada-line-{lineId}} agregado en ParadaModal.
+ * - lineStatus: aplicado al primer status select tras la primera línea checkeada
+ *   (simplificación — todas las líneas heredan el mismo status si lineStatus se pasa).
+ * - filePath: path absoluto a archivo a subir (≥1 requerido).
+ * - notes: opcional, notas generales.
+ */
 export async function registerParada(
   page: Page,
-  opts: { location: string; stopType?: 'retiro' | 'entrega' | 'intercambio'; notes?: string },
+  opts: {
+    location?: string
+    useOther?: boolean
+    freeText?: string
+    lineIds: string[]
+    lineStatus?: 'completo' | 'parcial' | 'no_disponible'
+    filePath: string
+    notes?: string
+  },
 ) {
   await page.getByRole('button', { name: 'Registrar Parada' }).first().click()
   await page.waitForTimeout(500)
 
-  // Fill location
-  await page.getByPlaceholder(/TUBOTEC/).fill(opts.location)
-
-  // Stop type radio (retiro is default)
-  if (opts.stopType === 'entrega') {
-    await page.getByText('Entrega de material').click()
-  } else if (opts.stopType === 'intercambio') {
-    await page.getByText('Intercambio').click()
+  // Ubicación
+  const locationSelect = page.locator('#parada-location-select')
+  if (opts.useOther) {
+    await locationSelect.selectOption({ value: '__OTHER__' })
+    const freeTextInput = page.locator('input[placeholder="Escriba la ubicación"]')
+    await freeTextInput.fill(opts.freeText ?? '')
+  } else {
+    if (!opts.location) throw new Error('registerParada: location requerido cuando useOther=false')
+    // Buscar opción cuyo texto contenga `location` y usar su value (string)
+    const optionValue = await locationSelect
+      .locator('option')
+      .filter({ hasText: opts.location })
+      .first()
+      .getAttribute('value')
+    if (!optionValue) {
+      throw new Error(`registerParada: no encontré opción que matchee '${opts.location}'`)
+    }
+    await locationSelect.selectOption(optionValue)
   }
 
-  // Notes
+  // Líneas afectadas — data-testid robusto agregado en ParadaModal Task 4
+  for (const lineId of opts.lineIds) {
+    await page.getByTestId(`parada-line-${lineId}`).check()
+  }
+
+  // Status de línea (aplica al primer line-status select dentro del modal)
+  if (opts.lineStatus && opts.lineStatus !== 'completo') {
+    const lineStatusSelect = page.getByLabel('Estado de la línea').first()
+    await lineStatusSelect.selectOption(opts.lineStatus)
+  }
+
+  // Foto de factura
+  const fileInput = page.locator('input[type="file"]').first()
+  await fileInput.setInputFiles(opts.filePath)
+  await page.waitForTimeout(800)
+
+  // Notas
   if (opts.notes) {
-    await page.locator('textarea').last().fill(opts.notes)
+    await page.locator('#parada-notes').fill(opts.notes)
   }
 
-  // Confirm — click the modal's confirm button (2nd "Registrar Parada")
+  // Confirm — modal's "Registrar Parada" button (2nd con ese name)
   await page.getByRole('button', { name: 'Registrar Parada' }).nth(1).click()
   await page.waitForTimeout(3000)
 }
