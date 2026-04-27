@@ -16,6 +16,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
+import path from 'node:path'
 
 // Load .env.local for service role key
 config({ path: '.env.local' })
@@ -474,22 +475,28 @@ test.describe.serial('Full Mobilization Lifecycle', () => {
   })
 
   test('4.5 Register Parada at TUBOTEC', async () => {
-    await page.getByRole('button', { name: /Parada/ }).click()
+    await page.getByRole('button', { name: /Parada/ }).first().click()
     await page.waitForTimeout(500)
     await snap(page, 'e2e-14-parada-modal')
 
     // Verify modal title
     await expect(page.getByText('Parada Intermedia')).toBeVisible()
 
-    // Fill location
-    await page.getByPlaceholder(/TUBOTEC/).fill('TUBOTEC SA - Milla 8')
+    // Seleccionar ubicación via free-text 'Otra' (TUBOTEC SA - Milla 8 no
+    // necesariamente está en las opciones del dropdown si la línea no la trae)
+    await page.locator('#parada-location-select').selectOption('__OTHER__')
+    await page.locator('input[placeholder="Escriba la ubicación"]').fill('TUBOTEC SA - Milla 8')
 
-    // Stop type should default to "Retiro" — verify radio
-    await expect(page.getByText('Retiro de material')).toBeVisible()
+    // Marcar primera línea (data-testid robusto)
+    await page.getByRole('checkbox').first().check()
+
+    // Subir attachment requerido
+    const FIXTURE = path.resolve(__dirname, 'fixtures', 'sample-invoice.pdf')
+    await page.locator('input[type="file"]').first().setInputFiles(FIXTURE)
+    await page.waitForTimeout(800)
 
     // Add notes
-    const notesArea = page.locator('textarea').last()
-    await notesArea.fill('Retiro parcial - faltan 65 tubos PVC, disponibles el jueves')
+    await page.locator('#parada-notes').fill('Retiro parcial - faltan 65 tubos PVC, disponibles el jueves')
 
     await snap(page, 'e2e-15-parada-filled')
 
@@ -507,13 +514,12 @@ test.describe.serial('Full Mobilization Lifecycle', () => {
     // Verify Parada event exists
     const { data: events } = await db
       .from('trip_events')
-      .select('event_type, location, stop_type, notes')
+      .select('event_type, location, notes')
       .eq('trip_id', tripDbId)
       .eq('event_type', 'Parada')
 
     expect(events!.length).toBeGreaterThanOrEqual(1)
     expect(events![0].location).toContain('TUBOTEC')
-    expect(events![0].stop_type).toBe('retiro')
 
     // Trip should still be En Ruta (Parada doesn't change status)
     const { data: trip } = await db
@@ -545,9 +551,17 @@ test.describe.serial('Full Mobilization Lifecycle', () => {
     await paradaBtn.click()
     await page.waitForTimeout(500)
 
-    await page.getByPlaceholder(/TUBOTEC/).fill('FEINSA SA')
-    const notesArea = page.locator('textarea').last()
-    await notesArea.fill('Retiro completo OC 29903')
+    // Free-text 'Otra ubicación' para FEINSA
+    await page.locator('#parada-location-select').selectOption('__OTHER__')
+    await page.locator('input[placeholder="Escriba la ubicación"]').fill('FEINSA SA')
+
+    // Marcar primera línea + subir attachment requerido
+    await page.getByRole('checkbox').first().check()
+    const FIXTURE = path.resolve(__dirname, 'fixtures', 'sample-invoice.pdf')
+    await page.locator('input[type="file"]').first().setInputFiles(FIXTURE)
+    await page.waitForTimeout(800)
+
+    await page.locator('#parada-notes').fill('Retiro completo OC 29903')
     await page.getByRole('button', { name: 'Registrar Parada' }).nth(1).click()
     await page.waitForTimeout(2000)
 
@@ -666,7 +680,7 @@ test.describe.serial('Full Mobilization Lifecycle', () => {
   test('5.2 BD: Complete event audit trail', async () => {
     const { data: events } = await db
       .from('trip_events')
-      .select('event_type, location, stop_type')
+      .select('event_type, location')
       .eq('trip_id', tripDbId)
       .order('event_timestamp')
 

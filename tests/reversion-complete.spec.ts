@@ -4,6 +4,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import path from 'node:path'
 import { db, BASE, login, createSolicitud, createTrip, openTripDetail, dispatch, registerParada, registerEntrega, registerRetorno, cleanupSolicitud } from './helpers'
 
 // Helper to revert the last revertible event
@@ -221,7 +222,21 @@ test.describe.serial('Revert Parada', () => {
     tripDbId = trip.dbId
     await openTripDetail(page, tripDbId)
     await dispatch(page)
-    await registerParada(page, { location: 'PROVEEDOR TEST', stopType: 'retiro', notes: 'Will revert' })
+
+    // Cargar lineId de la única línea para usar data-testid en helper
+    const { data: lines } = await db
+      .from('sm_request_lines')
+      .select('id')
+      .eq('request_id', solicitudId)
+      .limit(1)
+    const FIXTURE = path.resolve(__dirname, 'fixtures', 'sample-invoice.pdf')
+    await registerParada(page, {
+      useOther: true,
+      freeText: 'PROVEEDOR TEST',
+      lineIds: [lines![0].id],
+      filePath: FIXTURE,
+      notes: 'Will revert',
+    })
   })
 
   test.afterAll(async () => {

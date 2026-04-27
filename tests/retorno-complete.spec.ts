@@ -5,6 +5,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import path from 'node:path'
 import { db, BASE, login, createSolicitud, createTrip, openTripDetail, dispatch, registerEntrega, registerRetorno, registerParada, cleanupSolicitud } from './helpers'
 
 test.describe.serial('Retorno — Normal flow (after full delivery)', () => {
@@ -180,8 +181,29 @@ test.describe.serial('Retorno — After Paradas (complete timeline)', () => {
 
     await openTripDetail(page, tripDbId)
     await dispatch(page)
-    await registerParada(page, { location: 'PROVEEDOR X', stopType: 'retiro', notes: 'Pickup completo' })
-    await registerParada(page, { location: 'Bodega Temp', stopType: 'entrega', notes: 'Drop temporal' })
+
+    // Cargar lineIds para data-testid robusto en helper
+    const { data: lines } = await db
+      .from('sm_request_lines')
+      .select('id')
+      .eq('request_id', solicitudId)
+    const lineIds = (lines ?? []).map(l => l.id)
+    const FIXTURE = path.resolve(__dirname, 'fixtures', 'sample-invoice.pdf')
+
+    await registerParada(page, {
+      useOther: true,
+      freeText: 'PROVEEDOR X',
+      lineIds: [lineIds[0]],
+      filePath: FIXTURE,
+      notes: 'Pickup completo',
+    })
+    await registerParada(page, {
+      useOther: true,
+      freeText: 'Bodega Temp',
+      lineIds: [lineIds[0]],
+      filePath: FIXTURE,
+      notes: 'Drop temporal',
+    })
 
     // Get fresh confirmation code from BD in case helper didn't capture it
     if (!confirmationCode) {
