@@ -13,7 +13,6 @@ import {
   notifySolicitudCompletada,
   notifyIncidenciaRuta,
   notifyRetornoRegistrado,
-  notifyMaterialPreparado,
   notifyReversionRegistrada,
 } from '@/lib/notifications/actions'
 import { formatDate, formatQty } from '@/lib/utils/format'
@@ -484,25 +483,20 @@ export default function Page() {
   const revertedIds = new Set(
     events.filter((e) => e.event_type === 'Reversion' && e.reverts_event_id).map((e) => e.reverts_event_id!),
   )
-  const isPickup = false  // Pickup ya no existe a nivel trip — Cambio 3 lo movió a línea (T4 borra refs)
   const hasSalida = events.some((e) => e.event_type === 'Salida' && !revertedIds.has(e.id))
   const hasLlegada = events.some((e) => e.event_type === 'Llegada' && !revertedIds.has(e.id))
   const hasEntrega = events.some((e) => e.event_type === 'Entrega' && !revertedIds.has(e.id))
   const hasRetorno = events.some((e) => e.event_type === 'Retorno' && !revertedIds.has(e.id))
-  const hasPreparacion = events.some((e) => e.event_type === 'Preparacion' && !revertedIds.has(e.id))
-  const hasRetiro = events.some((e) => e.event_type === 'Retiro' && !revertedIds.has(e.id))
 
   const tripDone = trip?.status === 'Completado' || trip?.status === 'Cancelado'
 
-  // Siguiente evento principal (pickup usa secuencia diferente)
+  // Siguiente evento principal
   const nextMainEvent: TripEventType | null = tripDone
     ? null
-    : isPickup
-      ? (!hasPreparacion ? 'Preparacion' : !hasRetiro ? 'Retiro' : null)
-      : (!hasSalida ? 'Salida' : !hasEntrega ? 'Entrega' : !hasRetorno ? 'Retorno' : null)
+    : (!hasSalida ? 'Salida' : !hasEntrega ? 'Entrega' : !hasRetorno ? 'Retorno' : null)
 
-  // Llegada es opcional (solo para viajes normales, no pickup)
-  const showLlegadaButton = !isPickup && hasSalida && !hasLlegada && !hasEntrega && !tripDone
+  // Llegada es opcional
+  const showLlegadaButton = hasSalida && !hasLlegada && !hasEntrega && !tripDone
 
   // IDs de las líneas asignadas (para transitions de estado)
   const assignedLineIds = useMemo(
@@ -835,7 +829,7 @@ export default function Page() {
       try {
         const eventType = revertEvent.event_type
 
-        // Guard: no permitir revertir Llegada si hay Entrega/Retiro/Parada
+        // Guard: no permitir revertir Llegada si hay Entrega/Parada
         // no-reverted registrada después de esta Llegada. Revertir Llegada
         // en ese caso dejaría el trip inconsistente (sin actual_arrival pero
         // con líneas ya marcadas Entregada).
@@ -844,11 +838,11 @@ export default function Page() {
           const laterBlocking = events.some(
             (e) =>
               !revertedIds.has(e.id) &&
-              ['Entrega', 'Retiro', 'Parada'].includes(e.event_type) &&
+              ['Entrega', 'Parada'].includes(e.event_type) &&
               new Date(e.event_timestamp).getTime() > llegadaTime,
           )
           if (laterBlocking) {
-            setEventError('No se puede revertir Llegada porque existen eventos posteriores (Entrega/Retiro/Parada). Revierta esos primero.')
+            setEventError('No se puede revertir Llegada porque existen eventos posteriores (Entrega/Parada). Revierta esos primero.')
             setReverting(false)
             return
           }
@@ -992,72 +986,6 @@ export default function Page() {
             .eq('id', trip.id)
         }
 
-        if (eventType === 'Retiro') {
-          // Espejo de Entrega para los efectos de cantidades + rollback del trip
-          // que complete_pickup_trip habia marcado como Completado.
-          // TODO Fase B.0: verificar via Chat el body de complete_pickup_trip por si
-          // setea otros campos (date_cancelled, etc.) que tambien deban revertirse.
-          const { data: eventLines } = await supabase
-            .from('trip_event_lines')
-            .select('request_line_id, quantity')
-            .eq('trip_event_id', revertEvent.id)
-
-          // 1. Revertir cantidades en sm_request_lines (espejo Entrega)
-          for (const el of eventLines ?? []) {
-            const { data: current } = await supabase
-              .from('sm_request_lines')
-              .select('qty_delivered, qty_scheduled, quantity')
-              .eq('id', el.request_line_id)
-              .single()
-
-            const newDelivered = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
-            const newScheduled = (current?.qty_scheduled ?? 0) + el.quantity
-            const totalQty = current?.quantity ?? el.quantity
-            const newStatus =
-              newDelivered >= totalQty
-                ? 'Entregada'
-                : newDelivered > 0
-                  ? 'Parcial'
-                  : 'En Transito' // SIN acento — CRÍTICO
-
-            await supabase
-              .from('sm_request_lines')
-              .update({
-                qty_delivered: newDelivered,
-                qty_scheduled: newScheduled,
-                status: newStatus,
-                ...(newStatus !== 'Entregada' ? { delivered_at: null } : {}),
-              })
-              .eq('id', el.request_line_id)
-          }
-
-          // 2. Revertir trip_line_assignments.qty_delivered (fresh SELECT — fix C3)
-          for (const el of eventLines ?? []) {
-            const { data: tla } = await supabase
-              .from('trip_line_assignments')
-              .select('qty_delivered')
-              .eq('trip_id', trip.id)
-              .eq('request_line_id', el.request_line_id)
-              .single()
-
-            await supabase
-              .from('trip_line_assignments')
-              .update({ qty_delivered: Math.max(0, (tla?.qty_delivered ?? 0) - el.quantity) })
-              .eq('trip_id', trip.id)
-              .eq('request_line_id', el.request_line_id)
-          }
-
-          // 3. Rollback trip: complete_pickup_trip habia seteado status='Completado'
-          // Y actual_arrival=now(). Verificado con Fase B.0 prompt #1 (body del RPC).
-          // En flows pickup NO hay Llegada separada, asi que limpiar actual_arrival es
-          // correcto (distinto del caso Retorno fleet donde actual_arrival pertenece
-          // al evento Llegada y NO se debe tocar).
-          await supabase
-            .from('trips')
-            .update({ status: 'En Ruta', actual_arrival: null })
-            .eq('id', trip.id)
-        }
-
         // 3. Reload
         setRevertEvent(null)
         const tripData = await fetchTrip(id)
@@ -1072,47 +1000,6 @@ export default function Page() {
       }
     },
     [supabase, trip, person, revertEvent, fetchTrip, id, loadEvents],
-  )
-
-  // --- Preparación (pickup — informativo, no cambia estados) ---
-  const handlePreparation = useCallback(
-    async (data: { event_id: string; notes: string; attachments: Attachment[] }) => {
-      if (!trip) return
-      setEventBusy(true)
-      setEventError(null)
-      try {
-        // INSERT trip_events idempotente — event_id pre-generado en PreparationModal
-        const { error: insertErr } = await supabase.from('trip_events').insert({
-          id: data.event_id,
-          trip_id: trip.id,
-          event_type: 'Preparacion',
-          event_timestamp: new Date().toISOString(),
-          registered_by: person?.id ?? null,
-          notes: data.notes || null,
-          attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
-        })
-
-        if (insertErr) {
-          if (insertErr.code === '23505') {
-            console.warn('[Preparation] Duplicate key — idempotent success')
-          } else {
-            throw insertErr
-          }
-        }
-
-        // Notificar PMs que material está listo
-        notifyMaterialPreparado(trip.id).catch(console.error)
-        setActiveEvent(null)
-        const tripData = await fetchTrip(id)
-        setTrip(tripData)
-        await loadEvents()
-      } catch (err) {
-        setEventError(err instanceof Error ? err.message : 'Error al registrar preparación')
-      } finally {
-        setEventBusy(false)
-      }
-    },
-    [supabase, trip, person, fetchTrip, id, loadEvents],
   )
 
   // --- Parada intermedia (informacional — no cambia estados) ---
@@ -1158,117 +1045,6 @@ export default function Page() {
         setEventError(err instanceof Error ? err.message : 'Error al registrar parada')
       } finally {
         setEventBusy(false)
-      }
-    },
-    [supabase, trip, person, fetchTrip, id, loadEvents],
-  )
-
-  // --- Retiro (pickup — delivery + complete trip via RPC) ---
-  const handlePickup = useCallback(
-    async (data: PickupData) => {
-      if (!trip) return
-      setDelivering(true)
-      setEventError(null)
-      try {
-        const accepted = data.lines.filter((l) => l.line_status !== 'rejected' && l.quantity > 0)
-
-        // 1. INSERT trip_events PRIMERO — checkpoint de idempotencia.
-        // Si el retry encuentra 23505, significa que todo el handler ya corrió → early success.
-        // Protege los UPDATE += qty de abajo contra double-count bajo retry de red.
-        const { error: insertEvtErr } = await supabase
-          .from('trip_events')
-          .insert({
-            id: data.event_id,
-            trip_id: trip.id,
-            event_type: 'Retiro',
-            event_timestamp: new Date().toISOString(),
-            registered_by: person?.id ?? null,
-            received_by_id: data.received_by_id,
-            received_by_name: data.received_by_name,
-            notes: data.notes || null,
-            attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
-            confirmation_code_used: data.confirmation_code,
-          })
-
-        if (insertEvtErr) {
-          if (insertEvtErr.code === '23505') {
-            console.warn('[Pickup] Duplicate key — idempotent success, skipping all writes')
-            setActiveEvent(null)
-            const tripData = await fetchTrip(id)
-            setTrip(tripData)
-            await loadEvents()
-            return
-          }
-          throw insertEvtErr
-        }
-
-        // 2. INSERT trip_event_lines (throw on error, fix N8)
-        const eventLines = data.lines.map((l) => ({
-          trip_event_id: data.event_id,
-          request_line_id: l.request_line_id,
-          quantity: l.quantity,
-          line_status: l.line_status,
-        }))
-        const { error: linesErr } = await supabase.from('trip_event_lines').insert(eventLines)
-        if (linesErr) throw linesErr
-
-        // 3. INSERT delivery_observations
-        const observations = data.lines
-          .filter((l) => l.line_status === 'with_observations' && l.observation_type)
-          .map((l) => ({
-            trip_event_id: data.event_id,
-            request_line_id: l.request_line_id,
-            observation_type: l.observation_type!,
-            notes: l.observation_notes || null,
-            reported_by: person?.id ?? null,
-          }))
-        if (observations.length > 0) {
-          await supabase.from('delivery_observations').insert(observations)
-        }
-
-        // 4. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
-        for (const line of accepted) {
-          const { data: current } = await supabase
-            .from('sm_request_lines')
-            .select('qty_delivered, qty_scheduled, quantity')
-            .eq('id', line.request_line_id)
-            .single()
-
-          const currentDelivered = current?.qty_delivered ?? 0
-          const currentScheduled = current?.qty_scheduled ?? 0
-          const totalQty = current?.quantity ?? line.quantity
-          const newDelivered = Math.min(totalQty, currentDelivered + line.quantity)
-          const newScheduled = Math.max(0, currentScheduled - line.quantity)
-          const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
-
-          await supabase
-            .from('sm_request_lines')
-            .update({
-              qty_delivered: newDelivered,
-              qty_scheduled: newScheduled,
-              status: newStatus,
-              ...(newStatus === 'Entregada' ? { delivered_at: new Date().toISOString() } : {}),
-            })
-            .eq('id', line.request_line_id)
-        }
-
-        // 5. Complete trip via SECURITY DEFINER (PM can't UPDATE trips directly)
-        await (supabase.rpc as CallableFunction)('complete_pickup_trip', { p_trip_id: trip.id })
-
-        // 6. Notifications (loop all accepted, fix M6)
-        for (const line of accepted) {
-          notifyEntregaConfirmada(line.request_line_id, data.received_by_name).catch(console.error)
-        }
-
-        // 7. Reload
-        setActiveEvent(null)
-        const tripData = await fetchTrip(id)
-        setTrip(tripData)
-        await loadEvents()
-      } catch (err) {
-        setEventError(err instanceof Error ? err.message : 'Error al registrar retiro')
-      } finally {
-        setDelivering(false)
       }
     },
     [supabase, trip, person, fetchTrip, id, loadEvents],
@@ -1325,7 +1101,7 @@ export default function Page() {
   // PM solo ve Entrega + Incidencia (no puede UPDATE trips → no Salida/Retorno)
   const isPM = role === 'pm'
   // Retorno secundario: disponible después de Salida sin requerir Entrega
-  const showRetornoSecondary = !isPickup && hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
+  const showRetornoSecondary = hasSalida && !hasRetorno && !tripDone && nextMainEvent !== 'Retorno' && !isPM
 
   // Líneas aún En Transito al momento del click de Retorno — alimentan el guard dialog
   const enTransitoLines = trip.assignments
@@ -1509,8 +1285,8 @@ export default function Page() {
               />
             )}
 
-            {/* Parada intermedia — disponible después de Salida, múltiples veces, no PM, no pickup */}
-            {hasSalida && !tripDone && !isPM && !isPickup && (
+            {/* Parada intermedia — disponible después de Salida, múltiples veces, no PM */}
+            {hasSalida && !tripDone && !isPM && (
               <EventButton
                 eventType="Parada"
                 loading={eventBusy && activeEvent === 'Parada'}
@@ -1551,8 +1327,8 @@ export default function Page() {
         </div>
       )}
 
-      {/* Overlay de despacho editable (solo viajes normales) */}
-      {activeEvent === 'Salida' && trip && !isPickup && (
+      {/* Overlay de despacho editable */}
+      {activeEvent === 'Salida' && trip && (
         <DispatchModal
           trip={trip}
           onConfirm={handleDispatch}
@@ -1562,35 +1338,14 @@ export default function Page() {
         />
       )}
 
-      {/* Overlay de entrega con per-line status (solo viajes normales) */}
-      {activeEvent === 'Entrega' && trip && !isPickup && (
+      {/* Overlay de entrega con per-line status */}
+      {activeEvent === 'Entrega' && trip && (
         <DeliveryModal
           trip={trip}
           onConfirm={handleDelivery}
           onClose={() => setActiveEvent(null)}
           loading={delivering}
           receiverOptions={receiverOptions}
-          person={person}
-        />
-      )}
-
-      {/* Overlay de preparación (pickup) */}
-      {activeEvent === 'Preparacion' && trip && isPickup && (
-        <PreparationModal
-          trip={trip}
-          onConfirm={handlePreparation}
-          onClose={() => setActiveEvent(null)}
-          loading={eventBusy}
-        />
-      )}
-
-      {/* Overlay de retiro (pickup) */}
-      {activeEvent === 'Retiro' && trip && isPickup && (
-        <PickupModal
-          trip={trip}
-          onConfirm={handlePickup}
-          onClose={() => setActiveEvent(null)}
-          loading={delivering}
           person={person}
         />
       )}
@@ -1606,7 +1361,7 @@ export default function Page() {
       )}
 
       {/* Overlay de registro de evento (Llegada, Retorno, Incidencia) */}
-      {activeEvent && !['Salida', 'Entrega', 'Preparacion', 'Retiro', 'Parada'].includes(activeEvent) && (
+      {activeEvent && !['Salida', 'Entrega', 'Parada'].includes(activeEvent) && (
         <EventModal
           eventType={activeEvent}
           confirmationCode={trip.confirmation_code}

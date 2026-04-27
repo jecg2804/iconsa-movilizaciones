@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 
 // --- Tipos exportados ---
 
-export type TripEventType = 'Salida' | 'Llegada' | 'Entrega' | 'Retorno' | 'Incidencia' | 'Preparacion' | 'Retiro' | 'Parada'
+export type TripEventType = 'Salida' | 'Llegada' | 'Entrega' | 'Retorno' | 'Incidencia' | 'Parada'
 
 export interface TripEventInput {
   id?: string // UUID pre-generado para folder de storage
