@@ -47,7 +47,6 @@ interface TripEvent {
   attachments: Attachment[]
   reverts_event_id: string | null
   location: string | null
-  stop_type: string | null
 }
 
 // --- Componente de fila de asignacion (solo lectura) ---
@@ -428,8 +427,7 @@ export default function Page() {
         notes,
         attachments,
         reverts_event_id,
-        location,
-        stop_type
+        location
       `)
       .eq('trip_id', id)
       .order('event_timestamp', { ascending: true })
@@ -452,7 +450,6 @@ export default function Page() {
           attachments: att,
           reverts_event_id: (row.reverts_event_id as string | null) ?? null,
           location: (row.location as string | null) ?? null,
-          stop_type: (row.stop_type as string | null) ?? null,
         }
       })
       setEvents(mapped)
@@ -1134,7 +1131,6 @@ export default function Page() {
           event_timestamp: new Date().toISOString(),
           registered_by: person?.id ?? null,
           location: data.location,
-          stop_type: data.stop_type,
           notes: data.notes || null,
           attachments: data.attachments.length > 0 ? JSON.parse(JSON.stringify(data.attachments)) : null,
         }).select('id').single()

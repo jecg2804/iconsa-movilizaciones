@@ -365,6 +365,7 @@ export type Database = {
           engine_serial_number: string | null
           equipment_type: string | null
           fuel_tank_capacity_liters: number | null
+          gps_vehicle_id: string | null
           id: string
           inspection_type: string | null
           insurance_expiry: string | null
@@ -383,7 +384,6 @@ export type Database = {
           purchase_date: string | null
           qr_code_url: string | null
           serial_number: string | null
-          gps_vehicle_id: string | null
           spectrum_code: string | null
           status: string | null
           tracking_tier: string | null
@@ -405,6 +405,7 @@ export type Database = {
           engine_serial_number?: string | null
           equipment_type?: string | null
           fuel_tank_capacity_liters?: number | null
+          gps_vehicle_id?: string | null
           id?: string
           inspection_type?: string | null
           insurance_expiry?: string | null
@@ -423,7 +424,6 @@ export type Database = {
           purchase_date?: string | null
           qr_code_url?: string | null
           serial_number?: string | null
-          gps_vehicle_id?: string | null
           spectrum_code?: string | null
           status?: string | null
           tracking_tier?: string | null
@@ -445,6 +445,7 @@ export type Database = {
           engine_serial_number?: string | null
           equipment_type?: string | null
           fuel_tank_capacity_liters?: number | null
+          gps_vehicle_id?: string | null
           id?: string
           inspection_type?: string | null
           insurance_expiry?: string | null
@@ -463,7 +464,6 @@ export type Database = {
           purchase_date?: string | null
           qr_code_url?: string | null
           serial_number?: string | null
-          gps_vehicle_id?: string | null
           spectrum_code?: string | null
           status?: string | null
           tracking_tier?: string | null
@@ -2379,7 +2379,6 @@ export type Database = {
           registered_by: string | null
           reverts_event_id: string | null
           source: string | null
-          stop_type: string | null
           trip_id: string
         }
         Insert: {
@@ -2396,7 +2395,6 @@ export type Database = {
           registered_by?: string | null
           reverts_event_id?: string | null
           source?: string | null
-          stop_type?: string | null
           trip_id: string
         }
         Update: {
@@ -2413,7 +2411,6 @@ export type Database = {
           registered_by?: string | null
           reverts_event_id?: string | null
           source?: string | null
-          stop_type?: string | null
           trip_id?: string
         }
         Relationships: [

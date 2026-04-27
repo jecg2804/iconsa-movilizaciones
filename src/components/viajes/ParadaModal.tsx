@@ -10,7 +10,6 @@ import type { Attachment } from '@/lib/supabase/storage'
 
 export interface ParadaData {
   location: string
-  stop_type: 'retiro' | 'entrega' | 'intercambio'
   lines?: { request_line_id: string; line_status: string; quantity: number; notes?: string }[]
   oc_reference?: string
   notes: string
@@ -24,12 +23,6 @@ interface ParadaModalProps {
   loading: boolean
 }
 
-const STOP_TYPES = [
-  { value: 'retiro', label: 'Retiro de material/equipo' },
-  { value: 'entrega', label: 'Entrega de material/equipo' },
-  { value: 'intercambio', label: 'Intercambio (deja y recoge)' },
-] as const
-
 const LINE_STATUSES = [
   { value: 'completo', label: 'Completo' },
   { value: 'parcial', label: 'Parcial' },
@@ -38,7 +31,6 @@ const LINE_STATUSES = [
 
 export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalProps) {
   const [location, setLocation] = useState('')
-  const [stopType, setStopType] = useState<'retiro' | 'entrega' | 'intercambio'>('retiro')
   const [ocReference, setOcReference] = useState('')
   const [notes, setNotes] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -100,13 +92,12 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
 
     await onConfirm({
       location: location.trim(),
-      stop_type: stopType,
       lines: checkedLines.length > 0 ? checkedLines : undefined,
       oc_reference: ocReference.trim() || undefined,
       notes: fullNotes,
       attachments,
     })
-  }, [location, stopType, selectedLines, ocReference, notes, attachments, trip.assignments, onConfirm])
+  }, [location, selectedLines, ocReference, notes, attachments, trip.assignments, onConfirm])
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
@@ -137,28 +128,6 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
                 <option key={loc} value={loc} />
               ))}
             </datalist>
-          </div>
-
-          {/* Tipo de parada */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Tipo de parada <span className="text-red-500">*</span>
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {STOP_TYPES.map((st) => (
-                <label key={st.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <input
-                    type="radio"
-                    name="stop_type"
-                    value={st.value}
-                    checked={stopType === st.value}
-                    onChange={() => setStopType(st.value as typeof stopType)}
-                    className="accent-cyan-600"
-                  />
-                  {st.label}
-                </label>
-              ))}
-            </div>
           </div>
 
           {/* Líneas afectadas (colapsable) */}

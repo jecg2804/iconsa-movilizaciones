@@ -14,7 +14,6 @@ interface EventItem {
   attachments?: Attachment[]
   reverts_event_id?: string | null
   location?: string | null
-  stop_type?: string | null
 }
 
 interface EventTimelineProps {
@@ -146,16 +145,9 @@ export function EventTimeline({ events }: EventTimelineProps) {
                 </p>
               )}
 
-              {event.event_type === 'Parada' && !isReverted && (
-                <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  {event.location && (
-                    <span className="text-xs font-medium text-cyan-700">📍 {event.location}</span>
-                  )}
-                  {event.stop_type && (
-                    <span className="inline-flex rounded-full bg-cyan-50 px-2 py-0.5 text-xs text-cyan-700 border border-cyan-200">
-                      {event.stop_type === 'retiro' ? 'Retiro' : event.stop_type === 'entrega' ? 'Entrega' : 'Intercambio'}
-                    </span>
-                  )}
+              {event.event_type === 'Parada' && !isReverted && event.location && (
+                <div className="mt-0.5">
+                  <span className="text-xs font-medium text-cyan-700">📍 {event.location}</span>
                 </div>
               )}
 
