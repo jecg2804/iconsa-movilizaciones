@@ -209,6 +209,11 @@ export function ParadaModal({ trip, onConfirm, onClose, loading }: ParadaModalPr
                         <Package className="h-3.5 w-3.5 shrink-0 text-iconsa-gold" />
                       )}
                       <span className="flex-1 truncate text-sm text-gray-700">
+                        {a.line?.po_reference && (
+                          <span className="mr-2 font-mono text-xs text-iconsa-gray">
+                            OC {a.line.po_reference}
+                          </span>
+                        )}
                         {a.line?.description ?? 'Línea'}
                       </span>
                       <span className="text-xs text-iconsa-gray">

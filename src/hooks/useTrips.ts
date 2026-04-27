@@ -79,6 +79,7 @@ export interface TripAssignment {
     unit_text: string | null
     designated_receiver_id: string | null
     designated_receiver_name: string | null
+    po_reference?: string | null
     equipment: { id: string; spectrum_code: string | null; description: string } | null
     request: {
       id: string
@@ -330,6 +331,7 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       unit_text: (rawLine.unit_text as string | null) ?? null,
       designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
       designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
+      po_reference: (rawLine.po_reference as string | null) ?? null,
       equipment,
       request: rawRequest
         ? {
@@ -729,6 +731,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               qty_delivered,
               designated_receiver_id,
               designated_receiver_name,
+              po_reference,
               from_text,
               to_text,
               unit_text,
