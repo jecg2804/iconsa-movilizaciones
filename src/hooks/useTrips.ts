@@ -36,8 +36,8 @@ export interface BacklogLine {
   qty_delivered: number
   // Relaciones unidas
   equipment: { id: string; spectrum_code: string | null; description: string } | null
-  from_location: { id: string; name: string } | null
-  to_location: { id: string; name: string } | null
+  from_location: { id: string; name: string; location_type: string | null } | null
+  to_location: { id: string; name: string; location_type: string | null } | null
   unit: { id: string; code: string } | null
   // Info de la solicitud padre
   request: {
@@ -69,8 +69,8 @@ export interface TripAssignment {
     quantity: number
     status: string
     notes: string | null
-    from_location: { id: string; name: string } | null
-    to_location: { id: string; name: string } | null
+    from_location: { id: string; name: string; location_type: string | null } | null
+    to_location: { id: string; name: string; location_type: string | null } | null
     unit: { id: string; code: string } | null
     qty_scheduled: number
     qty_delivered: number
@@ -222,8 +222,8 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     const rawLine = a.line as Record<string, unknown> | null
     let line: TripAssignment['line'] = null
     if (rawLine) {
-      const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
-      const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
+      const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string; location_type: string | null } | null)
+      const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string; location_type: string | null } | null)
       const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
       const unitRel = unwrapRelation(rawLine.unit as { id: string; code: string } | null)
       const equipRel = unwrapRelation(rawLine.equipment as { id: string; spectrum_code: string | null; description: string } | null)
@@ -306,8 +306,8 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
   let line: TripAssignment['line'] = null
 
   if (rawLine) {
-    const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
-    const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
+    const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string; location_type: string | null } | null)
+    const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string; location_type: string | null } | null)
     const unit = unwrapRelation(rawLine.unit as { id: string; code: string } | null)
     const equipment = unwrapRelation(rawLine.equipment as { id: string; spectrum_code: string | null; description: string } | null)
     const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
@@ -457,8 +457,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           qty_scheduled,
           qty_delivered,
           equipment:equipment_id(id, spectrum_code, description),
-          from_location:from_location_id(id, name),
-          to_location:to_location_id(id, name),
+          from_location:from_location_id(id, name, location_type),
+          to_location:to_location_id(id, name, location_type),
           unit:unit_id(id, code),
           request:request_id!inner(
             id,
@@ -620,8 +620,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               qty_delivered,
               designated_receiver_id,
               designated_receiver_name,
-              from_location:from_location_id(id, name),
-              to_location:to_location_id(id, name),
+              from_location:from_location_id(id, name, location_type),
+              to_location:to_location_id(id, name, location_type),
               from_text,
               to_text,
               unit_text,
@@ -732,8 +732,8 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               from_text,
               to_text,
               unit_text,
-              from_location:from_location_id(id, name),
-              to_location:to_location_id(id, name),
+              from_location:from_location_id(id, name, location_type),
+              to_location:to_location_id(id, name, location_type),
               unit:unit_id(id, code),
               equipment:equipment_id(id, spectrum_code, description),
               request:request_id(
