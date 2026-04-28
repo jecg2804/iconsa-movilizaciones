@@ -22,7 +22,7 @@ export interface PickupOrderLineWithRelations {
     from_text: string | null
     to_location: { id: string; name: string; project_id: string | null; location_type: string | null } | null
     to_text: string | null
-    request: { id: string; request_id: string | null; date_required: string | null; project: { code: string; name: string } | null }
+    request: { id: string; request_id: string | null; project: { code: string; name: string } | null }
   } | null
 }
 
@@ -30,6 +30,8 @@ export interface PickupOrderWithLines {
   id: string
   pickup_id: string
   status: 'Aprobado' | 'Entregado' | 'Cancelado'
+  /** Columna real BD (NOT NULL) — fecha en que Logística decide ejecutar el pickup. */
+  scheduled_date: string
   approved_at: string
   approved_by_name: string | null
   completed_at: string | null
@@ -41,8 +43,6 @@ export interface PickupOrderWithLines {
   notes: string | null
   attachments: Attachment[]
   lines: PickupOrderLineWithRelations[]
-  /** Derivado JS-side: MIN(line.request.date_required) sobre las líneas del order. null si todas son null. */
-  scheduled_date: string | null
 }
 
 interface PickupOrderCardProps {
@@ -85,15 +85,13 @@ export function PickupOrderCard({
             order.status === 'Aprobado' ? 'text-amber-800' :
             order.status === 'Entregado' ? 'text-emerald-800' : 'text-gray-600'
           } />
-          {order.scheduled_date && (
-            <span
-              className="inline-flex items-center gap-1 text-xs font-medium text-navy whitespace-nowrap"
-              title={`Fecha programada: ${formatDate(order.scheduled_date)}`}
-            >
-              <CalendarDays className="h-3 w-3" />
-              {formatDate(order.scheduled_date)}
-            </span>
-          )}
+          <span
+            className="inline-flex items-center gap-1 text-xs font-medium text-navy whitespace-nowrap"
+            title={`Fecha programada: ${formatDate(order.scheduled_date)}`}
+          >
+            <CalendarDays className="h-3 w-3" />
+            {formatDate(order.scheduled_date)}
+          </span>
           <span className="text-xs text-iconsa-gray" title={`Aprobado ${formatDateTime(order.approved_at)}`}>
             {formatDate(order.approved_at)}
             {order.approved_by_name && <span> · {order.approved_by_name}</span>}

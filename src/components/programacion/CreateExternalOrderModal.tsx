@@ -5,6 +5,7 @@ import { Wrench, Package } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import FileUploader from '@/components/ui/FileUploader'
 import { formatQty } from '@/lib/utils/format'
+import { todayStrInPanama } from '@/lib/utils/datetime'
 import type { Attachment } from '@/lib/supabase/storage'
 import type { BacklogLine } from '@/hooks/useTrips'
 import type { ExternalOrderLineInput } from '@/hooks/useExternalOrders'
@@ -21,6 +22,7 @@ interface CreateExternalOrderModalProps {
     providerName: string,
     invoiceAmount: number,
     invoiceAttachments: Attachment[],
+    scheduledDate: string,
     notes: string | null,
   ) => Promise<void>
   onClose: () => void
@@ -47,10 +49,20 @@ export function CreateExternalOrderModal({
     [selectedLines],
   )
 
+  // Default scheduled_date = MIN line dates (paralelo a CreatePickupOrderModal).
+  const defaultScheduledDate = useMemo(() => {
+    const dates = selectedLines
+      .map((l) => l.request.date_required)
+      .filter((d): d is string => Boolean(d) && /^\d{4}-\d{2}-\d{2}$/.test(d as string))
+    if (dates.length === 0) return todayStrInPanama()
+    return [...dates].sort()[0]
+  }, [selectedLines])
+
   const [quantities, setQuantities] = useState<LineQuantityState[]>(initialState)
   const [providerName, setProviderName] = useState('')
   const [invoiceAmount, setInvoiceAmount] = useState('')
   const [invoiceAttachments, setInvoiceAttachments] = useState<Attachment[]>([])
+  const [scheduledDate, setScheduledDate] = useState<string>(defaultScheduledDate)
   const [notes, setNotes] = useState('')
 
   const tempFolderId = useMemo(() => `external/temp-${Date.now()}`, [])
@@ -70,6 +82,7 @@ export function CreateExternalOrderModal({
     const amount = parseFloat(invoiceAmount)
     if (!Number.isFinite(amount) || amount <= 0) errs.invoiceAmount = 'El costo debe ser mayor a cero'
     if (invoiceAttachments.length === 0) errs.invoiceAttachments = 'Adjunta al menos una cotización o factura'
+    if (!scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) errs.scheduledDate = 'La fecha programada es requerida'
     if (notes.length > 500) errs.notes = 'Máximo 500 caracteres'
     return { valid: Object.keys(errs).length === 0, errors: errs }
   }
@@ -90,7 +103,7 @@ export function CreateExternalOrderModal({
       .filter((l) => l.quantity_assigned > 0)
 
     if (validLines.length === 0) return
-    await onConfirm(validLines, providerName, parseFloat(invoiceAmount), invoiceAttachments, notes.trim() || null)
+    await onConfirm(validLines, providerName, parseFloat(invoiceAmount), invoiceAttachments, scheduledDate, notes.trim() || null)
   }
 
   return (
@@ -205,6 +218,32 @@ export function CreateExternalOrderModal({
             />
             {formErrors.invoiceAttachments && (
               <p className="mt-1 text-xs text-red-600">{formErrors.invoiceAttachments}</p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="ext-scheduled-date" className="mb-1 block text-sm font-medium text-gray-700">
+              Fecha programada <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="ext-scheduled-date"
+              type="date"
+              value={scheduledDate}
+              onChange={(e) => {
+                setScheduledDate(e.target.value)
+                if (formErrors.scheduledDate) {
+                  setFormErrors((prev) => {
+                    const next = { ...prev }
+                    delete next.scheduledDate
+                    return next
+                  })
+                }
+              }}
+              disabled={loading}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+            />
+            {formErrors.scheduledDate && (
+              <p className="mt-1 text-xs text-red-600">{formErrors.scheduledDate}</p>
             )}
           </div>
 

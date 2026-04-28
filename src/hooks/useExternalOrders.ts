@@ -66,6 +66,7 @@ export function useExternalOrders() {
       providerName: string,
       invoiceAmount: number,
       invoiceAttachments: Attachment[],
+      scheduledDate: string,
       notes?: string | null,
     ): Promise<CreateExternalOrderResult> => {
       setLoading(true)
@@ -89,6 +90,12 @@ export function useExternalOrders() {
         }
         if (invoiceAttachments.length === 0) {
           const msg = 'Adjunta al menos una cotización o factura.'
+          setError(msg)
+          return { ok: false, error: msg }
+        }
+        // Cambio 5 polish-#5b: scheduled_date NOT NULL, validación strict
+        if (!scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+          const msg = 'La fecha programada es requerida (formato YYYY-MM-DD).'
           setError(msg)
           return { ok: false, error: msg }
         }
@@ -126,13 +133,14 @@ export function useExternalOrders() {
           }
         }
 
-        // INSERT external_orders header con provider/invoice/cost
+        // INSERT external_orders header con provider/invoice/cost + scheduled_date
         const { data: orderRow, error: insertError } = await supabase
           .from('external_orders')
           .insert({
             status: 'Aprobado',
             approved_by: charrisId,
             approved_at: new Date().toISOString(),
+            scheduled_date: scheduledDate,
             provider_name: providerName.trim(),
             invoice_amount: invoiceAmount,
             invoice_attachments: JSON.parse(JSON.stringify(invoiceAttachments)),

@@ -841,6 +841,7 @@ export type Database = {
           provider_name: string
           received_by_id: string | null
           received_by_name: string | null
+          scheduled_date: string
           status: string
           updated_at: string | null
           updated_by: string | null
@@ -862,6 +863,7 @@ export type Database = {
           provider_name: string
           received_by_id?: string | null
           received_by_name?: string | null
+          scheduled_date: string
           status?: string
           updated_at?: string | null
           updated_by?: string | null
@@ -883,6 +885,7 @@ export type Database = {
           provider_name?: string
           received_by_id?: string | null
           received_by_name?: string | null
+          scheduled_date?: string
           status?: string
           updated_at?: string | null
           updated_by?: string | null
@@ -1842,6 +1845,7 @@ export type Database = {
           pickup_id: string | null
           received_by_id: string | null
           received_by_name: string | null
+          scheduled_date: string
           status: string
           updated_at: string | null
           updated_by: string | null
@@ -1861,6 +1865,7 @@ export type Database = {
           pickup_id?: string | null
           received_by_id?: string | null
           received_by_name?: string | null
+          scheduled_date: string
           status?: string
           updated_at?: string | null
           updated_by?: string | null
@@ -1880,6 +1885,7 @@ export type Database = {
           pickup_id?: string | null
           received_by_id?: string | null
           received_by_name?: string | null
+          scheduled_date?: string
           status?: string
           updated_at?: string | null
           updated_by?: string | null
@@ -3488,4 +3494,3 @@ export const Constants = {
 
 // Helper type for row access
 export type Row<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
-

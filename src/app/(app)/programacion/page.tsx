@@ -302,7 +302,7 @@ export default function ProgramacionPage() {
       const { data } = await supabase
         .from('pickup_orders')
         .select(`
-          id, pickup_id, status, approved_at, completed_at, cancelled_at,
+          id, pickup_id, status, scheduled_date, approved_at, completed_at, cancelled_at,
           received_by_id, received_by_name, notes, attachments,
           approved_by_person:people!pickup_orders_approved_by_fkey(name),
           completed_by_person:people!pickup_orders_completed_by_fkey(name),
@@ -314,37 +314,30 @@ export default function ProgramacionPage() {
               unit:unit_id(code), unit_text,
               from_location:from_location_id(name), from_text,
               to_location:to_location_id(id, name, project_id, location_type), to_text,
-              request:request_id(id, request_id, date_required, project:project_id(code, name))
+              request:request_id(id, request_id, project:project_id(code, name))
             )
           )
         `)
         .eq('status', 'Aprobado')
-        .order('approved_at', { ascending: true })
+        .order('scheduled_date', { ascending: true })
 
-      const mapped: PickupOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => {
-        const lines = (Array.isArray(row.lines) ? row.lines : []) as PickupOrderWithLines['lines']
-        const dates = lines
-          .map((ol) => ol.line?.request.date_required)
-          .filter((d): d is string => Boolean(d))
-        const scheduled_date = dates.length > 0 ? dates.sort()[0] : null
-        return {
-          id: row.id as string,
-          pickup_id: row.pickup_id as string,
-          status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
-          approved_at: row.approved_at as string,
-          approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
-          completed_at: (row.completed_at as string | null) ?? null,
-          completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
-          cancelled_at: (row.cancelled_at as string | null) ?? null,
-          cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
-          received_by_id: (row.received_by_id as string | null) ?? null,
-          received_by_name: (row.received_by_name as string | null) ?? null,
-          notes: (row.notes as string | null) ?? null,
-          attachments: Array.isArray(row.attachments) ? (row.attachments as unknown as Attachment[]) : [],
-          lines,
-          scheduled_date,
-        }
-      })
+      const mapped: PickupOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        pickup_id: row.pickup_id as string,
+        status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+        scheduled_date: row.scheduled_date as string,
+        approved_at: row.approved_at as string,
+        approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+        completed_at: (row.completed_at as string | null) ?? null,
+        completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+        cancelled_at: (row.cancelled_at as string | null) ?? null,
+        cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+        received_by_id: (row.received_by_id as string | null) ?? null,
+        received_by_name: (row.received_by_name as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        attachments: Array.isArray(row.attachments) ? (row.attachments as unknown as Attachment[]) : [],
+        lines: (Array.isArray(row.lines) ? row.lines : []) as PickupOrderWithLines['lines'],
+      }))
       setPendingPickupOrders(mapped)
     } finally {
       setPickupOrdersLoading(false)
@@ -357,7 +350,7 @@ export default function ProgramacionPage() {
       const { data } = await supabase
         .from('external_orders')
         .select(`
-          id, external_id, status, provider_name, invoice_amount, invoice_attachments,
+          id, external_id, status, scheduled_date, provider_name, invoice_amount, invoice_attachments,
           approved_at, completed_at, cancelled_at,
           received_by_id, received_by_name, notes,
           approved_by_person:people!external_orders_approved_by_fkey(name),
@@ -370,39 +363,32 @@ export default function ProgramacionPage() {
               unit:unit_id(code), unit_text,
               from_location:from_location_id(name), from_text,
               to_location:to_location_id(id, name, project_id, location_type), to_text,
-              request:request_id(id, request_id, date_required, project:project_id(code, name))
+              request:request_id(id, request_id, project:project_id(code, name))
             )
           )
         `)
         .eq('status', 'Aprobado')
-        .order('approved_at', { ascending: true })
+        .order('scheduled_date', { ascending: true })
 
-      const mapped: ExternalOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => {
-        const lines = (Array.isArray(row.lines) ? row.lines : []) as ExternalOrderWithLines['lines']
-        const dates = lines
-          .map((ol) => ol.line?.request.date_required)
-          .filter((d): d is string => Boolean(d))
-        const scheduled_date = dates.length > 0 ? dates.sort()[0] : null
-        return {
-          id: row.id as string,
-          external_id: row.external_id as string,
-          status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
-          provider_name: row.provider_name as string,
-          invoice_amount: row.invoice_amount as number,
-          invoice_attachments: Array.isArray(row.invoice_attachments) ? (row.invoice_attachments as unknown as Attachment[]) : [],
-          approved_at: row.approved_at as string,
-          approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
-          completed_at: (row.completed_at as string | null) ?? null,
-          completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
-          cancelled_at: (row.cancelled_at as string | null) ?? null,
-          cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
-          received_by_id: (row.received_by_id as string | null) ?? null,
-          received_by_name: (row.received_by_name as string | null) ?? null,
-          notes: (row.notes as string | null) ?? null,
-          lines,
-          scheduled_date,
-        }
-      })
+      const mapped: ExternalOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        external_id: row.external_id as string,
+        status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+        scheduled_date: row.scheduled_date as string,
+        provider_name: row.provider_name as string,
+        invoice_amount: row.invoice_amount as number,
+        invoice_attachments: Array.isArray(row.invoice_attachments) ? (row.invoice_attachments as unknown as Attachment[]) : [],
+        approved_at: row.approved_at as string,
+        approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+        completed_at: (row.completed_at as string | null) ?? null,
+        completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+        cancelled_at: (row.cancelled_at as string | null) ?? null,
+        cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+        received_by_id: (row.received_by_id as string | null) ?? null,
+        received_by_name: (row.received_by_name as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        lines: (Array.isArray(row.lines) ? row.lines : []) as ExternalOrderWithLines['lines'],
+      }))
       setPendingExternalOrders(mapped)
     } finally {
       setExternalOrdersLoading(false)
@@ -430,9 +416,9 @@ export default function ProgramacionPage() {
   }, [backlog, selectedLineIds])
 
   const handleConfirmCreatePickup = useCallback(
-    async (lines: PickupOrderLineInput[], notes: string | null) => {
+    async (lines: PickupOrderLineInput[], scheduledDate: string, notes: string | null) => {
       if (!person?.id) return
-      const result = await pickupOrders.createPickupOrder(person.id, lines, notes)
+      const result = await pickupOrders.createPickupOrder(person.id, lines, scheduledDate, notes)
       if (result.ok) {
         setCreatePickupModal(null)
         setSelectedLineIds(new Set())
@@ -449,6 +435,7 @@ export default function ProgramacionPage() {
       providerName: string,
       invoiceAmount: number,
       invoiceAttachments: Attachment[],
+      scheduledDate: string,
       notes: string | null,
     ) => {
       if (!person?.id) return
@@ -458,6 +445,7 @@ export default function ProgramacionPage() {
         providerName,
         invoiceAmount,
         invoiceAttachments,
+        scheduledDate,
         notes,
       )
       if (result.ok) {

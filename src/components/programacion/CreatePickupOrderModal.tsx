@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Wrench, Package } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { formatQty } from '@/lib/utils/format'
+import { todayStrInPanama } from '@/lib/utils/datetime'
 import type { BacklogLine } from '@/hooks/useTrips'
 import type { PickupOrderLineInput } from '@/hooks/usePickupOrders'
 
@@ -14,7 +15,7 @@ interface LineQuantityState {
 
 interface CreatePickupOrderModalProps {
   selectedLines: BacklogLine[]
-  onConfirm: (lines: PickupOrderLineInput[], notes: string | null) => Promise<void>
+  onConfirm: (lines: PickupOrderLineInput[], scheduledDate: string, notes: string | null) => Promise<void>
   onClose: () => void
   loading: boolean
   error: string | null
@@ -39,8 +40,21 @@ export function CreatePickupOrderModal({
     [selectedLines],
   )
 
+  // Default scheduled_date = MIN(selectedLines.request.date_required) (la fecha
+  // requerida más temprana). Si por algún motivo todas son null/inválidas,
+  // fallback a hoy en zona horaria de Panamá.
+  const defaultScheduledDate = useMemo(() => {
+    const dates = selectedLines
+      .map((l) => l.request.date_required)
+      .filter((d): d is string => Boolean(d) && /^\d{4}-\d{2}-\d{2}$/.test(d as string))
+    if (dates.length === 0) return todayStrInPanama()
+    return [...dates].sort()[0]
+  }, [selectedLines])
+
   const [quantities, setQuantities] = useState<LineQuantityState[]>(initialState)
+  const [scheduledDate, setScheduledDate] = useState<string>(defaultScheduledDate)
   const [notes, setNotes] = useState('')
+  const [dateError, setDateError] = useState<string | null>(null)
 
   const handleQtyChange = (lineId: string, value: string) => {
     setQuantities((prev) =>
@@ -49,6 +63,12 @@ export function CreatePickupOrderModal({
   }
 
   const handleSubmit = async () => {
+    if (!scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+      setDateError('La fecha programada es requerida.')
+      return
+    }
+    setDateError(null)
+
     const validLines: PickupOrderLineInput[] = quantities
       .map((q) => ({
         request_line_id: q.request_line_id,
@@ -57,7 +77,7 @@ export function CreatePickupOrderModal({
       .filter((l) => l.quantity_assigned > 0)
 
     if (validLines.length === 0) return
-    await onConfirm(validLines, notes.trim() || null)
+    await onConfirm(validLines, scheduledDate, notes.trim() || null)
   }
 
   return (
@@ -124,6 +144,24 @@ export function CreatePickupOrderModal({
               </div>
             )
           })}
+        </div>
+
+        <div className="mt-4">
+          <label htmlFor="pickup-order-scheduled-date" className="mb-1 block text-sm font-medium text-gray-700">
+            Fecha programada <span className="text-red-600">*</span>
+          </label>
+          <input
+            id="pickup-order-scheduled-date"
+            type="date"
+            value={scheduledDate}
+            onChange={(e) => {
+              setScheduledDate(e.target.value)
+              if (dateError) setDateError(null)
+            }}
+            disabled={loading}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+          />
+          {dateError && <p className="mt-1 text-xs text-red-600">{dateError}</p>}
         </div>
 
         <div className="mt-4">

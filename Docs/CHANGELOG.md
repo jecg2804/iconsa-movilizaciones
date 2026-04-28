@@ -6,6 +6,33 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ## 2026-04-28
 
+- [bd] **Cambio 5 — `scheduled_date` agregado a `pickup_orders` y `external_orders` (Polish #5b).** Aplicado por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-28 vía Supabase MCP. Migration `cambio5_add_scheduled_date_to_orders`:
+
+  ```sql
+  ALTER TABLE pickup_orders   ADD COLUMN scheduled_date DATE NOT NULL;
+  ALTER TABLE external_orders ADD COLUMN scheduled_date DATE NOT NULL;
+  COMMENT ON COLUMN pickup_orders.scheduled_date IS
+    'Fecha programada por Logística para ejecutar el pickup. Default al crear: MIN(line.date_required), editable por Charris.';
+  COMMENT ON COLUMN external_orders.scheduled_date IS
+    'Fecha programada por Logística para ejecutar el viaje externo. Default al crear: MIN(line.date_required), editable por Charris.';
+  ```
+
+  Backfill aplicado por Chat: 3 pickup_orders + 5 external_orders existentes seteados a `MIN(line.date_required)` retroactivamente. Todos OK, invariantes BD verificados, datos saneados.
+
+  **Razón del cambio:** el commit `14180b1` (Polish #5a) había agregado un chip de "fecha programada" derivado JS-side de `MIN(line.request.date_required)` por order. Eso era una mala interpretación del feedback de oficina — Charris necesita poder programar la fecha él mismo (independiente del `date_required` de las líneas), igual que ya hace en TripForm para fleet trips. La columna real reemplaza la derivación. Ahora son 6 migraciones de Cambio 5 en orden estricto, no 5 — agregar `cambio5_add_scheduled_date_to_orders` al final del script consolidado para el merge final v2.
+
+- [feat] **Cambio 5 polish #5b — date picker en CreatePickupOrderModal y CreateExternalOrderModal.** Reemplaza la derivación JS-side del Polish #5a (commit `14180b1`) por la columna real BD agregada en la migración paralela. Cambios:
+
+  - **`src/lib/types/database.ts` regenerado** contra staging — tipos generados incluyen `scheduled_date: string` (NOT NULL) en Row/Insert/Update de `pickup_orders` y `external_orders`. Helper manual `Row<T>` re-appendeado (`npx supabase gen types` lo wipea). Limpieza de `npm warn exec...` que el comando dejó en stdout y se metió en el file.
+  - **Hooks**: `usePickupOrders.createPickupOrder` agregó parámetro `scheduledDate: string` después de `lines`. `useExternalOrders.createExternalOrder` agregó `scheduledDate: string` después de `invoiceAttachments`. Validación strict: regex `^\d{4}-\d{2}-\d{2}$` antes del INSERT — si el formato no matchea, retorna error sin tocar BD. INSERT incluye `scheduled_date: scheduledDate` en payload.
+  - **Modales**: ambos agregaron campo `<input type="date">` requerido con asterisco rojo. Default pre-rellenado con `MIN(selectedLines.map(l => l.request.date_required))` (la fecha requerida más temprana de las líneas seleccionadas en el bulk; fallback a `todayStrInPanama()` si todas son null/inválidas). Editable. Validación blocking en `handleSubmit` antes de invocar el hook. CreatePickupOrderModal usa `dateError` state simple. CreateExternalOrderModal extendió `formErrors.scheduledDate` (consistente con providerName/invoiceAmount/invoiceAttachments).
+  - **handlers en `programacion/page.tsx`**: `handleConfirmCreatePickup` y `handleConfirmCreateExternal` aceptan `scheduledDate: string` y lo pasan al hook. Signature de `onConfirm` props de modales actualizada.
+  - **Cards**: `PickupOrderCard.PickupOrderWithLines.scheduled_date` cambió de `string | null` a `string` (NOT NULL). `ExternalOrderCard.ExternalOrderWithLines.scheduled_date` igual. Eliminado `date_required` del nested type `PickupOrderLineWithRelations.line.request` (ya no se necesita — el dato viene de la columna del order). Render del chip `<CalendarDays />` quitó el conditional `{order.scheduled_date && ...}` ya que es NOT NULL.
+  - **Queries (4 lugares)**: agregado `scheduled_date` al SELECT a nivel del order. Quitado `date_required` del SELECT inner `request:request_id(...)`. Eliminado el cálculo MIN JS-side en los 4 mapping (lectura directa de `row.scheduled_date as string`). `.order('approved_at')` cambiado a `.order('scheduled_date')` para que la lista se ordene por fecha programada (FIFO operacional para Logística), no por orden de aprobación.
+  - **Estilo**: same UX que TripForm (`type="date"`, label "Fecha programada", asterisco rojo, focus ring iconsa-blue).
+
+  Files: `src/lib/types/database.ts`, `src/hooks/usePickupOrders.ts`, `src/hooks/useExternalOrders.ts`, `src/components/programacion/CreatePickupOrderModal.tsx`, `src/components/programacion/CreateExternalOrderModal.tsx`, `src/components/programacion/PickupOrderCard.tsx`, `src/components/programacion/ExternalOrderCard.tsx`, `src/app/(app)/programacion/page.tsx`, `src/app/(app)/solicitudes/[id]/page.tsx`. Build verde end-to-end. Commit atómico (cambio coordinado BD+UI: `scheduled_date` es `NOT NULL`, INSERT sin campo falla en runtime). NO push (James pushea al cierre de Cambio 5 v2 tras smoke OK).
+
 - [bd] **Cambio 5 — RLS policies aplicadas en 4 tablas nuevas (BLOCKING smoke test resuelto).** Las 4 migraciones aplicadas por Chat el 2026-04-27 (`cambio5_create_pickup_orders`, `cambio5_create_external_orders`, `cambio5_recalc_qty_scheduled_triggers`, `cambio5_drop_old_columns_simplify_cascade`) crearon las tablas `pickup_orders`, `pickup_order_lines`, `external_orders`, `external_order_lines` con `ENABLE ROW LEVEL SECURITY` pero **sin CREATE POLICY**. Confirmado via `get_advisors` (4 lints `rls_enabled_no_policy` INFO level). Resultado en runtime: cualquier INSERT desde el cliente (incluido admin) falla con `new row violates row-level security policy for table "pickup_orders"` / `"external_orders"`. Smoke test del 2026-04-28 detectó el bug al intentar aprobar bulk pickup y bulk external desde `/programacion`. **Aplicado por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-28** vía Supabase MCP. Pendiente prod en merge final v2.
 
   **Deltas vs propuesta original (4 ajustes detectados por Chat antes de aplicar):**

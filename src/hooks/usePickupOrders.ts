@@ -81,6 +81,7 @@ export function usePickupOrders() {
     async (
       charrisId: string,
       lines: PickupOrderLineInput[],
+      scheduledDate: string,
       notes?: string | null,
     ): Promise<CreatePickupOrderResult> => {
       setLoading(true)
@@ -89,6 +90,13 @@ export function usePickupOrders() {
       try {
         if (lines.length === 0) {
           const msg = 'Debe seleccionar al menos una línea para aprobar pickup.'
+          setError(msg)
+          return { ok: false, error: msg }
+        }
+
+        // Cambio 5 polish-#5b: scheduled_date NOT NULL, validación strict
+        if (!scheduledDate || !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+          const msg = 'La fecha programada es requerida (formato YYYY-MM-DD).'
           setError(msg)
           return { ok: false, error: msg }
         }
@@ -133,6 +141,7 @@ export function usePickupOrders() {
             status: 'Aprobado',
             approved_by: charrisId,
             approved_at: new Date().toISOString(),
+            scheduled_date: scheduledDate,
             notes: notes?.trim() || null,
             created_by: charrisId,
           })
