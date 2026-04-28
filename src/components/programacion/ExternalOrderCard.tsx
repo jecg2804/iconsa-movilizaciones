@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, Wrench, Package } from 'lucide-react'
+import { ChevronDown, ChevronRight, Wrench, Package, CalendarDays } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { getFileUrl } from '@/lib/supabase/storage'
@@ -26,6 +26,8 @@ export interface ExternalOrderWithLines {
   received_by_name: string | null
   notes: string | null
   lines: PickupOrderLineWithRelations[]
+  /** Derivado JS-side: MIN(line.request.date_required) sobre las líneas del order. null si todas son null. */
+  scheduled_date: string | null
 }
 
 interface ExternalOrderCardProps {
@@ -73,6 +75,15 @@ export function ExternalOrderCard({
             order.status === 'Aprobado' ? 'text-blue-800' :
             order.status === 'Entregado' ? 'text-emerald-800' : 'text-gray-600'
           } />
+          {order.scheduled_date && (
+            <span
+              className="inline-flex items-center gap-1 text-xs font-medium text-navy whitespace-nowrap"
+              title={`Fecha programada: ${formatDate(order.scheduled_date)}`}
+            >
+              <CalendarDays className="h-3 w-3" />
+              {formatDate(order.scheduled_date)}
+            </span>
+          )}
           <span className="text-xs text-iconsa-gray" title={`Aprobado ${formatDateTime(order.approved_at)}`}>
             {formatDate(order.approved_at)}
             {order.approved_by_name && <span> · {order.approved_by_name}</span>}
