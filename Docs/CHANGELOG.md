@@ -4,6 +4,101 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-28
+
+- [bd-pending] **Cambio 5 — RLS policies faltantes en 4 tablas nuevas (BLOCKING smoke test).** Las 4 migraciones aplicadas por Chat el 2026-04-27 (`cambio5_create_pickup_orders`, `cambio5_create_external_orders`, `cambio5_recalc_qty_scheduled_triggers`, `cambio5_drop_old_columns_simplify_cascade`) crearon las tablas `pickup_orders`, `pickup_order_lines`, `external_orders`, `external_order_lines` con `ENABLE ROW LEVEL SECURITY` pero **sin CREATE POLICY**. Confirmado via `get_advisors` (4 lints `rls_enabled_no_policy` INFO level). Resultado en runtime: cualquier INSERT desde el cliente (incluido admin) falla con `new row violates row-level security policy for table "pickup_orders"` / `"external_orders"`. Smoke test del 2026-04-28 detectó el bug al intentar aprobar bulk pickup y bulk external desde `/programacion`.
+
+  **Patrón aplicado (consistente con tablas operativas existentes — `trips`, `trip_line_assignments`, etc.):**
+  - SELECT abierto a todos los `authenticated` (PMs leen orders relacionadas a sus solicitudes; logistica/admin leen todo).
+  - INSERT/UPDATE/DELETE restringidos a `admin` y `logistica` via `public.get_my_app_role()` (función SECURITY DEFINER ya existente).
+  - DELETE solo en `*_order_lines` (para `removeLineFromPickupOrder` / `removeLineFromExternalOrder`). Las `*_orders` solo se cancelan via UPDATE status.
+  - Los triggers de recálculo (`trg_recalc_from_pickup_order_status_change`, `trg_recalc_from_external_order_status_change`) son SECURITY DEFINER → bypassan RLS, no necesitan policy explícita.
+
+  **SQL para staging (`vonwkciosksqspyljzfy`) y eventualmente prod (`bzeoszympkkicwlfdtcn`):**
+
+  ```sql
+  -- ─────────────── pickup_orders ───────────────
+  CREATE POLICY "authenticated_select" ON public.pickup_orders
+    FOR SELECT TO authenticated USING (true);
+
+  CREATE POLICY "logistica_admin_insert" ON public.pickup_orders
+    FOR INSERT TO authenticated
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  CREATE POLICY "logistica_admin_update" ON public.pickup_orders
+    FOR UPDATE TO authenticated
+    USING (public.get_my_app_role() IN ('admin', 'logistica'))
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  -- ─────────────── pickup_order_lines ───────────────
+  CREATE POLICY "authenticated_select" ON public.pickup_order_lines
+    FOR SELECT TO authenticated USING (true);
+
+  CREATE POLICY "logistica_admin_insert" ON public.pickup_order_lines
+    FOR INSERT TO authenticated
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  CREATE POLICY "logistica_admin_delete" ON public.pickup_order_lines
+    FOR DELETE TO authenticated
+    USING (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  -- ─────────────── external_orders ───────────────
+  CREATE POLICY "authenticated_select" ON public.external_orders
+    FOR SELECT TO authenticated USING (true);
+
+  CREATE POLICY "logistica_admin_insert" ON public.external_orders
+    FOR INSERT TO authenticated
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  CREATE POLICY "logistica_admin_update" ON public.external_orders
+    FOR UPDATE TO authenticated
+    USING (public.get_my_app_role() IN ('admin', 'logistica'))
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  -- ─────────────── external_order_lines ───────────────
+  CREATE POLICY "authenticated_select" ON public.external_order_lines
+    FOR SELECT TO authenticated USING (true);
+
+  CREATE POLICY "logistica_admin_insert" ON public.external_order_lines
+    FOR INSERT TO authenticated
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+
+  CREATE POLICY "logistica_admin_delete" ON public.external_order_lines
+    FOR DELETE TO authenticated
+    USING (public.get_my_app_role() IN ('admin', 'logistica'));
+  ```
+
+  **Rollback (si necesario):**
+
+  ```sql
+  DROP POLICY IF EXISTS "authenticated_select" ON public.pickup_orders;
+  DROP POLICY IF EXISTS "logistica_admin_insert" ON public.pickup_orders;
+  DROP POLICY IF EXISTS "logistica_admin_update" ON public.pickup_orders;
+  DROP POLICY IF EXISTS "authenticated_select" ON public.pickup_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_insert" ON public.pickup_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_delete" ON public.pickup_order_lines;
+  DROP POLICY IF EXISTS "authenticated_select" ON public.external_orders;
+  DROP POLICY IF EXISTS "logistica_admin_insert" ON public.external_orders;
+  DROP POLICY IF EXISTS "logistica_admin_update" ON public.external_orders;
+  DROP POLICY IF EXISTS "authenticated_select" ON public.external_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_insert" ON public.external_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_delete" ON public.external_order_lines;
+  ```
+
+  **Aplicar en:** staging primero (verificar smoke test pickup + external pasa), luego prod en el merge final v2 del branch `jaime/dev`.
+
+- [fix] **Cambio 5 polish — UI bulk action toolbar + integer step en quantity inputs.** Tres bugs encontrados durante smoke test post-T10:
+
+  - **UI inconsistente (Bug 3):** los 3 botones de la sección bulk action (Crear Movilización en header navy + Aprobar pickup amber + Aprobar viaje externo blue) vivían en estilos divergentes (Button component vs raw button con clases Tailwind). El `bg-blue-600` del botón "Aprobar viaje externo" además renderizaba invisible (texto blanco sobre sin fondo) — probablemente clase no purgada en otro lugar del codebase, conflicto con override CSS, o issue Tailwind v4 específico al combinar con otras clases en el mismo elemento. **Fix:** rediseño completo de la toolbar bulk action — los 3 botones ahora viven en el mismo toolbar (no distribuidos en header + toolbar), todos usan el componente `<Button>` con `variant="primary"` + `size="sm"` + `className` override para color (navy default = Crear Movilización, `!bg-amber-500` = Aprobar pickup, `!bg-blue-600` = Aprobar viaje externo). Header simplificado: solo muestra "Nueva Movilización" cuando NO hay selección. Cuando hay selección, header solo tiene el título + el botón "Limpiar" se mueve al toolbar como link. Resultado: un solo bloque visual con jerarquía clara, los 3 botones tienen mismo size/padding/rounded, los colores diferenciados reflejan la naturaleza de la acción (navy=fleet, amber=pickup, blue=externo) consistente con el sistema de badges del proyecto.
+
+  - **Quantity input spinners decimales (Bug 2):** `CreatePickupOrderModal.tsx:112` y `CreateExternalOrderModal.tsx:139` tenían `step="0.01"` en los inputs de cantidad — el spinner del number input subía/bajaba 0.01 en 0.01 (4.98, 4.99, 5.00) cuando el caso 99% es enteros (cemento bolsas, varillas, equipos). **Fix:** `step="1"` en los inputs de cantidad. Conservado `step="0.01"` en el input de Costo del Servicio (`CreateExternalOrderModal.tsx:184`) que sí es dinero. El input sigue siendo `type="number"` así que escribir decimales a mano sigue funcionando si se necesita (ej: kg fraccionarios) — solo cambia el comportamiento del spinner.
+
+  - **RLS BLOCKING (Bug 1):** ver entry `[bd-pending]` arriba — fix de BD, no de código.
+
+  Files: `src/app/(app)/programacion/page.tsx` (toolbar refactor), `src/components/programacion/CreatePickupOrderModal.tsx` (step), `src/components/programacion/CreateExternalOrderModal.tsx` (step). Build verde. NO push (James pushea al cierre de Cambio 5 v2).
+
+---
+
 ## 2026-04-27
 - [feat] **Cambio 3 — Pickup nuevo (modelo bandera-en-línea) shippeado.** Eliminación completa del modelo viejo de pickup-via-trip-especial. Pickup ahora es flag a nivel de línea (`sm_request_lines.pickup_by_project`) sin trip, sin tarifa, sin código. Tres superficies UX nuevas: (1) **Aprobar pickup desde backlog** (`/programacion`) con botón 🤝 + modal mínimo para logistica/admin → línea pasa a `'Pickup Aprobado'` y desaparece del backlog (cascade trigger lleva solicitud padre a 'En Proceso'); (2) **Convertir línea Programada a pickup** (`/programacion/viaje/[id]`) con botón 🤝 en cada AssignmentRow + modal con dos variantes (última línea cancela trip; otras solo sacan línea); bloqueo si `qty_delivered>0` (E2/Q7); UPDATE atómico evita round-trip Pendiente→Pickup Aprobado en cascade; (3) **Sección "Pickups Pendientes de Retiro"** en `/programacion` listando líneas con `pickup_by_project=true AND pickup_completed_at IS NULL` ordenadas FIFO por `pickup_approved_at` → modal "Registrar entrega" con receptor (dropdown personas + texto fallback, validación XOR Q6), notas opcional, attachments opcional persistidos en `sm_request_lines.attachments` JSONB → línea pasa a 'Entregada' con `qty_delivered=quantity` (todo-o-nada Q4) y cascade cierra solicitud si todas las líneas están Entregadas. **Eliminaciones de código viejo** (~700 líneas): `PreparationModal.tsx`, `PickupModal.tsx`, eventos `Preparacion`/`Retiro` (icons/colors EventTimeline + TripEventType union + EVENT_CONFIG en EventButton), handlers `handlePreparation`/`handlePickup` (mis-viajes/[id]), branch `Retiro` en `handleRevert`, refs a `complete_pickup_trip` RPC, `PICKUP_STEPS` y `isPickup` en `TripCard`/ProgressBar, badge "Retiro" en `/solicitudes` (table + mobile), `is_self_pickup` en TripForm + nuevo trip page + GPS API route + 10 archivos más, `fulfillment_type` en SolicitudForm + useSolicitudes + initial states, validación J1 obsoleta. Tests legacy: `tests/pickup-flow.spec.ts` borrado entero (~250 líneas), helpers `registerPreparation`/`registerRetiro` eliminados, opt `isPickup` y bloque toggle pickup en `createTrip` removidos. **Polish/fixes pre-existentes:** `cancelSolicitud` ahora incluye `'Pickup Aprobado'` en filtro de cancelación (fix I1/E8 — antes líneas pickup-aprobadas quedaban huérfanas en solicitud Cancelada). Badge "🤝 PICKUP" en LineRow de `/solicitudes/[id]` con tooltip de fecha aprobación; badge "🤝 RETIRADO" cuando línea completada con receptor + fecha. GPS API route sin branch `'pickup'` (solo not_in_route/no_gps/stale/live). **Decisiones cerradas:** Q1=eliminar badge agregado en lista solicitudes; Q2=DELETE pickup-flow.spec.ts; Q3=eliminar badge TripCard sin reemplazo; Q4=todo-o-nada; Q5=todas personas activas + texto fallback; Q6=XOR receptor; Q7=NO permitir pickup si `qty_delivered>0`; Q8=modal mínimo de confirmación al aprobar. **Edge cases cubiertos:** E1 Pendiente sin trip → Pickup Aprobado directo; E2 Programada con `qty_delivered>0` bloqueada; E3 solicitud mixta (cascade trigger ya updateado por Chat); E4 trip con N>1 assignments NO se cancela; E5 pickup parcial NO soportado v1; E6 solicitante NO puede iniciar pickup; E7 línea pickup en trip con campaign no aplica; E8 cancelar solicitud con líneas Pickup Aprobado (I1 fix); E9 NO reversible v1; E10 borrador con líneas Pickup Aprobado no posible. **Deuda técnica conocida:** `convertLineToPickup` (Surface 2) NO es atómico server-side — DELETE assignment + UPDATE línea son 2 queries separadas. Riesgo bajo en v1 (1 Charris operando, sin concurrencia). Si una falla mid-flow, la otra queda aplicada. Polish post-merge: convertir a RPC SQL con SECURITY DEFINER y transacción server-side. Tests E2E del flow nuevo quedan como AD-5 follow-up. Cierra items: **J1** (Pickup flow bloqueado → BORRADO), **D4** (Pickup + fleet lines mezcladas → CERRADO), **AD-1** (PickupOrder vs Trip → OBSOLETO; Decisión 11/3). Plan: `Docs/superpowers/plans/2026-04-27-cambio3-pickup-redesign.md` (borrado al cierre per `plan-lifecycle.md`). Commits: `c3ed958..` (T1) → último commit T11.
 

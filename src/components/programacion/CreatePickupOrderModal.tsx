@@ -109,7 +109,7 @@ export function CreatePickupOrderModal({
                     type="number"
                     min="0"
                     max={available}
-                    step="0.01"
+                    step="1"
                     value={qty?.quantity_assigned ?? ''}
                     onChange={(e) => handleQtyChange(line.id, e.target.value)}
                     onFocus={(e) => e.target.select()}

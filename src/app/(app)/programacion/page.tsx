@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight, ChevronsDownUp, ChevronsUpDown, X } from 'lucide-react'
+import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
@@ -775,56 +775,50 @@ export default function ProgramacionPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header — un solo botón contextual */}
+      {/* Header — solo título + botón "Nueva Movilización" cuando NO hay selección */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-navy">Programación de Movilizaciones</h1>
-        {puedeCrearViaje && (
-          <div className="flex items-center gap-2">
-            {visibleSelectedCount > 0 && (
-              <button type="button" title="Deseleccionar todo" onClick={() => setSelectedLineIds(new Set())} className="rounded-full p-1.5 text-iconsa-gray hover:bg-gray-100 transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            )}
-            <Button
-              onClick={visibleSelectedCount > 0 ? handleCrearViajeConLineas : () => router.push('/programacion/viaje/nuevo')}
-              className="shrink-0"
-            >
-              {visibleSelectedCount > 0 ? (
-                <><Truck className="h-4 w-4" /> Crear Movilización ({visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea' : 'líneas'})</>
-              ) : (
-                <><Plus className="h-4 w-4" /> Nueva Movilización</>
-              )}
-            </Button>
-          </div>
+        {puedeCrearViaje && visibleSelectedCount === 0 && (
+          <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
+            <Plus className="h-4 w-4" /> Nueva Movilización
+          </Button>
         )}
       </div>
 
-      {/* ─── Bulk action toolbar (D1) — visible cuando hay líneas seleccionadas ─── */}
-      {(role === 'logistica' || role === 'admin') && visibleSelectedCount > 0 && (
+      {/* ─── Bulk action toolbar (D1) — 3 botones consistentes con jerarquía visual por color ─── */}
+      {puedeCrearViaje && visibleSelectedCount > 0 && (
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm font-semibold text-amber-900">
               {visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea seleccionada' : 'líneas seleccionadas'}
             </span>
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
+              {/* Crear Movilización — navy (acción default) */}
+              <Button variant="primary" size="sm" onClick={handleCrearViajeConLineas}>
+                <Truck className="h-4 w-4" /> Crear Movilización
+              </Button>
+              {/* Aprobar pickup — amber (override) */}
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleOpenBulkApprovePickup}
-                className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors"
+                className="bg-amber-500! hover:bg-amber-600! focus-visible:ring-amber-500!"
               >
                 Aprobar pickup
-              </button>
-              <button
-                type="button"
+              </Button>
+              {/* Aprobar viaje externo — blue (override) */}
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleOpenBulkApproveExternal}
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                className="bg-blue-600! hover:bg-blue-700! focus-visible:ring-blue-600!"
               >
                 Aprobar viaje externo
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={() => setSelectedLineIds(new Set())}
-                className="text-xs text-amber-900 hover:underline"
+                className="text-xs text-amber-900 hover:underline ml-1"
               >
                 Limpiar selección
               </button>
