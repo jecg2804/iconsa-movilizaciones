@@ -809,6 +809,10 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   )
 
   // --- Cancelar solicitud ---
+  // Cambio 5 T10: cancela pickup_orders + external_orders relacionados con lógica G:
+  //   - Si TODAS las líneas del order son de la solicitud → cancel order entero
+  //   - Si solo ALGUNAS → DELETE de order_lines selectivo (auto_cancel_empty trigger
+  //     maneja último caso si quedan 0 líneas)
   const cancelSolicitud = useCallback(
     async (id: string, personId?: string): Promise<boolean> => {
       if (busyRef.current) return false
@@ -817,7 +821,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       setSaveError(null)
 
       try {
-        // 1. Obtener las lineas de la solicitud
+        // 1. Obtener líneas de la solicitud
         const { data: lines, error: fetchError } = await supabase
           .from('sm_request_lines')
           .select('id, status')
@@ -828,7 +832,89 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           return false
         }
 
-        // 2. Para lineas Programadas: eliminar asignaciones de viaje
+        const lineIds = (lines ?? []).map((l) => l.id)
+
+        // 2. Cancel pickup_orders relacionados con lógica G
+        // SELECT pickup_orders activos que tienen AT LEAST 1 línea de esta solicitud.
+        const { data: pickupOrdersData } = await supabase
+          .from('pickup_orders')
+          .select(`
+            id, pickup_id,
+            lines:pickup_order_lines!inner(id, request_line_id)
+          `)
+          .eq('status', 'Aprobado')
+          .in('lines.request_line_id', lineIds.length > 0 ? lineIds : ['__none__'])
+
+        for (const order of pickupOrdersData ?? []) {
+          // Fetch ALL lines del order (no solo las JOINed)
+          const { data: allOrderLines } = await supabase
+            .from('pickup_order_lines')
+            .select('id, request_line_id')
+            .eq('pickup_order_id', order.id)
+
+          const allOrderLinesArr = allOrderLines ?? []
+          const linesFromThisRequest = allOrderLinesArr.filter((ol) => lineIds.includes(ol.request_line_id))
+
+          if (linesFromThisRequest.length === allOrderLinesArr.length) {
+            // TODAS las líneas son de la solicitud → cancel order entero
+            await supabase
+              .from('pickup_orders')
+              .update({
+                status: 'Cancelado',
+                cancelled_at: new Date().toISOString(),
+                cancelled_by: personId ?? null,
+              })
+              .eq('id', order.id)
+          } else if (linesFromThisRequest.length > 0) {
+            // Solo ALGUNAS son de la solicitud → DELETE selectivo
+            // (auto_cancel_empty trigger maneja si quedan 0 líneas)
+            const lineIdsToRemove = linesFromThisRequest.map((ol) => ol.id)
+            await supabase
+              .from('pickup_order_lines')
+              .delete()
+              .in('id', lineIdsToRemove)
+          }
+        }
+
+        // 3. Cancel external_orders relacionados (paralelo)
+        const { data: externalOrdersData } = await supabase
+          .from('external_orders')
+          .select(`
+            id, external_id,
+            lines:external_order_lines!inner(id, request_line_id)
+          `)
+          .eq('status', 'Aprobado')
+          .in('lines.request_line_id', lineIds.length > 0 ? lineIds : ['__none__'])
+
+        for (const order of externalOrdersData ?? []) {
+          const { data: allOrderLines } = await supabase
+            .from('external_order_lines')
+            .select('id, request_line_id')
+            .eq('external_order_id', order.id)
+
+          const allOrderLinesArr = allOrderLines ?? []
+          const linesFromThisRequest = allOrderLinesArr.filter((ol) => lineIds.includes(ol.request_line_id))
+
+          if (linesFromThisRequest.length === allOrderLinesArr.length) {
+            await supabase
+              .from('external_orders')
+              .update({
+                status: 'Cancelado',
+                cancelled_at: new Date().toISOString(),
+                cancelled_by: personId ?? null,
+              })
+              .eq('id', order.id)
+          } else if (linesFromThisRequest.length > 0) {
+            const lineIdsToRemove = linesFromThisRequest.map((ol) => ol.id)
+            await supabase
+              .from('external_order_lines')
+              .delete()
+              .in('id', lineIdsToRemove)
+          }
+        }
+
+        // 4. Eliminar trip_line_assignments para líneas Programadas
+        // (el trigger BD recalcula sm_request_lines.qty_scheduled automáticamente)
         const programmedLines = (lines ?? []).filter((l) => l.status === 'Programada')
         for (const line of programmedLines) {
           await supabase
@@ -837,9 +923,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
             .eq('request_line_id', line.id)
         }
 
-        // 3. Actualizar líneas Pendiente, Programada y Parcial a Cancelada
-        // (Cambio 3 fix I1/E8 + Cambio 4 paralelo: sin estos status, líneas
-        // pickup-aprobadas o externo-aprobadas quedaban huérfanas en solicitud Cancelada)
+        // 5. UPDATE líneas Pendiente/Programada/Parcial a 'Cancelada'
+        // (post-Migration 4: status 'Pickup Aprobado'/'Externo Aprobado' eliminados)
         const lineIdsToCancel = (lines ?? [])
           .filter((l) => l.status === 'Pendiente' || l.status === 'Programada' || l.status === 'Parcial')
           .map((l) => l.id)
@@ -856,7 +941,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           }
         }
 
-        // 4. Actualizar el status del header a Cancelada
+        // 6. UPDATE sm_requests.status='Cancelada'
         const { error: cancelError } = await supabase
           .from('sm_requests')
           .update({ status: 'Cancelada' })
@@ -867,7 +952,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           return false
         }
 
-        // Notificar cancelación
+        // Notificar
         notifySolicitudCancelada(id, personId).catch(console.error)
 
         return true
