@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { ChevronDown, ChevronRight, Wrench, Package } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
@@ -135,8 +136,9 @@ export function ExternalOrderCard({
             const toName = ol.line.to_location?.name ?? ol.line.to_text ?? '—'
             const unitCode = ol.line.unit?.code ?? ol.line.unit_text ?? ''
             const isEquipo = ol.line.line_type === 'Equipo'
+            const requestDisplayId = ol.line.request.request_id ?? ol.line.request.id.slice(0, 8)
             return (
-              <div key={ol.id} className="flex items-center gap-2 text-sm py-1">
+              <div key={ol.id} className="flex items-center gap-2 text-sm py-1 flex-wrap">
                 {isEquipo ? (
                   <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
                 ) : (
@@ -145,6 +147,13 @@ export function ExternalOrderCard({
                 <span className="font-medium text-gray-900" title={ol.line.description}>
                   {ol.line.description}
                 </span>
+                <Link
+                  href={`/solicitudes/${ol.line.request.id}`}
+                  className="font-mono text-xs text-iconsa-gray hover:text-iconsa-blue hover:underline whitespace-nowrap"
+                  title={`Ir a solicitud ${requestDisplayId}`}
+                >
+                  {requestDisplayId}
+                </Link>
                 <span className="text-gray-300">·</span>
                 <span className="font-semibold text-gray-700 whitespace-nowrap bg-gray-100 px-1.5 py-0.5 rounded text-xs">
                   {formatQty(ol.quantity_assigned)} {unitCode}
