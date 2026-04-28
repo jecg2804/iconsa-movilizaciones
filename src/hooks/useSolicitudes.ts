@@ -13,6 +13,16 @@ import {
 
 // --- Tipos exportados ---
 
+/**
+ * Información de fulfillment activa para una línea (Cambio 5).
+ * Una línea puede tener 0-N fulfillments activos en paralelo (Trip + Pickup + External).
+ * Discriminated union por type — el campo discriminador permite render conditional.
+ */
+export type FulfillmentInfo =
+  | { type: 'trip'; id: string; trip_id: string | null; status: string; quantity_assigned: number; qty_delivered: number }
+  | { type: 'pickup'; id: string; pickup_id: string; status: string; quantity_assigned: number; qty_delivered: number }
+  | { type: 'external'; id: string; external_id: string; status: string; provider_name: string; invoice_amount: number; quantity_assigned: number; qty_delivered: number }
+
 export interface SolicitudWithRelations {
   id: string
   request_id: string | null
@@ -69,6 +79,7 @@ export interface LineWithRelations {
   from_location: { id: string; name: string } | null
   to_location: { id: string; name: string } | null
   unit: { id: string; code: string; description: string | null } | null
+  fulfillments: FulfillmentInfo[]
 }
 
 export interface SolicitudInput {
@@ -383,7 +394,19 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
             equipment:equipment!sm_request_lines_equipment_id_fkey(id, spectrum_code, description),
             from_location:locations!sm_request_lines_from_location_id_fkey(id, name),
             to_location:locations!sm_request_lines_to_location_id_fkey(id, name),
-            unit:units!sm_request_lines_unit_id_fkey(id, code, description)
+            unit:units!sm_request_lines_unit_id_fkey(id, code, description),
+            trip_assignments:trip_line_assignments(
+              id, quantity_assigned, qty_delivered,
+              trip:trip_id(id, trip_id, status)
+            ),
+            pickup_lines:pickup_order_lines(
+              id, quantity_assigned, qty_delivered,
+              order:pickup_order_id(id, pickup_id, status)
+            ),
+            external_lines:external_order_lines(
+              id, quantity_assigned, qty_delivered,
+              order:external_order_id(id, external_id, status, provider_name, invoice_amount)
+            )
           )
         `)
         .eq('id', id)
@@ -409,6 +432,57 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         const fromLoc = line.from_location as LineWithRelations['from_location']
         const toLoc = line.to_location as LineWithRelations['to_location']
         const unit = line.unit as LineWithRelations['unit']
+
+        // Mapear fulfillments (3 tablas pivote) a discriminated union.
+        // Filtro: solo orders/trips activos (status !== 'Cancelado').
+        const tripAssignments = (line.trip_assignments as Array<Record<string, unknown>>) ?? []
+        const pickupLines = (line.pickup_lines as Array<Record<string, unknown>>) ?? []
+        const externalLines = (line.external_lines as Array<Record<string, unknown>>) ?? []
+
+        const fulfillments: FulfillmentInfo[] = []
+
+        for (const ta of tripAssignments) {
+          const trip = (Array.isArray(ta.trip) ? ta.trip[0] : ta.trip) as { id: string; trip_id: string | null; status: string } | null
+          if (!trip || trip.status === 'Cancelado') continue
+          fulfillments.push({
+            type: 'trip',
+            id: trip.id,
+            trip_id: trip.trip_id,
+            status: trip.status,
+            quantity_assigned: ta.quantity_assigned as number,
+            qty_delivered: (ta.qty_delivered as number) ?? 0,
+          })
+        }
+
+        for (const pl of pickupLines) {
+          const order = (Array.isArray(pl.order) ? pl.order[0] : pl.order) as { id: string; pickup_id: string; status: string } | null
+          if (!order || order.status === 'Cancelado') continue
+          fulfillments.push({
+            type: 'pickup',
+            id: order.id,
+            pickup_id: order.pickup_id,
+            status: order.status,
+            quantity_assigned: pl.quantity_assigned as number,
+            qty_delivered: (pl.qty_delivered as number) ?? 0,
+          })
+        }
+
+        for (const el of externalLines) {
+          const order = (Array.isArray(el.order) ? el.order[0] : el.order) as {
+            id: string; external_id: string; status: string; provider_name: string; invoice_amount: number
+          } | null
+          if (!order || order.status === 'Cancelado') continue
+          fulfillments.push({
+            type: 'external',
+            id: order.id,
+            external_id: order.external_id,
+            status: order.status,
+            provider_name: order.provider_name,
+            invoice_amount: order.invoice_amount,
+            quantity_assigned: el.quantity_assigned as number,
+            qty_delivered: (el.qty_delivered as number) ?? 0,
+          })
+        }
 
         return {
           id: line.id as string,
@@ -440,6 +514,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           from_location: fromLoc ? (Array.isArray(fromLoc) ? fromLoc[0] : fromLoc) : null,
           to_location: toLoc ? (Array.isArray(toLoc) ? toLoc[0] : toLoc) : null,
           unit: unit ? (Array.isArray(unit) ? unit[0] : unit) : null,
+          fulfillments,
         }
       })
 

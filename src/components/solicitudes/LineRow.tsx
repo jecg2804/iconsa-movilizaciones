@@ -3,7 +3,7 @@
 import { Wrench, Package, Pencil, Trash2, Copy, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { formatQty } from '@/lib/utils/format'
-import type { LineInput } from '@/hooks/useSolicitudes'
+import type { LineInput, FulfillmentInfo } from '@/hooks/useSolicitudes'
 
 interface LineRowProps {
   line: LineInput & { status?: string; po_reference?: string | null; material_category?: string | null; qty_delivered?: number | null; qty_scheduled?: number | null }
@@ -19,6 +19,8 @@ interface LineRowProps {
   fromDisplay?: string
   toDisplay?: string
   unitDisplay?: string
+  // Cambio 5 — fulfillments per línea (0-N items)
+  fulfillments?: FulfillmentInfo[]
 }
 
 /**
@@ -38,6 +40,7 @@ function LineRow({
   fromDisplay,
   toDisplay,
   unitDisplay,
+  fulfillments = [],
 }: LineRowProps) {
   const isEquipo = line.line_type === 'Equipo'
   const status = line.status ?? 'Pendiente'
@@ -102,9 +105,45 @@ function LineRow({
             </span>
           )}
 
-          {/* Badge de estado */}
-          <div className="ml-auto shrink-0 flex items-center gap-1.5">
+          {/* Badge de estado + badges per fulfillment activo (Cambio 5, 0-N) */}
+          <div className="ml-auto shrink-0 flex items-center gap-1.5 flex-wrap">
             <Badge variant="line" label={status} />
+            {fulfillments.map((f) => {
+              if (f.type === 'trip') {
+                return (
+                  <span
+                    key={f.id}
+                    className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium"
+                    title={`Trip ${f.trip_id ?? f.id.slice(0, 8)}, ${f.quantity_assigned} unidades${f.status !== 'Programado' ? ` (${f.status})` : ''}`}
+                  >
+                    EN VIAJE {f.trip_id ?? f.id.slice(0, 8)}
+                  </span>
+                )
+              }
+              if (f.type === 'pickup') {
+                return (
+                  <span
+                    key={f.id}
+                    className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-xs font-medium"
+                    title={`Pickup ${f.pickup_id}, ${f.quantity_assigned} unidades${f.status !== 'Aprobado' ? ` (${f.status})` : ''}`}
+                  >
+                    EN PICKUP {f.pickup_id}
+                  </span>
+                )
+              }
+              if (f.type === 'external') {
+                return (
+                  <span
+                    key={f.id}
+                    className="inline-flex items-center rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-xs font-medium"
+                    title={`Externo ${f.external_id}, B/. ${f.invoice_amount.toFixed(2)}, ${f.provider_name}, ${f.quantity_assigned} unidades${f.status !== 'Aprobado' ? ` (${f.status})` : ''}`}
+                  >
+                    EN EXTERNO {f.external_id}
+                  </span>
+                )
+              }
+              return null
+            })}
           </div>
 
           {/* Acciones */}
@@ -168,6 +207,30 @@ function LineRow({
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             <Badge variant="line" label={status} />
+            {fulfillments.map((f) => {
+              if (f.type === 'trip') {
+                return (
+                  <span key={f.id} className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium" title={`Trip ${f.trip_id ?? f.id.slice(0, 8)}, ${f.quantity_assigned}`}>
+                    VIAJE
+                  </span>
+                )
+              }
+              if (f.type === 'pickup') {
+                return (
+                  <span key={f.id} className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-medium" title={`Pickup ${f.pickup_id}, ${f.quantity_assigned}`}>
+                    PICKUP
+                  </span>
+                )
+              }
+              if (f.type === 'external') {
+                return (
+                  <span key={f.id} className="inline-flex items-center rounded-full bg-violet-100 text-violet-700 px-1.5 py-0.5 text-[10px] font-medium" title={`Externo ${f.external_id}, B/. ${f.invoice_amount.toFixed(2)}, ${f.provider_name}, ${f.quantity_assigned}`}>
+                    EXTERNO
+                  </span>
+                )
+              }
+              return null
+            })}
           </div>
         </div>
 

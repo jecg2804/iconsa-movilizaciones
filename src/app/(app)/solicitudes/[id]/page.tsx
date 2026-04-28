@@ -924,6 +924,7 @@ export default function SolicitudDetailPage() {
                   fromDisplay={names.fromDisplay}
                   toDisplay={names.toDisplay}
                   unitDisplay={names.unitDisplay}
+                  fulfillments={originalLine?.fulfillments ?? []}
                 />
               )
             })}
