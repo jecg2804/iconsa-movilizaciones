@@ -6,15 +6,17 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ## 2026-04-28
 
-- [bd-pending] **Cambio 5 — RLS policies faltantes en 4 tablas nuevas (BLOCKING smoke test).** Las 4 migraciones aplicadas por Chat el 2026-04-27 (`cambio5_create_pickup_orders`, `cambio5_create_external_orders`, `cambio5_recalc_qty_scheduled_triggers`, `cambio5_drop_old_columns_simplify_cascade`) crearon las tablas `pickup_orders`, `pickup_order_lines`, `external_orders`, `external_order_lines` con `ENABLE ROW LEVEL SECURITY` pero **sin CREATE POLICY**. Confirmado via `get_advisors` (4 lints `rls_enabled_no_policy` INFO level). Resultado en runtime: cualquier INSERT desde el cliente (incluido admin) falla con `new row violates row-level security policy for table "pickup_orders"` / `"external_orders"`. Smoke test del 2026-04-28 detectó el bug al intentar aprobar bulk pickup y bulk external desde `/programacion`.
+- [bd] **Cambio 5 — RLS policies aplicadas en 4 tablas nuevas (BLOCKING smoke test resuelto).** Las 4 migraciones aplicadas por Chat el 2026-04-27 (`cambio5_create_pickup_orders`, `cambio5_create_external_orders`, `cambio5_recalc_qty_scheduled_triggers`, `cambio5_drop_old_columns_simplify_cascade`) crearon las tablas `pickup_orders`, `pickup_order_lines`, `external_orders`, `external_order_lines` con `ENABLE ROW LEVEL SECURITY` pero **sin CREATE POLICY**. Confirmado via `get_advisors` (4 lints `rls_enabled_no_policy` INFO level). Resultado en runtime: cualquier INSERT desde el cliente (incluido admin) falla con `new row violates row-level security policy for table "pickup_orders"` / `"external_orders"`. Smoke test del 2026-04-28 detectó el bug al intentar aprobar bulk pickup y bulk external desde `/programacion`. **Aplicado por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-28** vía Supabase MCP. Pendiente prod en merge final v2.
 
-  **Patrón aplicado (consistente con tablas operativas existentes — `trips`, `trip_line_assignments`, etc.):**
-  - SELECT abierto a todos los `authenticated` (PMs leen orders relacionadas a sus solicitudes; logistica/admin leen todo).
-  - INSERT/UPDATE/DELETE restringidos a `admin` y `logistica` via `public.get_my_app_role()` (función SECURITY DEFINER ya existente).
-  - DELETE solo en `*_order_lines` (para `removeLineFromPickupOrder` / `removeLineFromExternalOrder`). Las `*_orders` solo se cancelan via UPDATE status.
-  - Los triggers de recálculo (`trg_recalc_from_pickup_order_status_change`, `trg_recalc_from_external_order_status_change`) son SECURITY DEFINER → bypassan RLS, no necesitan policy explícita.
+  **Deltas vs propuesta original (4 ajustes detectados por Chat antes de aplicar):**
+  1. **`*_order_lines` UPDATE faltaba completamente** — la propuesta original solo incluía SELECT/INSERT/DELETE. Sin UPDATE policy, `usePickupOrders.completePickupOrder` (líneas 724-733 que setean `qty_delivered = quantity_assigned` por línea) y `useExternalOrders.completeExternalOrder` (paralelo) fallarían siempre. Agregado: UPDATE en pickup_order_lines y external_order_lines.
+  2. **`*_orders` UPDATE necesita PM además de admin/logistica** — D8/J de Cambio 5 permite que PMs confirmen entrega de orders relacionadas a sus solicitudes desde `/solicitudes/[id]` (helper `checkPmCanConfirmOrder` en T8 con AT LEAST 1 match). Agregado rol `'pm'` al USING/WITH CHECK.
+  3. **`*_order_lines` UPDATE/DELETE necesitan PM también** — `cancelSolicitud` (T10) puede ejecutarse por PMs cuando cancelan solicitud parcial con orders activos, lo que dispara DELETE de order_lines + UPDATE status order. Agregado rol `'pm'`.
+  4. **Naming refleja el set de roles real** — policies que incluyen PM se renombraron de `logistica_admin_*` a `logistica_admin_pm_*` para que el nombre indique los grants efectivos.
 
-  **SQL para staging (`vonwkciosksqspyljzfy`) y eventualmente prod (`bzeoszympkkicwlfdtcn`):**
+  **Validación de ownership queda en código JS** (`checkPmCanConfirmOrder` con AT LEAST 1 match). RLS solo chequea rol — patrón consistente con `trip_line_assignments.operational_update` que también permite PM aunque PMs solo deben tocar líneas de sus proyectos. La defensa-en-profundidad real es la combinación RLS rol + JS ownership check.
+
+  **SQL final aplicado en staging (14 policies activas — verificado por Chat con SELECT post-aplicación):**
 
   ```sql
   -- ─────────────── pickup_orders ───────────────
@@ -25,10 +27,10 @@ Actualizado con cada commit. Entries > 90 días se archivan.
     FOR INSERT TO authenticated
     WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
 
-  CREATE POLICY "logistica_admin_update" ON public.pickup_orders
+  CREATE POLICY "logistica_admin_pm_update" ON public.pickup_orders
     FOR UPDATE TO authenticated
-    USING (public.get_my_app_role() IN ('admin', 'logistica'))
-    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+    USING (public.get_my_app_role() IN ('admin', 'logistica', 'pm'))
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica', 'pm'));
 
   -- ─────────────── pickup_order_lines ───────────────
   CREATE POLICY "authenticated_select" ON public.pickup_order_lines
@@ -38,9 +40,14 @@ Actualizado con cada commit. Entries > 90 días se archivan.
     FOR INSERT TO authenticated
     WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
 
-  CREATE POLICY "logistica_admin_delete" ON public.pickup_order_lines
+  CREATE POLICY "logistica_admin_pm_update" ON public.pickup_order_lines
+    FOR UPDATE TO authenticated
+    USING (public.get_my_app_role() IN ('admin', 'logistica', 'pm'))
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica', 'pm'));
+
+  CREATE POLICY "logistica_admin_pm_delete" ON public.pickup_order_lines
     FOR DELETE TO authenticated
-    USING (public.get_my_app_role() IN ('admin', 'logistica'));
+    USING (public.get_my_app_role() IN ('admin', 'logistica', 'pm'));
 
   -- ─────────────── external_orders ───────────────
   CREATE POLICY "authenticated_select" ON public.external_orders
@@ -50,10 +57,10 @@ Actualizado con cada commit. Entries > 90 días se archivan.
     FOR INSERT TO authenticated
     WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
 
-  CREATE POLICY "logistica_admin_update" ON public.external_orders
+  CREATE POLICY "logistica_admin_pm_update" ON public.external_orders
     FOR UPDATE TO authenticated
-    USING (public.get_my_app_role() IN ('admin', 'logistica'))
-    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
+    USING (public.get_my_app_role() IN ('admin', 'logistica', 'pm'))
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica', 'pm'));
 
   -- ─────────────── external_order_lines ───────────────
   CREATE POLICY "authenticated_select" ON public.external_order_lines
@@ -63,29 +70,38 @@ Actualizado con cada commit. Entries > 90 días se archivan.
     FOR INSERT TO authenticated
     WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica'));
 
-  CREATE POLICY "logistica_admin_delete" ON public.external_order_lines
+  CREATE POLICY "logistica_admin_pm_update" ON public.external_order_lines
+    FOR UPDATE TO authenticated
+    USING (public.get_my_app_role() IN ('admin', 'logistica', 'pm'))
+    WITH CHECK (public.get_my_app_role() IN ('admin', 'logistica', 'pm'));
+
+  CREATE POLICY "logistica_admin_pm_delete" ON public.external_order_lines
     FOR DELETE TO authenticated
-    USING (public.get_my_app_role() IN ('admin', 'logistica'));
+    USING (public.get_my_app_role() IN ('admin', 'logistica', 'pm'));
   ```
+
+  Los triggers de recálculo (`trg_recalc_from_pickup_order_status_change`, `trg_recalc_from_external_order_status_change`) son SECURITY DEFINER → bypassan RLS, no necesitan policy explícita.
 
   **Rollback (si necesario):**
 
   ```sql
   DROP POLICY IF EXISTS "authenticated_select" ON public.pickup_orders;
   DROP POLICY IF EXISTS "logistica_admin_insert" ON public.pickup_orders;
-  DROP POLICY IF EXISTS "logistica_admin_update" ON public.pickup_orders;
+  DROP POLICY IF EXISTS "logistica_admin_pm_update" ON public.pickup_orders;
   DROP POLICY IF EXISTS "authenticated_select" ON public.pickup_order_lines;
   DROP POLICY IF EXISTS "logistica_admin_insert" ON public.pickup_order_lines;
-  DROP POLICY IF EXISTS "logistica_admin_delete" ON public.pickup_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_pm_update" ON public.pickup_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_pm_delete" ON public.pickup_order_lines;
   DROP POLICY IF EXISTS "authenticated_select" ON public.external_orders;
   DROP POLICY IF EXISTS "logistica_admin_insert" ON public.external_orders;
-  DROP POLICY IF EXISTS "logistica_admin_update" ON public.external_orders;
+  DROP POLICY IF EXISTS "logistica_admin_pm_update" ON public.external_orders;
   DROP POLICY IF EXISTS "authenticated_select" ON public.external_order_lines;
   DROP POLICY IF EXISTS "logistica_admin_insert" ON public.external_order_lines;
-  DROP POLICY IF EXISTS "logistica_admin_delete" ON public.external_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_pm_update" ON public.external_order_lines;
+  DROP POLICY IF EXISTS "logistica_admin_pm_delete" ON public.external_order_lines;
   ```
 
-  **Aplicar en:** staging primero (verificar smoke test pickup + external pasa), luego prod en el merge final v2 del branch `jaime/dev`.
+  **Para prod en merge final v2:** aplicar este SQL final (14 policies), no la propuesta original (que tenía 11 y rompía completePickup/completeExternal/cancelSolicitud para PM).
 
 - [fix] **Cambio 5 polish — UI bulk action toolbar + integer step en quantity inputs.** Tres bugs encontrados durante smoke test post-T10:
 
