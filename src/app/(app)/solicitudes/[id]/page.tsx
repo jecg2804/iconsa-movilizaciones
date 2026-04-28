@@ -29,6 +29,13 @@ import { LineEditor } from '@/components/solicitudes/LineEditor'
 import { LineRow } from '@/components/solicitudes/LineRow'
 import type { AssociatedTrip, TripLineInfo, TripEventInfo } from '@/components/solicitudes/types'
 import ActiveTripPanel from '@/components/solicitudes/ActiveTripPanel'
+import { usePickupOrders } from '@/hooks/usePickupOrders'
+import { useExternalOrders } from '@/hooks/useExternalOrders'
+import { PickupOrderCard, type PickupOrderWithLines } from '@/components/programacion/PickupOrderCard'
+import { ExternalOrderCard, type ExternalOrderWithLines } from '@/components/programacion/ExternalOrderCard'
+import { ConfirmPickupOrderDeliveryModal } from '@/components/programacion/ConfirmPickupOrderDeliveryModal'
+import { ConfirmExternalOrderDeliveryModal } from '@/components/programacion/ConfirmExternalOrderDeliveryModal'
+import type { Attachment } from '@/lib/supabase/storage'
 
 // --- Helpers ---
 
@@ -113,6 +120,21 @@ export default function SolicitudDetailPage() {
   const [people, setPeople] = useState<SelectOption[]>([])
   const [approvers, setApprovers] = useState<SelectOption[]>([])
   const [units, setUnits] = useState<SelectOption[]>([])
+
+  // --- Cambio 5 T8: pickup_orders + external_orders related a esta solicitud ---
+  const pickupOrders = usePickupOrders()
+  const externalOrders = useExternalOrders()
+
+  const [relatedPickupOrders, setRelatedPickupOrders] = useState<PickupOrderWithLines[]>([])
+  const [relatedExternalOrders, setRelatedExternalOrders] = useState<ExternalOrderWithLines[]>([])
+  const [pmProjectIds, setPmProjectIds] = useState<Set<string>>(new Set())
+
+  const [confirmPickupOrder, setConfirmPickupOrder] = useState<PickupOrderWithLines | null>(null)
+  const [confirmExternalOrder, setConfirmExternalOrder] = useState<ExternalOrderWithLines | null>(null)
+  const [cancelPickupModal, setCancelPickupModal] = useState<{ order: PickupOrderWithLines; deliveredCount: number; deliveredQty: number } | null>(null)
+  const [cancelExternalModal, setCancelExternalModal] = useState<{ order: ExternalOrderWithLines; deliveredCount: number; deliveredQty: number } | null>(null)
+
+  const [receiverOptions, setReceiverOptions] = useState<{ value: string; label: string }[]>([])
 
   // --- Cargar solicitud ---
   useEffect(() => {
@@ -259,6 +281,229 @@ export default function SolicitudDetailPage() {
   }, [supabase])
 
   // (Carga de cost_codes movida al hook useCostCodeCascade dentro de SolicitudForm — Cambio 2)
+
+  // --- Cambio 5 T8: PM project_ids fetch (sólo si role === 'pm') ---
+  // Versión (b) SIMPLIFICACIÓN PRACTICAL: single fetch + JS-side filter.
+  // Versión (a) inline N-queries con `.eq` sobre nested joins NO funciona en
+  // Supabase JS client (filtering on nested joins via .eq/.in no soportado).
+  useEffect(() => {
+    if (!person?.id || role !== 'pm') {
+      setPmProjectIds(new Set())
+      return
+    }
+    const fetchPmProjects = async () => {
+      const { data } = await supabase
+        .from('person_projects')
+        .select('project_id')
+        .eq('person_id', person.id)
+        .eq('is_active', true)
+      setPmProjectIds(new Set((data ?? []).map((pp) => pp.project_id)))
+    }
+    void fetchPmProjects()
+  }, [person, role, supabase])
+
+  // Helper PM permission per order — JS-side filter (versión b).
+  // INNER JOIN behavior: cuando una línea tiene to_location_id=null (free-text),
+  // to_location es null. El check `if (!toLoc) return false` correctamente
+  // excluye esas líneas (E11). Si TODAS las líneas son free-text, PM no puede
+  // confirmar — solo admin/logistica.
+  // location_type === 'proyecto' es lowercase per Cambio 1 (E12).
+  // AT LEAST 1 match — `lines.some(...)` retorna true al primer match.
+  const checkPmCanConfirmOrder = useCallback(
+    (lines: PickupOrderWithLines['lines'] | ExternalOrderWithLines['lines']): boolean => {
+      if (role === 'admin' || role === 'logistica') return true
+      if (role !== 'pm') return false
+      return lines.some((ol) => {
+        const toLoc = ol.line?.to_location
+        if (!toLoc) return false  // free-text destination → no contribuye (E11)
+        if (toLoc.location_type !== 'proyecto') return false  // LOWERCASE per Cambio 1
+        return toLoc.project_id != null && pmProjectIds.has(toLoc.project_id)
+      })
+    },
+    [role, pmProjectIds],
+  )
+
+  // --- Cambio 5 T8: refetch de pickup_orders y external_orders related ---
+  // Filtramos por `lines.line.request_id` con !inner para que solo aparezcan
+  // orders que tienen AT LEAST 1 línea perteneciente a esta solicitud.
+  const refetchRelatedPickupOrders = useCallback(async () => {
+    if (!id) return
+    const { data } = await supabase
+      .from('pickup_orders')
+      .select(`
+        id, pickup_id, status, approved_at, completed_at, cancelled_at,
+        received_by_id, received_by_name, notes, attachments,
+        approved_by_person:people!pickup_orders_approved_by_fkey(name),
+        completed_by_person:people!pickup_orders_completed_by_fkey(name),
+        cancelled_by_person:people!pickup_orders_cancelled_by_fkey(name),
+        lines:pickup_order_lines!inner(
+          id, request_line_id, quantity_assigned, qty_delivered,
+          line:request_line_id!inner(
+            description, line_type, quantity, request_id,
+            unit:unit_id(code), unit_text,
+            from_location:from_location_id(name), from_text,
+            to_location:to_location_id(id, name, project_id, location_type), to_text,
+            request:request_id!inner(id, request_id, project:project_id(code, name))
+          )
+        )
+      `)
+      .eq('lines.line.request_id', id)
+
+    const mapped: PickupOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      pickup_id: row.pickup_id as string,
+      status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+      approved_at: row.approved_at as string,
+      approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+      completed_at: (row.completed_at as string | null) ?? null,
+      completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+      cancelled_at: (row.cancelled_at as string | null) ?? null,
+      cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+      received_by_id: (row.received_by_id as string | null) ?? null,
+      received_by_name: (row.received_by_name as string | null) ?? null,
+      notes: (row.notes as string | null) ?? null,
+      attachments: Array.isArray(row.attachments) ? (row.attachments as unknown as Attachment[]) : [],
+      lines: (Array.isArray(row.lines) ? row.lines : []) as PickupOrderWithLines['lines'],
+    }))
+    setRelatedPickupOrders(mapped)
+  }, [supabase, id])
+
+  const refetchRelatedExternalOrders = useCallback(async () => {
+    if (!id) return
+    const { data } = await supabase
+      .from('external_orders')
+      .select(`
+        id, external_id, status, provider_name, invoice_amount, invoice_attachments,
+        approved_at, completed_at, cancelled_at,
+        received_by_id, received_by_name, notes,
+        approved_by_person:people!external_orders_approved_by_fkey(name),
+        completed_by_person:people!external_orders_completed_by_fkey(name),
+        cancelled_by_person:people!external_orders_cancelled_by_fkey(name),
+        lines:external_order_lines!inner(
+          id, request_line_id, quantity_assigned, qty_delivered,
+          line:request_line_id!inner(
+            description, line_type, quantity, request_id,
+            unit:unit_id(code), unit_text,
+            from_location:from_location_id(name), from_text,
+            to_location:to_location_id(id, name, project_id, location_type), to_text,
+            request:request_id!inner(id, request_id, project:project_id(code, name))
+          )
+        )
+      `)
+      .eq('lines.line.request_id', id)
+
+    const mapped: ExternalOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      external_id: row.external_id as string,
+      status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+      provider_name: row.provider_name as string,
+      invoice_amount: row.invoice_amount as number,
+      invoice_attachments: Array.isArray(row.invoice_attachments) ? (row.invoice_attachments as unknown as Attachment[]) : [],
+      approved_at: row.approved_at as string,
+      approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+      completed_at: (row.completed_at as string | null) ?? null,
+      completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+      cancelled_at: (row.cancelled_at as string | null) ?? null,
+      cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+      received_by_id: (row.received_by_id as string | null) ?? null,
+      received_by_name: (row.received_by_name as string | null) ?? null,
+      notes: (row.notes as string | null) ?? null,
+      lines: (Array.isArray(row.lines) ? row.lines : []) as ExternalOrderWithLines['lines'],
+    }))
+    setRelatedExternalOrders(mapped)
+  }, [supabase, id])
+
+  useEffect(() => {
+    void refetchRelatedPickupOrders()
+    void refetchRelatedExternalOrders()
+  }, [refetchRelatedPickupOrders, refetchRelatedExternalOrders])
+
+  // Receivers para modales de confirm delivery
+  useEffect(() => {
+    supabase
+      .from('people')
+      .select('id, name')
+      .eq('status', 'Activo')
+      .order('name')
+      .then(({ data }) => setReceiverOptions((data ?? []).map((p) => ({ value: p.id, label: p.name }))))
+  }, [supabase])
+
+  // --- Handlers Cambio 5 T8 ---
+  const handleConfirmPickupDelivery = useCallback(async (data: {
+    receivedById: string | null
+    receivedByName: string
+    notes: string
+    additionalAttachments: Attachment[]
+  }) => {
+    if (!confirmPickupOrder || !person?.id) return
+    const result = await pickupOrders.completePickupOrder(
+      confirmPickupOrder.id, person.id, data.receivedById, data.receivedByName, data.notes, data.additionalAttachments,
+    )
+    if (result.ok) {
+      setConfirmPickupOrder(null)
+      void refetchRelatedPickupOrders()
+    }
+  }, [confirmPickupOrder, person, pickupOrders, refetchRelatedPickupOrders])
+
+  const handleConfirmExternalDelivery = useCallback(async (data: {
+    receivedById: string | null
+    receivedByName: string
+    notes: string
+    additionalAttachments: Attachment[]
+  }) => {
+    if (!confirmExternalOrder || !person?.id) return
+    const result = await externalOrders.completeExternalOrder(
+      confirmExternalOrder.id, person.id, data.receivedById, data.receivedByName, data.notes, data.additionalAttachments,
+    )
+    if (result.ok) {
+      setConfirmExternalOrder(null)
+      void refetchRelatedExternalOrders()
+    }
+  }, [confirmExternalOrder, person, externalOrders, refetchRelatedExternalOrders])
+
+  const handleOpenCancelPickup = useCallback(async (order: PickupOrderWithLines) => {
+    const { data } = await supabase
+      .from('pickup_order_lines')
+      .select('id, qty_delivered')
+      .eq('pickup_order_id', order.id)
+    const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+    setCancelPickupModal({
+      order,
+      deliveredCount: deliveredLines.length,
+      deliveredQty: deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0),
+    })
+  }, [supabase])
+
+  const handleOpenCancelExternal = useCallback(async (order: ExternalOrderWithLines) => {
+    const { data } = await supabase
+      .from('external_order_lines')
+      .select('id, qty_delivered')
+      .eq('external_order_id', order.id)
+    const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+    setCancelExternalModal({
+      order,
+      deliveredCount: deliveredLines.length,
+      deliveredQty: deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0),
+    })
+  }, [supabase])
+
+  const confirmCancelPickup = useCallback(async () => {
+    if (!cancelPickupModal || !person?.id) return
+    const result = await pickupOrders.cancelPickupOrder(cancelPickupModal.order.id, person.id)
+    if (result.ok) {
+      setCancelPickupModal(null)
+      void refetchRelatedPickupOrders()
+    }
+  }, [cancelPickupModal, person, pickupOrders, refetchRelatedPickupOrders])
+
+  const confirmCancelExternal = useCallback(async () => {
+    if (!cancelExternalModal || !person?.id) return
+    const result = await externalOrders.cancelExternalOrder(cancelExternalModal.order.id, person.id)
+    if (result.ok) {
+      setCancelExternalModal(null)
+      void refetchRelatedExternalOrders()
+    }
+  }, [cancelExternalModal, person, externalOrders, refetchRelatedExternalOrders])
 
   // --- Modo del formulario ---
   const mode = useMemo<FormMode>(() => {
@@ -535,6 +780,66 @@ export default function SolicitudDetailPage() {
           return bSalida.localeCompare(aSalida)
         })
         .map((t) => <ActiveTripPanel key={t.id} trip={t} role={role} />)}
+
+      {/* Cambio 5 T8: Pickup Orders related a la solicitud */}
+      {relatedPickupOrders.length > 0 && (
+        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50/30">
+          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Pickup Orders</h2>
+            <span className="rounded-full bg-amber-200 text-amber-900 px-2 py-0.5 text-xs font-medium">
+              {relatedPickupOrders.length}
+            </span>
+          </div>
+          <div className="px-4 pb-4 space-y-2">
+            {relatedPickupOrders.map((order) => {
+              const isAdmin = role === 'admin' || role === 'logistica'
+              const canConfirm = checkPmCanConfirmOrder(order.lines)
+              const canCancel = isAdmin && order.status === 'Aprobado'
+              return (
+                <PickupOrderCard
+                  key={order.id}
+                  order={order}
+                  canConfirmDelivery={canConfirm && order.status === 'Aprobado'}
+                  canCancelOrder={canCancel}
+                  onConfirmDelivery={() => setConfirmPickupOrder(order)}
+                  onCancelOrder={() => handleOpenCancelPickup(order)}
+                  showLinesInitially={true}
+                />
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Cambio 5 T8: Viajes Externos related a la solicitud */}
+      {relatedExternalOrders.length > 0 && (
+        <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/30">
+          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Viajes Externos</h2>
+            <span className="rounded-full bg-blue-200 text-blue-900 px-2 py-0.5 text-xs font-medium">
+              {relatedExternalOrders.length}
+            </span>
+          </div>
+          <div className="px-4 pb-4 space-y-2">
+            {relatedExternalOrders.map((order) => {
+              const isAdmin = role === 'admin' || role === 'logistica'
+              const canConfirm = checkPmCanConfirmOrder(order.lines)
+              const canCancel = isAdmin && order.status === 'Aprobado'
+              return (
+                <ExternalOrderCard
+                  key={order.id}
+                  order={order}
+                  canConfirmDelivery={canConfirm && order.status === 'Aprobado'}
+                  canCancelOrder={canCancel}
+                  onConfirmDelivery={() => setConfirmExternalOrder(order)}
+                  onCancelOrder={() => handleOpenCancelExternal(order)}
+                  showLinesInitially={true}
+                />
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Header del formulario */}
       <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
@@ -881,6 +1186,95 @@ export default function SolicitudDetailPage() {
                 onClick={() => performDeleteLine(deleteLineIndex)}
               >
                 Eliminar linea
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cambio 5 T8: Modales pickup/external orders */}
+      {confirmPickupOrder && (
+        <ConfirmPickupOrderDeliveryModal
+          order={confirmPickupOrder}
+          receiverOptions={receiverOptions}
+          onConfirm={handleConfirmPickupDelivery}
+          onClose={() => setConfirmPickupOrder(null)}
+          loading={pickupOrders.loading}
+          error={pickupOrders.error}
+        />
+      )}
+
+      {confirmExternalOrder && (
+        <ConfirmExternalOrderDeliveryModal
+          order={confirmExternalOrder}
+          receiverOptions={receiverOptions}
+          onConfirm={handleConfirmExternalDelivery}
+          onClose={() => setConfirmExternalOrder(null)}
+          loading={externalOrders.loading}
+          error={externalOrders.error}
+        />
+      )}
+
+      {cancelPickupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              ¿Cancelar pickup {cancelPickupModal.order.pickup_id}?
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              {cancelPickupModal.deliveredCount > 0 ? (
+                <>
+                  Cancelar este pickup va a devolver al backlog las líneas no entregadas.
+                  Las {cancelPickupModal.deliveredCount}{' '}
+                  {cancelPickupModal.deliveredCount === 1 ? 'línea ya entregada' : 'líneas ya entregadas'}{' '}
+                  ({cancelPickupModal.deliveredQty} unidades en total) quedan registradas como entregadas (no se invierten). ¿Confirmar?
+                </>
+              ) : (
+                <>Las líneas volverán al backlog. ¿Confirmar?</>
+              )}
+            </p>
+            {pickupOrders.error && (
+              <p className="mt-2 text-sm text-red-600">{pickupOrders.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setCancelPickupModal(null)} disabled={pickupOrders.loading}>
+                Volver
+              </Button>
+              <Button variant="danger" size="sm" onClick={confirmCancelPickup} loading={pickupOrders.loading}>
+                Sí, cancelar pickup
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelExternalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              ¿Cancelar viaje externo {cancelExternalModal.order.external_id}?
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              {cancelExternalModal.deliveredCount > 0 ? (
+                <>
+                  Cancelar este viaje externo va a devolver al backlog las líneas no entregadas.
+                  Las {cancelExternalModal.deliveredCount}{' '}
+                  {cancelExternalModal.deliveredCount === 1 ? 'línea ya entregada' : 'líneas ya entregadas'}{' '}
+                  ({cancelExternalModal.deliveredQty} unidades en total) quedan registradas como entregadas. La factura subida se preserva. ¿Confirmar?
+                </>
+              ) : (
+                <>Las líneas volverán al backlog. La factura subida se preserva. ¿Confirmar?</>
+              )}
+            </p>
+            {externalOrders.error && (
+              <p className="mt-2 text-sm text-red-600">{externalOrders.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setCancelExternalModal(null)} disabled={externalOrders.loading}>
+                Volver
+              </Button>
+              <Button variant="danger" size="sm" onClick={confirmCancelExternal} loading={externalOrders.loading}>
+                Sí, cancelar viaje externo
               </Button>
             </div>
           </div>
