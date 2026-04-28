@@ -2,7 +2,7 @@
 
 import { Wrench, Package, Pencil, Trash2, Copy, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { formatQty, formatCurrency } from '@/lib/utils/format'
+import { formatQty } from '@/lib/utils/format'
 import type { LineInput } from '@/hooks/useSolicitudes'
 
 interface LineRowProps {
@@ -19,23 +19,6 @@ interface LineRowProps {
   fromDisplay?: string
   toDisplay?: string
   unitDisplay?: string
-  // Cambio 3 — info de pickup per-línea
-  pickupInfo?: {
-    pickup_by_project: boolean
-    pickup_approved_at: string | null
-    pickup_completed_at: string | null
-    pickup_received_by_name: string | null
-  }
-  // Cambio 4 — info de externo per-línea
-  externalInfo?: {
-    external_by_provider: boolean
-    external_approved_at: string | null
-    external_completed_at: string | null
-    external_provider_name: string | null
-    external_invoice_amount: number | null
-    external_received_by_id: string | null
-    external_received_by_name: string | null
-  }
 }
 
 /**
@@ -55,46 +38,9 @@ function LineRow({
   fromDisplay,
   toDisplay,
   unitDisplay,
-  pickupInfo,
-  externalInfo,
 }: LineRowProps) {
   const isEquipo = line.line_type === 'Equipo'
   const status = line.status ?? 'Pendiente'
-
-  // Cambio 3: badges per-línea pickup
-  const showPickupApproved = pickupInfo?.pickup_by_project && status === 'Pickup Aprobado'
-  const showPickupCompleted = pickupInfo?.pickup_completed_at && status === 'Entregada'
-  const formatPanamaDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('es-PA', { timeZone: 'America/Panama' })
-
-  // Cambio 4: badges per-línea externo
-  const showExternalApproved = externalInfo?.external_by_provider && status === 'Externo Aprobado'
-  const showExternalCompleted = externalInfo?.external_completed_at && status === 'Entregada'
-
-  const externalApprovedTooltip = externalInfo?.external_approved_at
-    ? (() => {
-        const provider = externalInfo.external_provider_name ?? '—'
-        const amount = externalInfo.external_invoice_amount != null
-          ? formatCurrency(externalInfo.external_invoice_amount)
-          : '—'
-        const date = formatPanamaDate(externalInfo.external_approved_at)
-        return `Externo: ${provider}, ${amount}, aprobado ${date}`
-      })()
-    : 'Aprobado como externo'
-
-  const externalCompletedTooltip = externalInfo?.external_completed_at
-    ? (() => {
-        const provider = externalInfo.external_provider_name ?? '—'
-        const amount = externalInfo.external_invoice_amount != null
-          ? formatCurrency(externalInfo.external_invoice_amount)
-          : '—'
-        const date = externalInfo.external_completed_at
-          ? formatPanamaDate(externalInfo.external_completed_at)
-          : '—'
-        const receiver = externalInfo.external_received_by_name ?? '(no captado)'
-        return `Externo: ${provider}, ${amount}, entregado ${date}, receptor ${receiver}`
-      })()
-    : ''
 
   // Resolver nombres para mostrar
   const fromName = fromDisplay ?? line.from_text ?? '—'
@@ -156,41 +102,9 @@ function LineRow({
             </span>
           )}
 
-          {/* Badge de estado + pickup badges (Cambio 3) */}
+          {/* Badge de estado */}
           <div className="ml-auto shrink-0 flex items-center gap-1.5">
             <Badge variant="line" label={status} />
-            {showPickupApproved && pickupInfo && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium"
-                title={pickupInfo.pickup_approved_at ? `Aprobado el ${formatPanamaDate(pickupInfo.pickup_approved_at)}` : 'Aprobado como pickup'}
-              >
-                🤝 PICKUP
-              </span>
-            )}
-            {showPickupCompleted && pickupInfo && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs font-medium"
-                title={`Retirado por ${pickupInfo.pickup_received_by_name ?? '—'} el ${pickupInfo.pickup_completed_at ? formatPanamaDate(pickupInfo.pickup_completed_at) : '—'}`}
-              >
-                🤝 RETIRADO
-              </span>
-            )}
-            {showExternalApproved && externalInfo && (
-              <span
-                className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-xs font-medium"
-                title={externalApprovedTooltip}
-              >
-                EXTERNO APROBADO
-              </span>
-            )}
-            {showExternalCompleted && externalInfo && (
-              <span
-                className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-xs font-medium"
-                title={externalCompletedTooltip}
-              >
-                ENTREGADO (EXTERNO)
-              </span>
-            )}
           </div>
 
           {/* Acciones */}
@@ -254,38 +168,6 @@ function LineRow({
           </div>
           <div className="flex items-center gap-1 flex-wrap">
             <Badge variant="line" label={status} />
-            {showPickupApproved && pickupInfo && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-medium"
-                title={pickupInfo.pickup_approved_at ? `Aprobado el ${formatPanamaDate(pickupInfo.pickup_approved_at)}` : 'Aprobado como pickup'}
-              >
-                🤝
-              </span>
-            )}
-            {showPickupCompleted && pickupInfo && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[10px] font-medium"
-                title={`Retirado por ${pickupInfo.pickup_received_by_name ?? '—'} el ${pickupInfo.pickup_completed_at ? formatPanamaDate(pickupInfo.pickup_completed_at) : '—'}`}
-              >
-                🤝✓
-              </span>
-            )}
-            {showExternalApproved && externalInfo && (
-              <span
-                className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-medium"
-                title={externalApprovedTooltip}
-              >
-                EXT
-              </span>
-            )}
-            {showExternalCompleted && externalInfo && (
-              <span
-                className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[10px] font-medium"
-                title={externalCompletedTooltip}
-              >
-                EXT ✓
-              </span>
-            )}
           </div>
         </div>
 

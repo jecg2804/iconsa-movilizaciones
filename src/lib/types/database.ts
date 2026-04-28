@@ -778,6 +778,160 @@ export type Database = {
           },
         ]
       }
+      external_order_lines: {
+        Row: {
+          created_at: string | null
+          external_order_id: string
+          id: string
+          qty_delivered: number | null
+          quantity_assigned: number
+          request_line_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_order_id: string
+          id?: string
+          qty_delivered?: number | null
+          quantity_assigned: number
+          request_line_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          external_order_id?: string
+          id?: string
+          qty_delivered?: number | null
+          quantity_assigned?: number
+          request_line_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_order_lines_external_order_id_fkey"
+            columns: ["external_order_id"]
+            isOneToOne: false
+            referencedRelation: "external_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_order_lines_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "sm_request_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_orders: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          external_id: string | null
+          id: string
+          invoice_amount: number
+          invoice_attachments: Json
+          notes: string | null
+          provider_name: string
+          received_by_id: string | null
+          received_by_name: string | null
+          status: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          invoice_amount: number
+          invoice_attachments?: Json
+          notes?: string | null
+          provider_name: string
+          received_by_id?: string | null
+          received_by_name?: string | null
+          status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          invoice_amount?: number
+          invoice_attachments?: Json
+          notes?: string | null
+          provider_name?: string
+          received_by_id?: string | null
+          received_by_name?: string | null
+          status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_orders_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_orders_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_orders_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_orders_received_by_id_fkey"
+            columns: ["received_by_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_orders_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedback: {
         Row: {
           admin_notes: string | null
@@ -1627,6 +1781,154 @@ export type Database = {
           },
         ]
       }
+      pickup_order_lines: {
+        Row: {
+          created_at: string | null
+          id: string
+          pickup_order_id: string
+          qty_delivered: number | null
+          quantity_assigned: number
+          request_line_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          pickup_order_id: string
+          qty_delivered?: number | null
+          quantity_assigned: number
+          request_line_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          pickup_order_id?: string
+          qty_delivered?: number | null
+          quantity_assigned?: number
+          request_line_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pickup_order_lines_pickup_order_id_fkey"
+            columns: ["pickup_order_id"]
+            isOneToOne: false
+            referencedRelation: "pickup_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_order_lines_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "sm_request_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pickup_orders: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          attachments: Json
+          cancelled_at: string | null
+          cancelled_by: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          notes: string | null
+          pickup_id: string | null
+          received_by_id: string | null
+          received_by_name: string | null
+          status: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          attachments?: Json
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          pickup_id?: string | null
+          received_by_id?: string | null
+          received_by_name?: string | null
+          status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          attachments?: Json
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          pickup_id?: string | null
+          received_by_id?: string | null
+          received_by_name?: string | null
+          status?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pickup_orders_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_cancelled_by_fkey"
+            columns: ["cancelled_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_received_by_id_fkey"
+            columns: ["received_by_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_extras: {
         Row: {
           code: string
@@ -2013,16 +2315,6 @@ export type Database = {
           designated_receiver_name: string | null
           equipment_id: string | null
           equipment_text: string | null
-          external_approved_at: string | null
-          external_approved_by: string | null
-          external_by_provider: boolean
-          external_completed_at: string | null
-          external_invoice_amount: number | null
-          external_invoice_attachments: Json
-          external_notes: string | null
-          external_provider_name: string | null
-          external_received_by_id: string | null
-          external_received_by_name: string | null
           from_location_id: string | null
           from_text: string | null
           id: string
@@ -2030,12 +2322,6 @@ export type Database = {
           line_type: string
           material_category: string | null
           notes: string | null
-          pickup_approved_at: string | null
-          pickup_approved_by: string | null
-          pickup_by_project: boolean
-          pickup_completed_at: string | null
-          pickup_received_by_id: string | null
-          pickup_received_by_name: string | null
           po_reference: string | null
           purchase_order_line_id: string | null
           qty_delivered: number | null
@@ -2060,16 +2346,6 @@ export type Database = {
           designated_receiver_name?: string | null
           equipment_id?: string | null
           equipment_text?: string | null
-          external_approved_at?: string | null
-          external_approved_by?: string | null
-          external_by_provider?: boolean
-          external_completed_at?: string | null
-          external_invoice_amount?: number | null
-          external_invoice_attachments?: Json
-          external_notes?: string | null
-          external_provider_name?: string | null
-          external_received_by_id?: string | null
-          external_received_by_name?: string | null
           from_location_id?: string | null
           from_text?: string | null
           id?: string
@@ -2077,12 +2353,6 @@ export type Database = {
           line_type: string
           material_category?: string | null
           notes?: string | null
-          pickup_approved_at?: string | null
-          pickup_approved_by?: string | null
-          pickup_by_project?: boolean
-          pickup_completed_at?: string | null
-          pickup_received_by_id?: string | null
-          pickup_received_by_name?: string | null
           po_reference?: string | null
           purchase_order_line_id?: string | null
           qty_delivered?: number | null
@@ -2107,16 +2377,6 @@ export type Database = {
           designated_receiver_name?: string | null
           equipment_id?: string | null
           equipment_text?: string | null
-          external_approved_at?: string | null
-          external_approved_by?: string | null
-          external_by_provider?: boolean
-          external_completed_at?: string | null
-          external_invoice_amount?: number | null
-          external_invoice_attachments?: Json
-          external_notes?: string | null
-          external_provider_name?: string | null
-          external_received_by_id?: string | null
-          external_received_by_name?: string | null
           from_location_id?: string | null
           from_text?: string | null
           id?: string
@@ -2124,12 +2384,6 @@ export type Database = {
           line_type?: string
           material_category?: string | null
           notes?: string | null
-          pickup_approved_at?: string | null
-          pickup_approved_by?: string | null
-          pickup_by_project?: boolean
-          pickup_completed_at?: string | null
-          pickup_received_by_id?: string | null
-          pickup_received_by_name?: string | null
           po_reference?: string | null
           purchase_order_line_id?: string | null
           qty_delivered?: number | null
@@ -2160,38 +2414,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "sm_request_lines_external_approved_by_fkey"
-            columns: ["external_approved_by"]
-            isOneToOne: false
-            referencedRelation: "people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sm_request_lines_external_received_by_id_fkey"
-            columns: ["external_received_by_id"]
-            isOneToOne: false
-            referencedRelation: "people"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "sm_request_lines_from_location_id_fkey"
             columns: ["from_location_id"]
             isOneToOne: false
             referencedRelation: "locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sm_request_lines_pickup_approved_by_fkey"
-            columns: ["pickup_approved_by"]
-            isOneToOne: false
-            referencedRelation: "people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sm_request_lines_pickup_received_by_id_fkey"
-            columns: ["pickup_received_by_id"]
-            isOneToOne: false
-            referencedRelation: "people"
             referencedColumns: ["id"]
           },
           {
@@ -3123,6 +3349,10 @@ export type Database = {
     }
     Functions: {
       get_my_app_role: { Args: never; Returns: string }
+      recalc_qty_for_line: {
+        Args: { p_request_line_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
@@ -3258,3 +3488,4 @@ export const Constants = {
 
 // Helper type for row access
 export type Row<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
+

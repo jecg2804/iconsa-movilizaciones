@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/types/database'
 import {
   notifyLineasProgramadas,
   notifyViajeAsignadoConductor,
@@ -347,48 +345,6 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
     qty_dispatched: (a.qty_dispatched as number) ?? 0,
     line,
   }
-}
-
-// --- Función auxiliar para actualizar líneas al cancelar asignaciones ---
-
-/**
- * Libera una línea de una asignación de viaje:
- * - Resta la cantidad asignada de qty_scheduled
- * - Si qty_scheduled llega a 0, revierte el estado a 'Pendiente'
- */
-async function releaseLineFromAssignment(
-  supabase: SupabaseClient<Database>,
-  requestLineId: string,
-  quantityAssigned: number,
-): Promise<boolean> {
-  // Obtener el estado actual y qty_scheduled de la línea
-  const { data: line, error: fetchError } = await supabase
-    .from('sm_request_lines')
-    .select('id, status, qty_scheduled, qty_delivered')
-    .eq('id', requestLineId)
-    .single()
-
-  if (fetchError || !line) return false
-
-  // No revertir líneas en estados terminales (protección contra datos inconsistentes)
-  if (['Entregada', 'Cancelada'].includes(line.status)) return true
-
-  const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - quantityAssigned)
-  // Si no queda cantidad programada, determinar estado según entregas previas
-  let newStatus = line.status
-  if (newQtyScheduled <= 0) {
-    newStatus = (line.qty_delivered ?? 0) > 0 ? 'Parcial' : 'Pendiente'
-  }
-
-  const { error: updateError } = await supabase
-    .from('sm_request_lines')
-    .update({
-      qty_scheduled: newQtyScheduled,
-      status: newStatus,
-    })
-    .eq('id', requestLineId)
-
-  return !updateError
 }
 
 // --- Hook principal ---
@@ -860,38 +816,19 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             return null
           }
 
-          // 3. Actualizar el estado de cada línea asignada a 'Programada'
-          //    y sumar la cantidad programada acumulada
-          for (const a of assignments) {
-            const { data: currentLine } = await supabase
-              .from('sm_request_lines')
-              .select('qty_scheduled, quantity')
-              .eq('id', a.request_line_id)
-              .single()
-
-            const currentScheduled = currentLine?.qty_scheduled ?? 0
-            const totalQty = currentLine?.quantity ?? a.quantity_assigned
-            // Clampear para no exceder la cantidad total de la línea
-            const newQtyScheduled = Math.min(totalQty, currentScheduled + a.quantity_assigned)
-
-            await supabase
-              .from('sm_request_lines')
-              .update({
-                status: 'Programada',
-                qty_scheduled: newQtyScheduled,
-              })
-              .eq('id', a.request_line_id)
-          }
+          // El trigger BD recalc_qty_for_line se dispara automáticamente
+          // al insertar trip_line_assignments y reconcilia qty_scheduled
+          // y status='Programada' en sm_request_lines.
         }
 
-        // 4. Re-fetch para obtener el trip_id auto-generado por el trigger
+        // Re-fetch para obtener el trip_id auto-generado por el trigger
         const { data: refreshed } = await supabase
           .from('trips')
           .select('trip_id')
           .eq('id', newTripId)
           .single()
 
-        // 5. Notificaciones: líneas programadas a PMs + viaje asignado a conductor
+        // Notificaciones: líneas programadas a PMs + viaje asignado a conductor
         const { data: lineRequests } = await supabase
           .from('sm_request_lines')
           .select('request_id')
@@ -959,61 +896,33 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           return false
         }
 
-        // 2. Eliminar asignaciones removidas y liberar las líneas de vuelta al backlog
-        for (const assignmentId of removeAssignmentIds) {
-          // Obtener la asignación para saber cuánto restar de qty_scheduled
-          const { data: assignment, error: fetchAssignError } = await supabase
-            .from('trip_line_assignments')
-            .select('request_line_id, quantity_assigned')
-            .eq('id', assignmentId)
-            .single()
-
-          if (fetchAssignError || !assignment) continue
-
-          // Eliminar la asignación del viaje
-          await supabase
+        // 2. Eliminar asignaciones removidas. El trigger BD recalc_qty_for_line
+        //    se dispara en DELETE y reconcilia qty_scheduled + status de la línea.
+        if (removeAssignmentIds.length > 0) {
+          const { error: deleteError } = await supabase
             .from('trip_line_assignments')
             .delete()
-            .eq('id', assignmentId)
+            .in('id', removeAssignmentIds)
 
-          // Liberar la línea: restar qty_scheduled, volver a Pendiente si llega a 0
-          await releaseLineFromAssignment(
-            supabase,
-            assignment.request_line_id,
-            assignment.quantity_assigned,
-          )
+          if (deleteError) {
+            setSaveError(`Error al eliminar asignaciones: ${deleteError.message}`)
+            return false
+          }
         }
 
-        // 2.5. Actualizar cantidades de asignaciones existentes modificadas
+        // 3. Actualizar cantidades de asignaciones existentes modificadas.
+        //    El trigger BD se dispara en UPDATE y reconcilia qty_scheduled.
         if (modifiedAssignments && modifiedAssignments.length > 0) {
           for (const mod of modifiedAssignments) {
-            const delta = mod.quantity_assigned - mod.original_quantity
-
-            // Actualizar la asignación
             await supabase
               .from('trip_line_assignments')
               .update({ quantity_assigned: mod.quantity_assigned })
               .eq('id', mod.id)
-
-            // Ajustar qty_scheduled de la línea
-            if (delta !== 0) {
-              const { data: currentLine } = await supabase
-                .from('sm_request_lines')
-                .select('qty_scheduled')
-                .eq('id', mod.request_line_id)
-                .single()
-
-              const newQtyScheduled = Math.max(0, (currentLine?.qty_scheduled ?? 0) + delta)
-
-              await supabase
-                .from('sm_request_lines')
-                .update({ qty_scheduled: newQtyScheduled })
-                .eq('id', mod.request_line_id)
-            }
           }
         }
 
-        // 3. Agregar nuevas asignaciones y marcar las líneas como Programadas
+        // 4. Agregar nuevas asignaciones. El trigger BD se dispara en INSERT
+        //    y reconcilia qty_scheduled + status='Programada' de la línea.
         if (addAssignments.length > 0) {
           const newRows = addAssignments.map((a) => ({
             trip_id: id,
@@ -1028,25 +937,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           if (insertError) {
             setSaveError(`Error al agregar asignaciones: ${insertError.message}`)
             return false
-          }
-
-          // Actualizar estado y cantidad programada de las líneas recién asignadas
-          for (const a of addAssignments) {
-            const { data: currentLine } = await supabase
-              .from('sm_request_lines')
-              .select('qty_scheduled')
-              .eq('id', a.request_line_id)
-              .single()
-
-            const newQtyScheduled = (currentLine?.qty_scheduled ?? 0) + a.quantity_assigned
-
-            await supabase
-              .from('sm_request_lines')
-              .update({
-                status: 'Programada',
-                qty_scheduled: newQtyScheduled,
-              })
-              .eq('id', a.request_line_id)
           }
         }
 
@@ -1072,29 +962,11 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       setSaveError(null)
 
       try {
-        // 1. Obtener todas las asignaciones del viaje para liberar las líneas
-        const { data: assignments, error: fetchError } = await supabase
-          .from('trip_line_assignments')
-          .select('id, request_line_id, quantity_assigned')
-          .eq('trip_id', id)
-
-        if (fetchError) {
-          setSaveError(fetchError.message)
-          return false
-        }
-
-        // 2. Liberar cada línea asignada de vuelta al backlog.
-        //    El trigger cascade_request_status() actualizará automáticamente
-        //    el estado de las solicitudes padre cuando las líneas vuelvan a Pendiente.
-        for (const assignment of assignments ?? []) {
-          await releaseLineFromAssignment(
-            supabase,
-            assignment.request_line_id,
-            assignment.quantity_assigned,
-          )
-        }
-
-        // 3. Eliminar todas las asignaciones del viaje
+        // 1. Eliminar todas las asignaciones del viaje. El trigger BD
+        //    recalc_qty_for_line se dispara en DELETE y reconcilia
+        //    qty_scheduled + status de cada línea (vuelven a Pendiente
+        //    si quedan en 0). El trigger cascade_request_status actualiza
+        //    el estado de las solicitudes padre.
         const { error: deleteAssignError } = await supabase
           .from('trip_line_assignments')
           .delete()
@@ -1105,7 +977,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           return false
         }
 
-        // 4. Marcar el viaje como Cancelado
+        // 2. Marcar el viaje como Cancelado
         const { error: cancelError } = await supabase
           .from('trips')
           .update({ status: 'Cancelado' })

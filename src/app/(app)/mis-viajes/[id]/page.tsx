@@ -612,7 +612,9 @@ export default function Page() {
 
         if (tripError) throw tripError
 
-        // 3. UPDATE líneas a 'En Transito' (SIN acento — CRÍTICO para cascade)
+        // 3. UPDATE líneas a 'En Transito' (SIN acento — CRÍTICO para cascade).
+        //    Status no es trigger-managed durante dispatch — solo el trigger
+        //    recalcula qty_scheduled. La transición a 'En Transito' se hace aquí.
         const lineIds = effectiveData.lines.map((l) => l.request_line_id)
         if (lineIds.length > 0) {
           const { error: linesError } = await supabase
@@ -623,33 +625,16 @@ export default function Page() {
           if (linesError) throw linesError
         }
 
-        // 4. UPDATE trip_line_assignments: qty_dispatched
-        // Si el conductor despacha menos de lo programado, devolver la diferencia al pool
+        // 4. UPDATE trip_line_assignments: qty_dispatched.
+        //    Si el conductor despacha menos de lo programado, el trigger BD
+        //    recalc_qty_for_line se dispara al UPDATE y reconcilia qty_scheduled
+        //    en sm_request_lines (la diferencia vuelve al pool automáticamente).
         for (const line of effectiveData.lines) {
-          const assignment = trip.assignments.find(a => a.request_line_id === line.request_line_id)
-          const qtyAssigned = assignment?.quantity_assigned ?? line.qty_dispatched
-
           await supabase
             .from('trip_line_assignments')
             .update({ qty_dispatched: line.qty_dispatched })
             .eq('trip_id', trip.id)
             .eq('request_line_id', line.request_line_id)
-
-          // Si qty_dispatched < quantity_assigned, liberar la diferencia del pool
-          // quantity_assigned NO se modifica (preserva lo que Charris programó)
-          const notDispatched = qtyAssigned - line.qty_dispatched
-          if (notDispatched > 0) {
-            const { data: currentLine } = await supabase
-              .from('sm_request_lines')
-              .select('qty_scheduled')
-              .eq('id', line.request_line_id)
-              .single()
-            const newScheduled = Math.max(0, (currentLine?.qty_scheduled ?? 0) - notDispatched)
-            await supabase
-              .from('sm_request_lines')
-              .update({ qty_scheduled: newScheduled })
-              .eq('id', line.request_line_id)
-          }
         }
 
         // 5. Notificación
@@ -736,37 +721,11 @@ export default function Page() {
           await supabase.from('delivery_observations').insert(observations)
         }
 
-        // 4. UPDATE sm_request_lines: qty_delivered += qty, qty_scheduled -= qty, status
-        for (const line of accepted) {
-          const { data: current } = await supabase
-            .from('sm_request_lines')
-            .select('qty_delivered, qty_scheduled, quantity')
-            .eq('id', line.request_line_id)
-            .single()
-
-          const currentDelivered = current?.qty_delivered ?? 0
-          const currentScheduled = current?.qty_scheduled ?? 0
-          const totalQty = current?.quantity ?? line.quantity
-          const newDelivered = Math.min(totalQty, currentDelivered + line.quantity)
-          // Decrementar qty_scheduled por lo entregado (ya no está "en proceso")
-          const newScheduled = Math.max(0, currentScheduled - line.quantity)
-          const newStatus = newDelivered >= totalQty ? 'Entregada' : 'Parcial'
-
-          await supabase
-            .from('sm_request_lines')
-            .update({
-              qty_delivered: newDelivered,
-              qty_scheduled: newScheduled,
-              status: newStatus,
-              ...(newStatus === 'Entregada' ? { delivered_at: new Date().toISOString() } : {}),
-            })
-            .eq('id', line.request_line_id)
-        }
-
-        // 5. UPDATE trip_line_assignments: qty_delivered (fresh SELECT para evitar race
+        // 4. UPDATE trip_line_assignments: qty_delivered (fresh SELECT para evitar race
         // condition bajo entregas concurrentes desde dos dispositivos. El idempotency
         // checkpoint de step 1 protege contra retries; este fresh SELECT protege contra
-        // concurrencia real. Fix completo seria una RPC atomica en Fase B.)
+        // concurrencia real. El trigger BD recalc_qty_for_line se dispara al UPDATE
+        // y reconcilia qty_scheduled, qty_delivered y status en sm_request_lines.
         for (const line of accepted) {
           const { data: freshAssignment } = await supabase
             .from('trip_line_assignments')
@@ -781,6 +740,24 @@ export default function Page() {
             .update({ qty_delivered: currentDelivered + line.quantity })
             .eq('trip_id', trip.id)
             .eq('request_line_id', line.request_line_id)
+        }
+
+        // 5. UPDATE sm_request_lines.delivered_at (no calculado por trigger).
+        //    Setear timestamp solo cuando la línea quedó completamente Entregada.
+        //    Re-leer post-trigger para saber el status actualizado.
+        for (const line of accepted) {
+          const { data: postTrigger } = await supabase
+            .from('sm_request_lines')
+            .select('status')
+            .eq('id', line.request_line_id)
+            .single()
+
+          if (postTrigger?.status === 'Entregada') {
+            await supabase
+              .from('sm_request_lines')
+              .update({ delivered_at: new Date().toISOString() })
+              .eq('id', line.request_line_id)
+          }
         }
 
         // 6. Notifications (loop all accepted, fix M6)
@@ -869,26 +846,10 @@ export default function Page() {
             .update({ status: 'Programado', actual_departure: null })
             .eq('id', trip.id)
 
-          // Lines → Programada + restore qty_scheduled if dispatch had reduced it
+          // Reset qty_dispatched en assignments. El trigger BD recalc_qty_for_line
+          // se dispara al UPDATE y reconcilia qty_scheduled + status='Programada'
+          // en sm_request_lines.
           for (const a of trip.assignments) {
-            const dispatched = a.qty_dispatched ?? a.quantity_assigned
-            const assigned = a.quantity_assigned
-            const notDispatched = assigned - dispatched
-
-            const { data: currentLine } = await supabase
-              .from('sm_request_lines')
-              .select('qty_scheduled')
-              .eq('id', a.request_line_id)
-              .single()
-
-            // Restore the delta that was subtracted during dispatch
-            const restoredScheduled = (currentLine?.qty_scheduled ?? 0) + (notDispatched > 0 ? notDispatched : 0)
-            await supabase
-              .from('sm_request_lines')
-              .update({ status: 'Programada', qty_scheduled: restoredScheduled })
-              .eq('id', a.request_line_id)
-
-            // Reset qty_dispatched
             await supabase
               .from('trip_line_assignments')
               .update({ qty_dispatched: 0 })
@@ -906,61 +867,16 @@ export default function Page() {
         }
 
         if (eventType === 'Entrega') {
-          // Branch verificado 2026-04-14 contra 4 escenarios de entregas
-          // parciales (hallazgo #5 del audit pre-fase, cierre).
-          // - E1: Entrega parcial única (qty=6 de 10) revertida → línea vuelve
-          //   a En Transito con qty_scheduled=10, qty_delivered=0. Correcto.
-          // - E2: Última de 2 entregas parciales revertida (qty=3 tras qty=4) →
-          //   línea queda Parcial con qty_delivered=4, qty_scheduled=6.
-          //   Correcto — la primera entrega sobrevive.
-          // - E3: Entrega que completó la línea (qty=2 tras qty=3, total=5)
-          //   revertida → línea vuelve a Parcial con qty_delivered=3,
-          //   qty_scheduled=2, delivered_at=null. Correcto — vuelve a Parcial
-          //   porque aún queda delivered>0, el cascade_request_status trigger
-          //   lleva el parent sm_requests de Completada a En Proceso.
-          // - E4: Entrega con observaciones revertida → qty vuelve atrás como
-          //   E1. Las filas de delivery_observations sobreviven intactas — son
-          //   evidencia histórica inmutable del reporte original del conductor.
-          // Ver CHANGELOG 2026-04-14 para el detalle completo del análisis.
+          // Decrementar qty_delivered en trip_line_assignments. El trigger BD
+          // recalc_qty_for_line se dispara al UPDATE y reconcilia
+          // qty_scheduled + qty_delivered + status en sm_request_lines.
+          // Las filas de delivery_observations sobreviven intactas — son
+          // evidencia histórica inmutable del reporte original del conductor.
           const { data: eventLines } = await supabase
             .from('trip_event_lines')
             .select('request_line_id, quantity')
             .eq('trip_event_id', revertEvent.id)
 
-          for (const el of eventLines ?? []) {
-            const { data: current } = await supabase
-              .from('sm_request_lines')
-              .select('qty_delivered, qty_scheduled, quantity')
-              .eq('id', el.request_line_id)
-              .single()
-
-            // Math.max(0, ...) — enforce_qty_integrity blocks negatives
-            const newDelivered = Math.max(0, (current?.qty_delivered ?? 0) - el.quantity)
-            // Restaurar qty_scheduled: la línea vuelve a estar "en proceso"
-            const newScheduled = (current?.qty_scheduled ?? 0) + el.quantity
-            // Calcular status dinámicamente: si aún quedan entregas previas (otras),
-            // la línea sigue Parcial; si newDelivered llega a 0, vuelve a En Transito.
-            const totalQty = current?.quantity ?? el.quantity
-            const newStatus =
-              newDelivered >= totalQty
-                ? 'Entregada'
-                : newDelivered > 0
-                  ? 'Parcial'
-                  : 'En Transito' // SIN acento — CRÍTICO
-
-            await supabase
-              .from('sm_request_lines')
-              .update({
-                qty_delivered: newDelivered,
-                qty_scheduled: newScheduled,
-                status: newStatus,
-                // Solo limpiar delivered_at si la línea ya no está Entregada
-                ...(newStatus !== 'Entregada' ? { delivered_at: null } : {}),
-              })
-              .eq('id', el.request_line_id)
-          }
-
-          // Also update trip_line_assignments.qty_delivered
           for (const el of eventLines ?? []) {
             const { data: tla } = await supabase
               .from('trip_line_assignments')
@@ -974,6 +890,23 @@ export default function Page() {
               .update({ qty_delivered: Math.max(0, (tla?.qty_delivered ?? 0) - el.quantity) })
               .eq('trip_id', trip.id)
               .eq('request_line_id', el.request_line_id)
+          }
+
+          // Limpiar delivered_at en sm_request_lines: el trigger ya recalculó
+          // el status, pero delivered_at no es trigger-managed.
+          for (const el of eventLines ?? []) {
+            const { data: postTrigger } = await supabase
+              .from('sm_request_lines')
+              .select('status')
+              .eq('id', el.request_line_id)
+              .single()
+
+            if (postTrigger?.status !== 'Entregada') {
+              await supabase
+                .from('sm_request_lines')
+                .update({ delivered_at: null })
+                .eq('id', el.request_line_id)
+            }
           }
           // NO revertir ubicación de equipo — refleja realidad física
         }
