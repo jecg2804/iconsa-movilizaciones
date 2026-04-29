@@ -1,0 +1,82 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-29-cambio6-cancel-integrity.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Migración BD consolidada cambio6_cancellation_integrity",
+      "status": "pending",
+      "description": "**Goal:** Aplicar la migración BD consolidada en staging vía Chat MCP, dejando entry [bd] confirmando aplicación.\n\n**Files:**\n- Modify: Docs/CHANGELOG.md\n\n**PARADA interna:** Code escribe entry [bd-pending], espera Chat aplique vía Supabase MCP, James confirma, Code edita → [bd] y commit.\n\n**Verify:** types regenerados muestran cancellation_reason y rate_id NOT NULL.\n\n```json:metadata\n{\"files\": [\"Docs/CHANGELOG.md\"], \"verifyCommand\": \"npx supabase gen types typescript --project-id vonwkciosksqspyljzfy | grep -E '(cancellation_reason|rate_id)'\", \"acceptanceCriteria\": [\"Entry [bd-pending] con SQL completo + rollback + 4 pre-merge queries\", \"Chat aplica vía MCP en staging\", \"Advisor confirma triggers nuevos\", \"Entry editada [bd-pending] → [bd]\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Regen types post-migración + helper preservation",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** Types regenerados contra staging incluyen cancellation_reason: string | null, rate_id: string (NOT NULL), helper Row<T> preservado.\n\n**Files:**\n- Modify: src/lib/types/database.ts\n\n**Verify:** npm run build verde, grep cancellation_reason → 9 ocurrencias.\n\n```json:metadata\n{\"files\": [\"src/lib/types/database.ts\"], \"verifyCommand\": \"npm run build 2>&1 | tail -10\", \"acceptanceCriteria\": [\"cancellation_reason en Row+Insert+Update de 3 tablas\", \"trips.rate_id sin null\", \"Helper Row<T> preservado\", \"npm warn cleanup\", \"Build verde\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Test E2E suite escrita (18 tests, baseline RED/GREEN mix)",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Crear tests/cambio6-integrity.spec.ts con 18 tests del spec. Baseline post-T1+T2: ~9 tests pasan (BD-driven), ~9 fallan (code-driven hasta T4-T9).\n\n**Files:**\n- Create: tests/cambio6-integrity.spec.ts\n\n**Verify:** npx playwright test tests/cambio6-integrity.spec.ts --reporter=list → 18 tests, baseline mix.\n\n```json:metadata\n{\"files\": [\"tests/cambio6-integrity.spec.ts\"], \"verifyCommand\": \"npx playwright test tests/cambio6-integrity.spec.ts --reporter=list\", \"acceptanceCriteria\": [\"18 tests declarados con describe blocks por bug\", \"Helpers seedSolicitudWithLines + seedTripWithAssignment + dispatchTrip + deliverInTrip\", \"Cleanup function por test\", \"Tests BD-driven (#5,#6,#12-15,#16-18) pasan post-T1\", \"Tests code-driven (#1-4,#7-11) fallan baseline RED\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: Fix Bug #1 — useTrips.cancelTrip refactor (no DELETE assignments)",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** cancelTrip no DELETE trip_line_assignments, acepta cancellationReason. Caller programacion/viaje/[id]/page.tsx pasa reason.\n\n**Files:**\n- Modify: src/hooks/useTrips.ts (cancelTrip)\n- Modify: src/app/(app)/programacion/viaje/[id]/page.tsx (handleCancelTrip)\n\n**Verify:** tests #1, #2, #3, #10, #11 pasan.\n\n```json:metadata\n{\"files\": [\"src/hooks/useTrips.ts\", \"src/app/(app)/programacion/viaje/[id]/page.tsx\"], \"verifyCommand\": \"npx playwright test tests/cambio6-integrity.spec.ts -g 'cancel_trip|backlog_calculation|line_status' --reporter=list\", \"acceptanceCriteria\": [\"DELETE removido\", \"cancellationReason param\", \"UPDATE incluye cancellation_reason\", \"Friendly error message\", \"5 tests pasan\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: Fix Bug #4 + D8 — handleDelivery error UX + handleRevert Salida pre-flight",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** UX claro cuando trigger Bug #4 rechaza INSERT duplicado + pre-flight check antes de UPDATE bulk en revert Salida.\n\n**Files:**\n- Modify: src/app/(app)/mis-viajes/[id]/page.tsx\n\n**Verify:** Build verde, test manual flow revert Salida y multi-Entrega.\n\n```json:metadata\n{\"files\": [\"src/app/(app)/mis-viajes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"handleDelivery catch detecta 'ya tiene una Entrega activa'\", \"Mensaje user-friendly\", \"handleRevert Salida pre-flight check qty_delivered>0\", \"Aborta con mensaje claro pre-UPDATE\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 6: Fix Bug #4 defense-in-depth — DeliveryModal filter UI greyed disabled",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Modal lista todas las líneas; las con Entrega activa aparecen greyed disabled con badge '✓ Entregada — {qty} a {receptor}'.\n\n**Files:**\n- Modify: src/components/viajes/DeliveryModal.tsx\n\n**Verify:** Build verde, visual manual confirmado.\n\n```json:metadata\n{\"files\": [\"src/components/viajes/DeliveryModal.tsx\"], \"verifyCommand\": \"npm run build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Pre-flight SELECT trip_event_lines con Entrega activa\", \"Map alreadyDeliveredLineIds calculado correctamente filtrando reverted\", \"Línea con entrega: checkbox disabled, badge, tooltip\", \"Línea sin entrega: comportamiento previo\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 7: Tarifa obligatoria — saveTrip + updateTrip + validate",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** saveTrip/updateTrip rechazan rate_id null. validate() en nuevo + edit page bloquea submit. Tests #16, #17 pasan.\n\n**Files:**\n- Modify: src/hooks/useTrips.ts (saveTrip + updateTrip)\n- Modify: src/app/(app)/programacion/viaje/nuevo/page.tsx (validate)\n- Modify: src/app/(app)/programacion/viaje/[id]/page.tsx (validate)\n\n**Verify:** tests #16, #17 pasan.\n\n```json:metadata\n{\"files\": [\"src/hooks/useTrips.ts\", \"src/app/(app)/programacion/viaje/nuevo/page.tsx\", \"src/app/(app)/programacion/viaje/[id]/page.tsx\"], \"verifyCommand\": \"npx playwright test tests/cambio6-integrity.spec.ts -g 'rate' --reporter=list\", \"acceptanceCriteria\": [\"saveTrip valida rate_id pre-INSERT\", \"updateTrip valida rate_id pre-UPDATE\", \"Cost > 0 validation\", \"validate() bloquea submit sin rate_id en ambas pages\", \"2 tests pasan\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 8: Cancel modals con razón condicional (3 lugares inline)",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** Los 3 cancel modals inline extienden con textarea requerido condicional según deliveredCount > 0. Botón disabled hasta razón ≥10 chars cuando requerido.\n\n**Files:**\n- Modify: src/app/(app)/programacion/viaje/[id]/page.tsx (cancel trip modal inline)\n- Modify: src/app/(app)/programacion/page.tsx (cancel pickup + external modals)\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx (cancel pickup + external si aplica)\n\n**Verify:** Visual manual + Playwright snapshot. Build verde.\n\n```json:metadata\n{\"files\": [\"src/app/(app)/programacion/viaje/[id]/page.tsx\", \"src/app/(app)/programacion/page.tsx\", \"src/app/(app)/solicitudes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build 2>&1 | tail -5\", \"acceptanceCriteria\": [\"Pre-flight stats deliveredCount/deliveredQty\", \"Textarea required condicional con asterisco\", \"Counter chars cuando requerido\", \"Botón disabled hasta válido\", \"Mensaje contextual cuando deliveries\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 9: cancellationReason param en hooks pickup/external + callers",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** cancelPickupOrder y cancelExternalOrder aceptan cancellationReason. UPDATE incluye campo. Tests #7, #8, #9 pasan.\n\n**Files:**\n- Modify: src/hooks/usePickupOrders.ts (cancelPickupOrder)\n- Modify: src/hooks/useExternalOrders.ts (cancelExternalOrder)\n\n**Verify:** tests cancel_pickup, cancel_external, complete_pickup_idempotent pasan.\n\n```json:metadata\n{\"files\": [\"src/hooks/usePickupOrders.ts\", \"src/hooks/useExternalOrders.ts\"], \"verifyCommand\": \"npx playwright test tests/cambio6-integrity.spec.ts -g 'cancel_pickup|cancel_external|complete_pickup' --reporter=list\", \"acceptanceCriteria\": [\"cancellationReason: string | null param\", \"UPDATE incluye cancellation_reason\", \"Friendly error message\", \"3 tests pasan\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 10: CLAUDE.md regla #9 update — tarifa obligatoria",
+      "status": "pending",
+      "blockedBy": [8],
+      "description": "**Goal:** Convención del proyecto refleja tarifa obligatoria.\n\n**Files:**\n- Modify: CLAUDE.md (regla #9)\n\n**Verify:** grep regla #9 muestra nuevo texto.\n\n```json:metadata\n{\"files\": [\"CLAUDE.md\"], \"verifyCommand\": \"grep -A 3 '9\\\\.' CLAUDE.md | head -5\", \"acceptanceCriteria\": [\"Regla #9 cambiada de OPCIONAL a OBLIGATORIA\", \"Nota Cambio 2026-04-29 Cambio 6 agregada\", \"Histórico J6 read-only preservado\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 11: PARADA — Smoke test fresh por James (BD limpia post-wipe)",
+      "status": "pending",
+      "blockedBy": [9],
+      "description": "**Goal:** James verifica el flow completo end-to-end con BD limpia. Si OK → green light para T-final docs unificado en sesión separada.\n\n**Files:** Ninguno (verificación manual).\n\n**NO commit en T11.** Es PARADA. T-final unificado (Cambio 5 + Cambio 6) es trabajo de sesión separada post smoke OK.\n\n**Verify:** 18/18 tests pasan + James confirma checklist manual.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"npx playwright test tests/cambio6-integrity.spec.ts --reporter=list\", \"acceptanceCriteria\": [\"18/18 tests E2E pasan\", \"Build verde\", \"James confirma 10 verificaciones manuales\", \"NO commit\", \"Reporte para James con commits T1-T10\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-29T00:00:00Z"
+}
