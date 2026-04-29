@@ -307,6 +307,9 @@ export default function ViajeDetailPage() {
   // Estado de UI
   const [isDirty, setIsDirty] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  // Cambio 6 T8: state para razón de cancelación. UX completa del textarea
+  // (con asterisco condicional + counter + botón disabled) viene en T8.
+  const [cancelReason, setCancelReason] = useState('')
 
   // Datos adicionales (fetch inline)
   const [drivers, setDrivers] = useState<PersonRow[]>([])
@@ -619,9 +622,12 @@ export default function ViajeDetailPage() {
   })
 
   // --- Cancelar viaje ---
+  // Cambio 6: cancelTrip ahora acepta razón opcional (BD trigger valida
+  // si es required cuando hay qty_delivered>0). El modal en T8 setea
+  // cancelReason via state local antes de invocar.
   const handleCancelTrip = guard(async () => {
     if (!trip) return
-    const success = await cancelTrip(trip.id)
+    const success = await cancelTrip(trip.id, cancelReason.trim() || null)
     if (success) {
       router.push('/programacion')
     }

@@ -986,36 +986,33 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
 
   // --- Cancelar viaje ---
   const cancelTrip = useCallback(
-    async (id: string): Promise<boolean> => {
+    async (id: string, cancellationReason: string | null): Promise<boolean> => {
       if (busyRef.current) return false
       busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
       try {
-        // 1. Eliminar todas las asignaciones del viaje. El trigger BD
-        //    recalc_qty_for_line se dispara en DELETE y reconcilia
-        //    qty_scheduled + status de cada línea (vuelven a Pendiente
-        //    si quedan en 0). El trigger cascade_request_status actualiza
-        //    el estado de las solicitudes padre.
-        const { error: deleteAssignError } = await supabase
-          .from('trip_line_assignments')
-          .delete()
-          .eq('trip_id', id)
-
-        if (deleteAssignError) {
-          setSaveError(deleteAssignError.message)
-          return false
-        }
-
-        // 2. Marcar el viaje como Cancelado
+        // Cambio 6 Bug #1 fix: NO MORE DELETE assignments.
+        // Trigger trg_recalc_from_trip_status_change (existe desde Cambio 5)
+        // recalcula líneas automáticamente al cambio de status. Trigger Bug #2
+        // fix asegura que líneas sin assignments activos no quedan zombie
+        // 'En Transito'. Assignments preservados para histórico operacional.
         const { error: cancelError } = await supabase
           .from('trips')
-          .update({ status: 'Cancelado' })
+          .update({
+            status: 'Cancelado',
+            cancellation_reason: cancellationReason?.trim() || null,
+          })
           .eq('id', id)
 
         if (cancelError) {
-          setSaveError(cancelError.message)
+          // Trigger BD enforce_cancellation_reason_trips puede rechazar
+          // si qty_delivered>0 y razón inválida (≥10 chars).
+          const friendly = cancelError.message.includes('cancellation_reason requerido')
+            ? 'Debes proveer una razón (≥10 caracteres) para cancelar este viaje porque tiene entregas registradas.'
+            : cancelError.message
+          setSaveError(friendly)
           return false
         }
 
