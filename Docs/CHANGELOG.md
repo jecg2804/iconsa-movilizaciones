@@ -6,7 +6,26 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ## 2026-04-29
 
-- [bd-pending] **Cambio 6 — migración consolidada `cambio6_cancellation_integrity` (cancel preservation + integridad de cálculos).** SQL aplicar por Chat en staging (`vonwkciosksqspyljzfy`). 1 sola transacción para atomicidad — pre-merge queries validan compatibilidad antes de aplicar a prod.
+- [bd] **Cambio 6 — migración consolidada `cambio6_cancellation_integrity` (cancel preservation + integridad de cálculos) aplicada en staging.** Aplicada por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-29 vía Supabase MCP. Version `20260429204609`. 1 sola transacción para atomicidad. Pendiente prod en merge final v2 unificado (post-Cambio 6 implementación + smoke OK).
+
+  **Pre-aplicación: 4 pre-merge queries retornaron 0 rows** (BD wipeada confirmó compatibilidad).
+
+  **Verificación post-migración (7/7 confirmados):**
+  - ✅ `cancellation_reason TEXT` (nullable) en `trips`, `pickup_orders`, `external_orders`.
+  - ✅ Triggers `enforce_cancellation_reason_trips` / `_pickup_orders` / `_external_orders` (3 paralelos, BEFORE UPDATE OF status).
+  - ✅ Trigger `enforce_one_active_delivery_trg` (BEFORE INSERT en `trip_event_lines`, Bug #4 fix).
+  - ✅ Función `recalc_qty_for_line` REPLACE con variable nueva `v_trip_qty_scheduled_active` y branch modificado `ELSIF v_current_status = 'En Transito' AND v_trip_qty_scheduled_active > 0 THEN` (Bug #2 fix). Resto de la función preservado intacto (steps 1-3 lógica de cálculo, step 5 UPDATE, otros branches `'Pendiente'`/`'Parcial'`/`'Entregada'`). SECURITY DEFINER y `SET search_path` mantenidos.
+  - ✅ Trigger `enforce_quantity_immutable_trg` (BEFORE UPDATE OF quantity en `sm_request_lines`, H1).
+  - ✅ CHECK constraints `qty_dispatched_le_assigned` y `qty_delivered_le_dispatched` (H7+H8) en `trip_line_assignments`.
+  - ✅ `trips.rate_id` ahora NOT NULL (tarifa obligatoria).
+
+  **Advisors security post-migración:** sin lints nuevos. Las 5 funciones nuevas son SECURITY INVOKER (correcto). Los lints existentes (`audit_trigger`, `generate_*`, etc.) son pre-Cambio 6 y no relacionados.
+
+  **Pre-merge queries post-migración:** las 4 siguen retornando 0 rows. Sistema consistente.
+
+  **Nota técnica:** durante el primer `apply_migration`, Supabase MCP devolvió un error spurio *"column already exists"* pero la migración SÍ se aplicó completamente (verificado via `list_migrations` + check de existencia de cada objeto). No se requirió retry.
+
+  **SQL aplicado (referencia, en una sola transacción):**
 
   **Pre-aplicación: 4 queries de validación (todas deben retornar 0 rows):**
 
