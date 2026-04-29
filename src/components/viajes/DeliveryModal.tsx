@@ -77,13 +77,26 @@ export function DeliveryModal({
   // UUID estable del evento — mismo valor para retries del mismo modal (idempotencia)
   const eventIdRef = useRef<string>(crypto.randomUUID())
 
-  // Only show lines that are 'En Transito' (multi-delivery: already delivered lines hidden)
+  // Cambio 6 D5: separar líneas operables (entregables ahora) de las ya entregadas
+  // en este trip (qty_delivered>0 en el assignment). Las ya entregadas se renderizan
+  // greyed disabled para visibilidad operativa — Charris ve progreso del trip
+  // ("voy 2 de 3 líneas"). Bug #4 BD trigger es la fuente de verdad; este UI es
+  // defense-in-depth.
   const deliverableAssignments = useMemo(
-    () => trip.assignments.filter((a) => a.line?.status === 'En Transito'),
+    () => trip.assignments.filter(
+      (a) => a.line?.status === 'En Transito' && (a.qty_delivered ?? 0) === 0,
+    ),
     [trip.assignments],
   )
 
-  // Initialize line states
+  // Líneas ya entregadas en este trip (qty_delivered>0). Render disabled con badge.
+  const alreadyDeliveredAssignments = useMemo(
+    () => trip.assignments.filter((a) => (a.qty_delivered ?? 0) > 0),
+    [trip.assignments],
+  )
+
+  // Initialize line states (solo entregables — las ya entregadas no van al state
+  // porque no son editables)
   const [lines, setLines] = useState<LineState[]>(() =>
     deliverableAssignments.map((a) => ({
       request_line_id: a.request_line_id,
@@ -193,7 +206,7 @@ export function DeliveryModal({
   }, [receiver, receiverOptions, code, lines, notes, attachments, onConfirm])
 
   // --- Render ---
-  if (deliverableAssignments.length === 0) {
+  if (deliverableAssignments.length === 0 && alreadyDeliveredAssignments.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
         <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-6">
@@ -230,7 +243,44 @@ export function DeliveryModal({
             <p className="mb-2 text-sm font-medium text-gray-700">
               Líneas por recibir ({lines.filter((l) => l.status !== 'rejected').length} de{' '}
               {lines.length})
+              {alreadyDeliveredAssignments.length > 0 && (
+                <span className="ml-1 text-xs text-iconsa-gray font-normal">
+                  · {alreadyDeliveredAssignments.length} ya entregada{alreadyDeliveredAssignments.length === 1 ? '' : 's'}
+                </span>
+              )}
             </p>
+
+            {/* Cambio 6 D5: líneas ya entregadas en este trip (greyed disabled) */}
+            {alreadyDeliveredAssignments.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {alreadyDeliveredAssignments.map((a) => {
+                  const isEquipo = a.line?.line_type === 'Equipo'
+                  const unitCode = a.line?.unit?.code ?? a.line?.unit_text ?? ''
+                  return (
+                    <div
+                      key={a.request_line_id}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50/30 p-3 opacity-70"
+                      title="Esta línea ya fue entregada en este viaje. Para corregir, reversá la Entrega anterior primero."
+                    >
+                      <div className="flex items-center gap-2">
+                        {isEquipo ? (
+                          <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                        ) : (
+                          <Package className="h-3.5 w-3.5 shrink-0 text-iconsa-gold" />
+                        )}
+                        <span className="flex-1 text-sm text-gray-700 truncate">
+                          {a.line?.description ?? '—'}
+                        </span>
+                        <span className="text-xs font-medium text-emerald-700 whitespace-nowrap">
+                          ✓ Entregada — {formatQty(a.qty_delivered ?? 0)} {unitCode}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             <div className="space-y-3">
               {lines.map((line, idx) => (
                 <div
