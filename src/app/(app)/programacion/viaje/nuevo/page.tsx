@@ -203,7 +203,9 @@ export default function NuevoViajePage() {
     if (isCabezal && !tripData.trailer_id) {
       errors.push('Remolque requerido para vehículo cabezal')
     }
-    // Tarifa es opcional — no toda movilización tiene tarifa formal
+    // Cambio 6: tarifa obligatoria (BD trips.rate_id NOT NULL)
+    if (!tripData.rate_id) errors.push('Seleccione una tarifa')
+    if (tripData.cost == null || tripData.cost <= 0) errors.push('El costo debe ser mayor a cero')
     if (assignments.length === 0) errors.push('Seleccione al menos una linea')
     setValidationErrors(errors)
     return errors.length === 0
