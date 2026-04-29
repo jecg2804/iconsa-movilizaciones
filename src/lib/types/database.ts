@@ -827,6 +827,7 @@ export type Database = {
         Row: {
           approved_at: string
           approved_by: string
+          cancellation_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           completed_at: string | null
@@ -849,6 +850,7 @@ export type Database = {
         Insert: {
           approved_at?: string
           approved_by: string
+          cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           completed_at?: string | null
@@ -871,6 +873,7 @@ export type Database = {
         Update: {
           approved_at?: string
           approved_by?: string
+          cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           completed_at?: string | null
@@ -1834,6 +1837,7 @@ export type Database = {
           approved_at: string
           approved_by: string
           attachments: Json
+          cancellation_reason: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           completed_at: string | null
@@ -1854,6 +1858,7 @@ export type Database = {
           approved_at?: string
           approved_by: string
           attachments?: Json
+          cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           completed_at?: string | null
@@ -1874,6 +1879,7 @@ export type Database = {
           approved_at?: string
           approved_by?: string
           attachments?: Json
+          cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           completed_at?: string | null
@@ -2807,6 +2813,7 @@ export type Database = {
           att_permit: boolean | null
           attachments: Json | null
           campaign_id: string | null
+          cancellation_reason: string | null
           confirmation_code: string | null
           cost: number | null
           created_at: string | null
@@ -2816,7 +2823,7 @@ export type Database = {
           escort: boolean | null
           id: string
           notes: string | null
-          rate_id: string | null
+          rate_id: string
           route_summary: string | null
           scheduled_date: string
           scheduled_time: string | null
@@ -2833,6 +2840,7 @@ export type Database = {
           att_permit?: boolean | null
           attachments?: Json | null
           campaign_id?: string | null
+          cancellation_reason?: string | null
           confirmation_code?: string | null
           cost?: number | null
           created_at?: string | null
@@ -2842,7 +2850,7 @@ export type Database = {
           escort?: boolean | null
           id?: string
           notes?: string | null
-          rate_id?: string | null
+          rate_id: string
           route_summary?: string | null
           scheduled_date: string
           scheduled_time?: string | null
@@ -2859,6 +2867,7 @@ export type Database = {
           att_permit?: boolean | null
           attachments?: Json | null
           campaign_id?: string | null
+          cancellation_reason?: string | null
           confirmation_code?: string | null
           cost?: number | null
           created_at?: string | null
@@ -2868,7 +2877,7 @@ export type Database = {
           escort?: boolean | null
           id?: string
           notes?: string | null
-          rate_id?: string | null
+          rate_id?: string
           route_summary?: string | null
           scheduled_date?: string
           scheduled_time?: string | null

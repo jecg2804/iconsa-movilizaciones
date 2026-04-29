@@ -767,6 +767,23 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         return null
       }
 
+      // Cambio 6: tarifa obligatoria (BD trips.rate_id NOT NULL).
+      // Defense-in-depth pre-INSERT — frontend valida primero pero la BD es
+      // la fuente de verdad. Sin este guard, TypeScript correctamente rechaza
+      // el insert porque Insert.rate_id ahora es required (no nullable).
+      if (!input.rate_id) {
+        setSaveError('La tarifa es obligatoria.')
+        busyRef.current = false
+        setSaving(false)
+        return null
+      }
+      if (input.cost == null || input.cost <= 0) {
+        setSaveError('El costo debe ser mayor a cero.')
+        busyRef.current = false
+        setSaving(false)
+        return null
+      }
+
       try {
         // 1. Insertar el viaje. Los triggers BD asignan trip_id y
         //    confirmation_code (generate_confirmation_code). No generamos
@@ -870,6 +887,20 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       busyRef.current = true
       setSaving(true)
       setSaveError(null)
+
+      // Cambio 6: tarifa obligatoria (BD trips.rate_id NOT NULL).
+      if (!input.rate_id) {
+        setSaveError('La tarifa es obligatoria.')
+        busyRef.current = false
+        setSaving(false)
+        return false
+      }
+      if (input.cost == null || input.cost <= 0) {
+        setSaveError('El costo debe ser mayor a cero.')
+        busyRef.current = false
+        setSaving(false)
+        return false
+      }
 
       try {
         // 1. Actualizar los campos del viaje
