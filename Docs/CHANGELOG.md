@@ -4,6 +4,272 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-29
+
+- [bd-pending] **Cambio 6 — migración consolidada `cambio6_cancellation_integrity` (cancel preservation + integridad de cálculos).** SQL aplicar por Chat en staging (`vonwkciosksqspyljzfy`). 1 sola transacción para atomicidad — pre-merge queries validan compatibilidad antes de aplicar a prod.
+
+  **Pre-aplicación: 4 queries de validación (todas deben retornar 0 rows):**
+
+  ```sql
+  -- Query 1: múltiples entregas activas (Bug #4)
+  SELECT te.trip_id, tel.request_line_id, COUNT(*) AS active_deliveries
+  FROM trip_event_lines tel
+  JOIN trip_events te ON te.id = tel.trip_event_id
+  WHERE te.event_type = 'Entrega'
+    AND te.reverts_event_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM trip_events te2 WHERE te2.reverts_event_id = te.id)
+  GROUP BY te.trip_id, tel.request_line_id
+  HAVING COUNT(*) > 1;
+
+  -- Query 2: trips sin rate_id (tarifa)
+  SELECT id, trip_id FROM trips WHERE rate_id IS NULL;
+
+  -- Query 3: líneas zombie 'En Transito' sin trip activo (Bug #2)
+  SELECT srl.id, srl.description, srl.status, srl.qty_scheduled, srl.qty_delivered
+  FROM sm_request_lines srl
+  WHERE srl.status = 'En Transito'
+    AND NOT EXISTS (
+      SELECT 1 FROM trip_line_assignments tla
+      JOIN trips t ON t.id = tla.trip_id
+      WHERE tla.request_line_id = srl.id AND t.status NOT IN ('Cancelado', 'Completado')
+    );
+
+  -- Query 4: drift en qty_dispatched/qty_delivered/quantity_assigned (riesgo H7+H8)
+  SELECT id, trip_id, request_line_id, quantity_assigned, qty_dispatched, qty_delivered
+  FROM trip_line_assignments
+  WHERE qty_delivered > qty_dispatched OR qty_dispatched > quantity_assigned;
+  ```
+
+  **Migración consolidada (1 transacción):**
+
+  ```sql
+  BEGIN;
+
+  -- 1. Columnas cancellation_reason (nullable)
+  ALTER TABLE trips           ADD COLUMN cancellation_reason TEXT;
+  ALTER TABLE pickup_orders   ADD COLUMN cancellation_reason TEXT;
+  ALTER TABLE external_orders ADD COLUMN cancellation_reason TEXT;
+
+  COMMENT ON COLUMN trips.cancellation_reason IS
+    'Razón de cancelación. Obligatoria (≥10 chars) cuando alguna línea del trip tenía qty_delivered>0. Validado por trigger.';
+  COMMENT ON COLUMN pickup_orders.cancellation_reason IS
+    'Razón de cancelación. Obligatoria (≥10 chars) cuando alguna línea del pickup_order tenía qty_delivered>0. Validado por trigger.';
+  COMMENT ON COLUMN external_orders.cancellation_reason IS
+    'Razón de cancelación. Obligatoria (≥10 chars) cuando alguna línea del external_order tenía qty_delivered>0. Validado por trigger.';
+
+  -- 2. Triggers BEFORE UPDATE para cancellation_reason condicional (3 paralelos)
+  CREATE OR REPLACE FUNCTION enforce_cancellation_reason_trips()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    IF NEW.status != 'Cancelado' OR OLD.status = 'Cancelado' THEN
+      RETURN NEW;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM trip_line_assignments tla
+      WHERE tla.trip_id = NEW.id AND tla.qty_delivered > 0
+    ) THEN
+      RETURN NEW;
+    END IF;
+    IF NEW.cancellation_reason IS NULL OR length(trim(NEW.cancellation_reason)) < 10 THEN
+      RAISE EXCEPTION 'cancellation_reason requerido (>=10 chars) cuando alguna línea tiene qty_delivered>0';
+    END IF;
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_cancellation_reason_trips
+  BEFORE UPDATE OF status ON trips
+  FOR EACH ROW EXECUTE FUNCTION enforce_cancellation_reason_trips();
+
+  CREATE OR REPLACE FUNCTION enforce_cancellation_reason_pickup_orders()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    IF NEW.status != 'Cancelado' OR OLD.status = 'Cancelado' THEN
+      RETURN NEW;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pickup_order_lines pol
+      WHERE pol.pickup_order_id = NEW.id AND pol.qty_delivered > 0
+    ) THEN
+      RETURN NEW;
+    END IF;
+    IF NEW.cancellation_reason IS NULL OR length(trim(NEW.cancellation_reason)) < 10 THEN
+      RAISE EXCEPTION 'cancellation_reason requerido (>=10 chars) cuando alguna línea tiene qty_delivered>0';
+    END IF;
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_cancellation_reason_pickup_orders
+  BEFORE UPDATE OF status ON pickup_orders
+  FOR EACH ROW EXECUTE FUNCTION enforce_cancellation_reason_pickup_orders();
+
+  CREATE OR REPLACE FUNCTION enforce_cancellation_reason_external_orders()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    IF NEW.status != 'Cancelado' OR OLD.status = 'Cancelado' THEN
+      RETURN NEW;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM external_order_lines eol
+      WHERE eol.external_order_id = NEW.id AND eol.qty_delivered > 0
+    ) THEN
+      RETURN NEW;
+    END IF;
+    IF NEW.cancellation_reason IS NULL OR length(trim(NEW.cancellation_reason)) < 10 THEN
+      RAISE EXCEPTION 'cancellation_reason requerido (>=10 chars) cuando alguna línea tiene qty_delivered>0';
+    END IF;
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_cancellation_reason_external_orders
+  BEFORE UPDATE OF status ON external_orders
+  FOR EACH ROW EXECUTE FUNCTION enforce_cancellation_reason_external_orders();
+
+  -- 3. Trigger Bug #4 — BEFORE INSERT en trip_event_lines
+  CREATE OR REPLACE FUNCTION enforce_one_active_delivery_per_trip_line()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    v_event_type text;
+    v_trip_id uuid;
+  BEGIN
+    SELECT event_type, trip_id INTO v_event_type, v_trip_id
+    FROM trip_events WHERE id = NEW.trip_event_id;
+
+    IF v_event_type != 'Entrega' THEN
+      RETURN NEW;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM trip_event_lines tel_x
+      JOIN trip_events te_x ON te_x.id = tel_x.trip_event_id
+      WHERE te_x.trip_id = v_trip_id
+        AND te_x.event_type = 'Entrega'
+        AND te_x.id != NEW.trip_event_id
+        AND te_x.reverts_event_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM trip_events te_rev
+          WHERE te_rev.reverts_event_id = te_x.id
+        )
+        AND tel_x.request_line_id = NEW.request_line_id
+    ) THEN
+      RAISE EXCEPTION 'Línea % ya tiene una Entrega activa en este trip. Reversá la Entrega anterior antes de registrar otra.', NEW.request_line_id;
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_one_active_delivery_trg
+  BEFORE INSERT ON trip_event_lines
+  FOR EACH ROW EXECUTE FUNCTION enforce_one_active_delivery_per_trip_line();
+
+  -- 4. Trigger Bug #2 fix — modificación de recalc_qty_for_line
+  -- IMPORTANTE: REPLACE de la función existente. Lógica del branch ELSIF
+  -- v_current_status = 'En Transito' THEN debe chequear v_qty_scheduled_active > 0
+  -- calculado sobre trips no-Cancelados/no-Completados:
+  --
+  --   ELSIF v_current_status = 'En Transito' THEN
+  --     SELECT COALESCE(SUM(qty_scheduled), 0) INTO v_qty_scheduled_active
+  --     FROM trip_line_assignments tla
+  --     JOIN trips t ON t.id = tla.trip_id
+  --     WHERE tla.request_line_id = p_request_line_id
+  --       AND t.status NOT IN ('Cancelado', 'Completado');
+  --
+  --     IF v_qty_scheduled_active > 0 THEN
+  --       v_new_status := 'En Transito';
+  --     ELSE
+  --       -- Caer al status según qty_delivered
+  --       IF v_total_qty_delivered = 0 THEN
+  --         v_new_status := 'Pendiente';
+  --       ELSIF v_total_qty_delivered >= v_quantity THEN
+  --         v_new_status := 'Entregada';
+  --       ELSE
+  --         v_new_status := 'Parcial';
+  --       END IF;
+  --     END IF;
+  --   END IF;
+
+  -- 5. Trigger H1 — BEFORE UPDATE en sm_request_lines.quantity
+  CREATE OR REPLACE FUNCTION enforce_quantity_immutable_with_active_assignments()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    IF NEW.quantity = OLD.quantity THEN
+      RETURN NEW;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM trip_line_assignments tla
+      JOIN trips t ON t.id = tla.trip_id
+      WHERE tla.request_line_id = NEW.id
+        AND tla.quantity_assigned > 0
+        AND t.status NOT IN ('Cancelado', 'Completado')
+    ) OR EXISTS (
+      SELECT 1 FROM pickup_order_lines pol
+      JOIN pickup_orders po ON po.id = pol.pickup_order_id
+      WHERE pol.request_line_id = NEW.id
+        AND pol.quantity_assigned > 0
+        AND po.status != 'Cancelado'
+    ) OR EXISTS (
+      SELECT 1 FROM external_order_lines eol
+      JOIN external_orders eo ON eo.id = eol.external_order_id
+      WHERE eol.request_line_id = NEW.id
+        AND eol.quantity_assigned > 0
+        AND eo.status != 'Cancelado'
+    ) THEN
+      RAISE EXCEPTION 'No se puede editar la cantidad de una línea con asignaciones activas. Cancele las asignaciones primero.';
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_quantity_immutable_trg
+  BEFORE UPDATE OF quantity ON sm_request_lines
+  FOR EACH ROW EXECUTE FUNCTION enforce_quantity_immutable_with_active_assignments();
+
+  -- 6. CHECK constraints H7 + H8
+  ALTER TABLE trip_line_assignments
+    ADD CONSTRAINT qty_dispatched_le_assigned CHECK (qty_dispatched <= quantity_assigned),
+    ADD CONSTRAINT qty_delivered_le_dispatched CHECK (qty_delivered <= qty_dispatched);
+
+  -- 7. Tarifa obligatoria
+  ALTER TABLE trips ALTER COLUMN rate_id SET NOT NULL;
+
+  COMMIT;
+  ```
+
+  **Rollback (si necesario):**
+
+  ```sql
+  BEGIN;
+  ALTER TABLE trip_line_assignments
+    DROP CONSTRAINT IF EXISTS qty_dispatched_le_assigned,
+    DROP CONSTRAINT IF EXISTS qty_delivered_le_dispatched;
+  ALTER TABLE trips ALTER COLUMN rate_id DROP NOT NULL;
+  DROP TRIGGER IF EXISTS enforce_quantity_immutable_trg ON sm_request_lines;
+  DROP TRIGGER IF EXISTS enforce_one_active_delivery_trg ON trip_event_lines;
+  DROP TRIGGER IF EXISTS enforce_cancellation_reason_trips ON trips;
+  DROP TRIGGER IF EXISTS enforce_cancellation_reason_pickup_orders ON pickup_orders;
+  DROP TRIGGER IF EXISTS enforce_cancellation_reason_external_orders ON external_orders;
+  DROP FUNCTION IF EXISTS enforce_quantity_immutable_with_active_assignments();
+  DROP FUNCTION IF EXISTS enforce_one_active_delivery_per_trip_line();
+  DROP FUNCTION IF EXISTS enforce_cancellation_reason_trips();
+  DROP FUNCTION IF EXISTS enforce_cancellation_reason_pickup_orders();
+  DROP FUNCTION IF EXISTS enforce_cancellation_reason_external_orders();
+  ALTER TABLE trips           DROP COLUMN IF EXISTS cancellation_reason;
+  ALTER TABLE pickup_orders   DROP COLUMN IF EXISTS cancellation_reason;
+  ALTER TABLE external_orders DROP COLUMN IF EXISTS cancellation_reason;
+  -- Restore previous version of recalc_qty_for_line trigger function (estado pre-Cambio 6)
+  COMMIT;
+  ```
+
+  **Aplicar en:** staging primero (BD wipeada, todas las pre-merge queries deben dar 0). Para prod en merge final v2 unificado: aplicar las 4 pre-merge queries; si retornan rows → cleanup antes; aplicar migración. Spec: `Docs/superpowers/specs/2026-04-29-cambio6-cancel-integrity.md` (commits `922102b` + `f446fc1`). Plan: `Docs/superpowers/plans/2026-04-29-cambio6-cancel-integrity.md` (commit `2bbed40`).
+
+---
+
 ## 2026-04-28
 
 - [bd] **Cambio 5 — `scheduled_date` agregado a `pickup_orders` y `external_orders` (Polish #5b).** Aplicado por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-28 vía Supabase MCP. Migration `cambio5_add_scheduled_date_to_orders`:
