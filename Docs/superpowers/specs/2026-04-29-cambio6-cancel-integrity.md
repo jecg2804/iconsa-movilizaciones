@@ -85,7 +85,7 @@ Fix: CHECK constraint `qty_delivered ≤ qty_dispatched` en `trip_line_assignmen
 
 ### Tests E2E (no opcional — regression guard)
 
-17 tests totales. Cada uno verifica el invariante después de la operación.
+18 tests totales. Cada uno verifica el invariante después de la operación.
 
 | # | Test | Verifica | Bug |
 |---|------|----------|-----|
@@ -106,6 +106,7 @@ Fix: CHECK constraint `qty_delivered ≤ qty_dispatched` en `trip_line_assignmen
 | 15 | `qty_delivered_cannot_exceed_dispatched` | INSERT/UPDATE con delivered > dispatched rechaza | H8 |
 | 16 | `create_trip_without_rate_blocked` | saveTrip con rate_id=null rechaza | tarifa |
 | 17 | `edit_trip_remove_rate_blocked` | updateTrip que setea rate_id=null rechaza | tarifa |
+| 18 | `revert_salida_blocked_when_deliveries_exist` | revert Salida con qty_delivered>0 rechaza con mensaje claro; permitido tras revertir Entregas (D8) | H8 |
 
 **AD-5 (helpers `tests/helpers.ts` rotos)** queda sin resolver — los tests usan seed manual hasta que AD-5 se cierre en otro cambio.
 
@@ -259,6 +260,39 @@ Greyed disabled (NO ocultas). Razones: visibilidad operativa del progreso, permi
 `ALTER TABLE trips ALTER COLUMN rate_id SET NOT NULL`. Backfill no necesario (BD wipeada). Para prod: pre-merge query 2 confirma 0 trips sin rate_id; si hay rows, cleanup antes del NOT NULL.
 
 `DispatchModal` ya está protegido por `enforce_trip_immutable_post_departure` (existe desde audit Fase B.1, abril 2026): trips post-Salida no permiten cambios de vehicle/driver/trailer. `rate_id` está bajo el mismo trigger, no se puede cambiar post-Salida.
+
+### D7 — Orden de triggers BEFORE UPDATE en `sm_request_lines` (post-migración)
+
+PostgreSQL ejecuta triggers BEFORE UPDATE en orden alfabético ASCII por nombre. Tras aplicar la migración, `sm_request_lines` tiene 3 triggers BEFORE UPDATE en este orden:
+
+| Orden | Trigger | Función | Cuándo se introdujo |
+|-------|---------|---------|---------------------|
+| 1 | `enforce_quantity_immutable_trg` | Bloquea cambio de `quantity` si hay assignments activos (H1) | Cambio 6 |
+| 2 | `sm_request_lines_updated_at` | Setea `updated_at = now()` | Pre-existente |
+| 3 | `trg_enforce_qty_integrity` | Valida invariant `qty_scheduled + qty_delivered ≤ NEW.quantity` | Pre-existente |
+
+**Por qué este orden importa para UX:** si Charris intenta editar `quantity` de una línea con assignments, el primer trigger (1) rechaza con mensaje específico *"No se puede editar la cantidad de una línea con asignaciones activas. Cancele las asignaciones primero."* — antes de que el trigger genérico (3) lance un mensaje sobre invariant violation. Mensaje específico = mejor debugging.
+
+**Para no romper este orden en cambios futuros:** el nombre del trigger H1 debe quedar alfabéticamente antes de `s`. `enforce_quantity_immutable_trg` cumple. Si se agregan triggers nuevos a esta tabla, mantener este orden documentado.
+
+### D8 — Efecto colateral de H8 sobre reversión de Salida (invariante deseado)
+
+El constraint H8 (`qty_delivered ≤ qty_dispatched`) impone indirectamente: **no se puede revertir Salida mientras existan Entregas registradas en el trip.**
+
+Razón: `handleRevert` para evento Salida (`mis-viajes/[id]/page.tsx:842-858`) hace `UPDATE trip_line_assignments SET qty_dispatched = 0` para todos los assignments. Si alguna línea tenía qty_delivered>0 (hubo Entrega antes), post-UPDATE quedaría qty_delivered>0 con qty_dispatched=0, violando H8 → BD rechaza UPDATE.
+
+**Esto es semánticamente correcto, no es bug.** Si el camión llegó y entregó, el camión sí salió. El flow correcto para reversar Salida con Entregas registradas es:
+
+1. Reversar cada Entrega individualmente (libera `qty_delivered` en cada assignment).
+2. Una vez `qty_delivered = 0` en todos los assignments, reversar Salida funciona normalmente.
+
+Este orden es coherente con el modelo Events V2 (eventos inmutables, reversiones puntuales que se aplican en orden inverso al original).
+
+**Defense-in-depth UX:** `handleRevert` para evento Salida debe agregar pre-flight check antes del UPDATE bulk. Si encuentra `qty_delivered > 0` en algún assignment del trip, abortar con mensaje claro:
+
+> *"Para revertir Salida, reversá primero las Entregas registradas. Hay {N} líneas con entregas activas en este viaje."*
+
+Sin pre-flight, el UPDATE falla con error genérico de constraint H8 — el mensaje claro es UX, no semántica.
 
 ## Cambios BD
 
@@ -561,6 +595,24 @@ catch (err) {
 }
 ```
 
+### g2) `src/app/(app)/mis-viajes/[id]/page.tsx` — `handleRevert` Salida pre-flight (D8)
+
+```typescript
+if (eventType === 'Salida') {
+  // D8 pre-flight: H8 constraint rechazaría UPDATE si hay qty_delivered>0.
+  // Damos mensaje claro al usuario antes de que la BD falle.
+  const linesWithDeliveries = trip.assignments.filter((a) => (a.qty_delivered ?? 0) > 0)
+  if (linesWithDeliveries.length > 0) {
+    setEventError(
+      `Para revertir Salida, reversá primero las Entregas registradas. Hay ${linesWithDeliveries.length} líneas con entregas activas en este viaje.`,
+    )
+    setReverting(false)
+    return
+  }
+  // ... resto del handler existente (UPDATE trip + UPDATE assignments)
+}
+```
+
 ### h) `src/app/(app)/programacion/viaje/nuevo/page.tsx` y `[id]/page.tsx` — validate
 
 Agregar a la función `validate()` existente:
@@ -613,7 +665,9 @@ PostgreSQL no soporta subqueries en CHECK. Implementación real es trigger BEFOR
 
 ### R6 — Edge case H8: ¿hay flow donde delivered se UPDATEa antes de dispatched?
 
-Verificado: handleDispatch (Salida) precede a handleDelivery (Entrega) por orden temporal del flow. No hay path operativo que viole el orden. Constraint safe.
+Verificado: handleDispatch (Salida) precede a handleDelivery (Entrega) por orden temporal del flow. No hay path operativo que viole el orden EN DIRECCIÓN FORWARD.
+
+**En dirección reverse (revertir Salida con Entregas activas):** H8 actúa como guard implícito — ver D8. El UPDATE bulk `qty_dispatched=0` en handleRevert para Salida falla con constraint H8 si alguna línea tiene qty_delivered>0. Esto es semánticamente correcto (mismo invariante, dirección reversa) y se documenta como invariante deseado, no bug. Test #18 verifica el comportamiento. Pre-flight UX en handleRevert da mensaje claro al usuario antes de que el constraint falle.
 
 ## Plan de aplicación
 
