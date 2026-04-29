@@ -300,6 +300,7 @@ export function usePickupOrders() {
     async (
       orderId: string,
       cancelledById: string,
+      cancellationReason: string | null,
     ): Promise<CancelPickupResult> => {
       setLoading(true)
       setError(null)
@@ -321,21 +322,27 @@ export function usePickupOrders() {
         const deliveredCount = deliveredLines.length
         const deliveredQty = deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0)
 
-        // UPDATE pickup_orders SET status='Cancelado'
+        // UPDATE pickup_orders SET status='Cancelado' + cancellation_reason
+        // Cambio 6: trigger BD enforce_cancellation_reason_pickup_orders ataja
+        // si deliveredCount>0 y razón inválida (≥10 chars).
         const { error: updateError } = await supabase
           .from('pickup_orders')
           .update({
             status: 'Cancelado',
             cancelled_at: new Date().toISOString(),
             cancelled_by: cancelledById,
+            cancellation_reason: cancellationReason?.trim() || null,
           })
           .eq('id', orderId)
           .eq('status', 'Aprobado')  // WHERE defensive
           .select('id')
 
         if (updateError) {
-          setError(updateError.message)
-          return { ok: false, error: updateError.message }
+          const friendly = updateError.message.includes('cancellation_reason requerido')
+            ? 'Debes proveer una razón (≥10 caracteres) para cancelar este pickup porque tiene entregas registradas.'
+            : updateError.message
+          setError(friendly)
+          return { ok: false, error: friendly }
         }
 
         // Trigger BD ya recalculó: qty_scheduled de no-entregadas → 0,

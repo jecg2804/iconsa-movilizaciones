@@ -104,17 +104,19 @@ export default function ProgramacionPage() {
   const [confirmPickupOrder, setConfirmPickupOrder] = useState<PickupOrderWithLines | null>(null)
   const [confirmExternalOrder, setConfirmExternalOrder] = useState<ExternalOrderWithLines | null>(null)
 
-  // Cancel order modals con stats contextual
+  // Cancel order modals con stats contextual + razón (Cambio 6 T8)
   const [cancelPickupModal, setCancelPickupModal] = useState<{
     order: PickupOrderWithLines
     deliveredCount: number
     deliveredQty: number
   } | null>(null)
+  const [cancelPickupReason, setCancelPickupReason] = useState('')
   const [cancelExternalModal, setCancelExternalModal] = useState<{
     order: ExternalOrderWithLines
     deliveredCount: number
     deliveredQty: number
   } | null>(null)
+  const [cancelExternalReason, setCancelExternalReason] = useState('')
 
   // --- Filtrado ---
   const filteredBacklog = useMemo(() => {
@@ -517,6 +519,7 @@ export default function ProgramacionPage() {
         .select('id, qty_delivered')
         .eq('pickup_order_id', order.id)
       const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+      setCancelPickupReason('')
       setCancelPickupModal({
         order,
         deliveredCount: deliveredLines.length,
@@ -533,6 +536,7 @@ export default function ProgramacionPage() {
         .select('id, qty_delivered')
         .eq('external_order_id', order.id)
       const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+      setCancelExternalReason('')
       setCancelExternalModal({
         order,
         deliveredCount: deliveredLines.length,
@@ -544,23 +548,31 @@ export default function ProgramacionPage() {
 
   const confirmCancelPickup = useCallback(async () => {
     if (!cancelPickupModal || !person?.id) return
-    const result = await pickupOrders.cancelPickupOrder(cancelPickupModal.order.id, person.id)
+    const result = await pickupOrders.cancelPickupOrder(
+      cancelPickupModal.order.id,
+      person.id,
+      cancelPickupReason.trim() || null,
+    )
     if (result.ok) {
       setCancelPickupModal(null)
       void refetchPendingPickupOrders()
       refetchBacklog()
     }
-  }, [cancelPickupModal, person, pickupOrders, refetchPendingPickupOrders, refetchBacklog])
+  }, [cancelPickupModal, person, pickupOrders, cancelPickupReason, refetchPendingPickupOrders, refetchBacklog])
 
   const confirmCancelExternal = useCallback(async () => {
     if (!cancelExternalModal || !person?.id) return
-    const result = await externalOrders.cancelExternalOrder(cancelExternalModal.order.id, person.id)
+    const result = await externalOrders.cancelExternalOrder(
+      cancelExternalModal.order.id,
+      person.id,
+      cancelExternalReason.trim() || null,
+    )
     if (result.ok) {
       setCancelExternalModal(null)
       void refetchPendingExternalOrders()
       refetchBacklog()
     }
-  }, [cancelExternalModal, person, externalOrders, refetchPendingExternalOrders, refetchBacklog])
+  }, [cancelExternalModal, person, externalOrders, cancelExternalReason, refetchPendingExternalOrders, refetchBacklog])
 
   const puedeCrearViaje = canCreateTrip(role)
 
@@ -1202,18 +1214,34 @@ export default function ProgramacionPage() {
             <h3 className="text-lg font-semibold text-gray-900">
               ¿Cancelar pickup {cancelPickupModal.order.pickup_id}?
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              {cancelPickupModal.deliveredCount > 0 ? (
-                <>
-                  Cancelar este pickup va a devolver al backlog las líneas no entregadas.
-                  Las {cancelPickupModal.deliveredCount}{' '}
-                  {cancelPickupModal.deliveredCount === 1 ? 'línea ya entregada' : 'líneas ya entregadas'}{' '}
-                  ({cancelPickupModal.deliveredQty} unidades en total) quedan registradas como entregadas (no se invierten). ¿Confirmar?
-                </>
-              ) : (
-                <>Las líneas volverán al backlog. ¿Confirmar?</>
+            {cancelPickupModal.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este pickup tiene <strong>{cancelPickupModal.deliveredCount} línea{cancelPickupModal.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelPickupModal.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">Las líneas volverán al backlog. ¿Confirmar?</p>
+            )}
+            <div className="mt-4">
+              <label htmlFor="cancel-pickup-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelPickupModal.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="cancel-pickup-reason"
+                value={cancelPickupReason}
+                onChange={(e) => setCancelPickupReason(e.target.value)}
+                placeholder={cancelPickupModal.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={pickupOrders.loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelPickupModal.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelPickupReason.trim().length}/10 caracteres mínimos
+                </p>
               )}
-            </p>
+            </div>
             {pickupOrders.error && (
               <p className="mt-2 text-sm text-red-600">{pickupOrders.error}</p>
             )}
@@ -1221,7 +1249,13 @@ export default function ProgramacionPage() {
               <Button variant="ghost" size="sm" onClick={() => setCancelPickupModal(null)} disabled={pickupOrders.loading}>
                 Volver
               </Button>
-              <Button variant="danger" size="sm" onClick={confirmCancelPickup} loading={pickupOrders.loading}>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={confirmCancelPickup}
+                loading={pickupOrders.loading}
+                disabled={cancelPickupModal.deliveredCount > 0 && cancelPickupReason.trim().length < 10}
+              >
                 Sí, cancelar pickup
               </Button>
             </div>
@@ -1235,18 +1269,34 @@ export default function ProgramacionPage() {
             <h3 className="text-lg font-semibold text-gray-900">
               ¿Cancelar viaje externo {cancelExternalModal.order.external_id}?
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              {cancelExternalModal.deliveredCount > 0 ? (
-                <>
-                  Cancelar este viaje externo va a devolver al backlog las líneas no entregadas.
-                  Las {cancelExternalModal.deliveredCount}{' '}
-                  {cancelExternalModal.deliveredCount === 1 ? 'línea ya entregada' : 'líneas ya entregadas'}{' '}
-                  ({cancelExternalModal.deliveredQty} unidades en total) quedan registradas como entregadas. La factura subida se preserva. ¿Confirmar?
-                </>
-              ) : (
-                <>Las líneas volverán al backlog. La factura subida se preserva. ¿Confirmar?</>
+            {cancelExternalModal.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este viaje externo tiene <strong>{cancelExternalModal.deliveredCount} línea{cancelExternalModal.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelExternalModal.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La factura subida se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">Las líneas volverán al backlog. La factura subida se preserva. ¿Confirmar?</p>
+            )}
+            <div className="mt-4">
+              <label htmlFor="cancel-external-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelExternalModal.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="cancel-external-reason"
+                value={cancelExternalReason}
+                onChange={(e) => setCancelExternalReason(e.target.value)}
+                placeholder={cancelExternalModal.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={externalOrders.loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelExternalModal.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelExternalReason.trim().length}/10 caracteres mínimos
+                </p>
               )}
-            </p>
+            </div>
             {externalOrders.error && (
               <p className="mt-2 text-sm text-red-600">{externalOrders.error}</p>
             )}
@@ -1254,7 +1304,13 @@ export default function ProgramacionPage() {
               <Button variant="ghost" size="sm" onClick={() => setCancelExternalModal(null)} disabled={externalOrders.loading}>
                 Volver
               </Button>
-              <Button variant="danger" size="sm" onClick={confirmCancelExternal} loading={externalOrders.loading}>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={confirmCancelExternal}
+                loading={externalOrders.loading}
+                disabled={cancelExternalModal.deliveredCount > 0 && cancelExternalReason.trim().length < 10}
+              >
                 Sí, cancelar viaje externo
               </Button>
             </div>

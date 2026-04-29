@@ -289,6 +289,7 @@ export function useExternalOrders() {
     async (
       orderId: string,
       cancelledById: string,
+      cancellationReason: string | null,
     ): Promise<CancelExternalResult> => {
       setLoading(true)
       setError(null)
@@ -309,22 +310,28 @@ export function useExternalOrders() {
         const deliveredCount = deliveredLines.length
         const deliveredQty = deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0)
 
-        // UPDATE external_orders SET status='Cancelado'
-        // NOTA: NO setear invoice_attachments a NULL — preservar (Q4)
+        // UPDATE external_orders SET status='Cancelado' + cancellation_reason
+        // Cambio 6: trigger BD enforce_cancellation_reason_external_orders
+        // ataja si deliveredCount>0 y razón inválida (≥10 chars).
+        // NOTA: NO setear invoice_attachments a NULL — preservar (Q4 Cambio 4)
         const { error: updateError } = await supabase
           .from('external_orders')
           .update({
             status: 'Cancelado',
             cancelled_at: new Date().toISOString(),
             cancelled_by: cancelledById,
+            cancellation_reason: cancellationReason?.trim() || null,
           })
           .eq('id', orderId)
           .eq('status', 'Aprobado')
           .select('id')
 
         if (updateError) {
-          setError(updateError.message)
-          return { ok: false, error: updateError.message }
+          const friendly = updateError.message.includes('cancellation_reason requerido')
+            ? 'Debes proveer una razón (≥10 caracteres) para cancelar este viaje externo porque tiene entregas registradas.'
+            : updateError.message
+          setError(friendly)
+          return { ok: false, error: friendly }
         }
 
         return { ok: true, deliveredCount, deliveredQty }

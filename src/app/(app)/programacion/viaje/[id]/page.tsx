@@ -307,9 +307,11 @@ export default function ViajeDetailPage() {
   // Estado de UI
   const [isDirty, setIsDirty] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
-  // Cambio 6 T8: state para razón de cancelación. UX completa del textarea
-  // (con asterisco condicional + counter + botón disabled) viene en T8.
+  // Cambio 6 T8: state para razón de cancelación + stats pre-flight.
+  // Si stats.deliveredCount>0, razón es required (≥10 chars) — el trigger BD
+  // enforce_cancellation_reason_trips ataja en defense-in-depth.
   const [cancelReason, setCancelReason] = useState('')
+  const [cancelStats, setCancelStats] = useState<{ deliveredCount: number; deliveredQty: number }>({ deliveredCount: 0, deliveredQty: 0 })
 
   // Datos adicionales (fetch inline)
   const [drivers, setDrivers] = useState<PersonRow[]>([])
@@ -875,7 +877,16 @@ export default function ViajeDetailPage() {
             {canCancelTrip && (
               <Button
                 variant="danger"
-                onClick={() => setShowCancelConfirm(true)}
+                onClick={() => {
+                  // T8: pre-flight stats para UI confirmation modal
+                  const lines = trip.assignments.filter((a) => (a.qty_delivered ?? 0) > 0)
+                  setCancelStats({
+                    deliveredCount: lines.length,
+                    deliveredQty: lines.reduce((sum, a) => sum + (a.qty_delivered ?? 0), 0),
+                  })
+                  setCancelReason('')
+                  setShowCancelConfirm(true)
+                }}
                 disabled={saving}
               >
                 Cancelar Movilización
@@ -922,18 +933,46 @@ export default function ViajeDetailPage() {
         </div>
       )}
 
-      {/* Modal de confirmacion de cancelacion de viaje */}
+      {/* Modal de confirmacion de cancelacion de viaje (Cambio 6 T8) */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">
               Cancelar Movilización
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              ¿Esta seguro de que desea cancelar esta movilización? Todas las lineas
-              asignadas regresaran al backlog como pendientes. Esta accion no se
-              puede deshacer.
-            </p>
+
+            {cancelStats.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este viaje tiene <strong>{cancelStats.deliveredCount} línea{cancelStats.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelStats.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">
+                ¿Estás seguro de que querés cancelar esta movilización? Las líneas asignadas vuelven al backlog como pendientes.
+              </p>
+            )}
+
+            <div className="mt-4">
+              <label htmlFor="cancel-trip-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelStats.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="cancel-trip-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder={cancelStats.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelStats.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelReason.trim().length}/10 caracteres mínimos
+                </p>
+              )}
+            </div>
+
             <div className="mt-4 flex items-center justify-end gap-3">
               <Button
                 variant="ghost"
@@ -947,6 +986,7 @@ export default function ViajeDetailPage() {
                 variant="danger"
                 size="sm"
                 onClick={handleCancelTrip}
+                disabled={cancelStats.deliveredCount > 0 && cancelReason.trim().length < 10}
                 loading={saving}
               >
                 Si, cancelar movilización
