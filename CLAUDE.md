@@ -159,7 +159,7 @@ Gray:   #5A6272  (secondary text)
 6. **Mobile-first.** Los ingenieros y conductores usan celulares.
 7. **Monospace para IDs.** `25-506-SM-023` y `MOV-2026-042` siempre en fuente monoespaciada.
 8. **Remolque condicional.** REQUERIDO cuando vehículo es cabezal (CAB### o 'CABEZAL'). Filtrar remolques por `spectrum_code LIKE 'REM%'`. Opcional para pick-up, volquete, camión grúa.
-9. **Tarifa y Costo OPCIONALES.** No toda movilización tiene tarifa formal. Si se selecciona tarifa, Costo se auto-rellena con `rate.amount` y queda **read-only** (deseleccionar tarifa para editar manualmente). Sin confirmación de sobreescritura: el campo no es editable mientras haya tarifa. **Cambio 2026-04-15 (J6):** antes el campo seguía editable con diálogo de confirmación.
+9. **Tarifa OBLIGATORIA.** Toda movilización requiere tarifa seleccionada al crear y editar. Costo se auto-rellena con `rate.amount` y queda **read-only** (deseleccionar tarifa NO posible — es requerida). Validación bloquea guardar/editar sin tarifa. BD: `trips.rate_id` NOT NULL. **Cambio 2026-04-29 (Cambio 6):** antes la tarifa era opcional; ahora es requerida en todo trip nuevo y editado. **Cambio 2026-04-15 (J6, contexto histórico):** se introdujo el read-only del costo cuando hay tarifa, antes el campo seguía editable con diálogo de confirmación.
 10. **Redirect después de guardar/enviar.** Crear nuevo → redirige a lista. Editar existente → se queda en detalle. Enviar solicitud → siempre a lista.
 11. **Filtro equipos en solicitud:** `type_code NOT IN ('ING')`. NO excluir VHL, VHP, TEC.
 12. **Solicitante NO editable.** Auto-fill con usuario logueado. El campo es disabled/readonly.
