@@ -778,9 +778,14 @@ export default function Page() {
         setTrip(tripData)
         await loadEvents()
       } catch (err) {
-        setEventError(
-          err instanceof Error ? err.message : 'Error al registrar entrega',
-        )
+        const errMsg = err instanceof Error ? err.message : 'Error al registrar entrega'
+        // Cambio 6 Bug #4: trigger BD enforce_one_active_delivery_trg rechaza
+        // segundo INSERT en trip_event_lines si ya hay Entrega no-revertida.
+        if (errMsg.includes('ya tiene una Entrega activa')) {
+          setEventError('Esta línea ya fue entregada en este viaje. Reversá la Entrega anterior primero si necesitás corregir.')
+        } else {
+          setEventError(errMsg)
+        }
       } finally {
         setDelivering(false)
       }
@@ -840,6 +845,19 @@ export default function Page() {
 
         // 2. Revert state changes
         if (eventType === 'Salida') {
+          // Cambio 6 D8 pre-flight: H8 constraint (qty_delivered ≤ qty_dispatched)
+          // rechazaría UPDATE qty_dispatched=0 si hay qty_delivered>0. Damos
+          // mensaje claro al usuario ANTES de que la BD falle con error genérico.
+          // Flow correcto: reversar Entregas primero, luego Salida.
+          const linesWithDeliveries = trip.assignments.filter((a) => (a.qty_delivered ?? 0) > 0)
+          if (linesWithDeliveries.length > 0) {
+            setEventError(
+              `Para revertir Salida, reversá primero las Entregas registradas. Hay ${linesWithDeliveries.length} línea${linesWithDeliveries.length === 1 ? '' : 's'} con entregas activas en este viaje.`,
+            )
+            setReverting(false)
+            return
+          }
+
           // Trip → Programado
           await supabase
             .from('trips')
