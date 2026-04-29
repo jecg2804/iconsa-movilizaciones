@@ -563,6 +563,14 @@ export default function ViajeDetailPage() {
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
     }
+    // Cambio 6: tarifa obligatoria. updateTrip también valida defense-in-depth,
+    // acá bloqueamos antes para que el TripForm muestre el error sin loading.
+    if (!tripData.rate_id) {
+      return
+    }
+    if (tripData.cost == null || tripData.cost <= 0) {
+      return
+    }
     // Validar que ninguna cantidad exceda su max (safety net)
     for (const a of existingAssignments) {
       if (!a.line?.quantity) continue
