@@ -6,7 +6,7 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ## 2026-04-30
 
-- [bd-pending] **Cambio 6.5 — refinamiento del modelo de eventos: migración consolidada `cambio6_5_event_model_refinement`.** PARADA: Chat aplica via Supabase MCP en staging (`vonwkciosksqspyljzfy`) tras correr las 4 pre-merge queries (deben retornar 0 rows). Pendiente prod en merge final v2 unificado (post-Cambio 6.5 implementación + smoke OK).
+- [bd] **Cambio 6.5 — refinamiento del modelo de eventos: migración consolidada `cambio6_5_event_model_refinement`.** PARADA: Chat aplica via Supabase MCP en staging (`vonwkciosksqspyljzfy`) tras correr las 4 pre-merge queries (deben retornar 0 rows). Pendiente prod en merge final v2 unificado (post-Cambio 6.5 implementación + smoke OK).
 
   **Resumen del cambio:** corrige la semántica del trigger `recalc_qty_for_line` para que entregas con líneas rechazadas liberen al backlog en el momento de la Entrega (no en Retorno). Da efecto operacional real al `line_status='rejected'` vía nueva columna `qty_rejected` en `trip_line_assignments` y triggers BD de sincronización (forward + reverse). Reescribe H1 con 3 condiciones de bloqueo. UNIQUE INDEX previene doble revert. Trigger BD bloquea revert Entrega en trip cerrado. Trigger BD valida notas obligatorias cuando alguna línea tiene `with_observations`.
 
@@ -405,6 +405,19 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
   **Aplicar en:** staging primero (BD wipeada en Cambio 6, las 4 pre-merge queries deben dar 0). Para prod en merge final v2 unificado: aplicar las 4 pre-merge queries; si retornan rows → entender el caso primero; aplicar migración. Spec: `Docs/superpowers/specs/2026-04-30-cambio6-5-event-model-refinement.md` (commit `b323de7`). Plan: `Docs/superpowers/plans/2026-04-30-cambio6-5-event-model-refinement.md` (commit `1aabcf2` + refinamientos `725a4ff`).
 
+**Aplicada por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-30 ~21:00 UTC** vía Supabase MCP. Version `20260430203756`. 1 sola transacción para atomicidad. Pendiente prod en merge final v2 unificado.
+
+  **Pre-aplicación: Q1=0, Q2=0, Q3=0, Q4=2** (los 2 rows de Q4 son data histórica del smoke MOV-2026-058 del 30 de abril; BD-8 es BEFORE INSERT, no afecta data existente).
+
+  **Verificación post-migración (7/7 confirmados):**
+  - ✅ Columna `qty_rejected NUMERIC NOT NULL DEFAULT 0` en `trip_line_assignments` (BD-1).
+  - ✅ CHECK `qty_rejected_non_negative` + `qty_delivered_plus_rejected_le_dispatched` activos. Viejo `qty_delivered_le_dispatched` eliminado (BD-2, BD-3).
+  - ✅ Función `recalc_qty_for_line` REPLACED con branch defensivo Cancelada + 6 puntos de orden + descuento qty_rejected (BD-4). SECURITY DEFINER preservado.
+  - ✅ Trigger `sync_assignment_on_delivery_event_trg` AFTER INSERT en `trip_event_lines` (BD-5).
+  - ✅ Trigger `sync_assignment_on_delivery_revert_trg` AFTER INSERT en `trip_events` WHEN reverts_event_id NOT NULL (BD-6).
+  - ✅ Función `enforce_quantity_immutable_with_active_assignments` REPLACED con 3 condiciones de bloqueo (BD-7). H1 alineado patrón Coupa.
+  - ✅ Trigger `enforce_revert_only_on_active_trip_trg` BEFORE INSERT en `trip_events` (BD-8) + UNIQUE INDEX `one_revert_per_event` (BD-9) + Trigger `enforce_notes_on_with_observations_trg` BEFORE INSERT en `trip_event_lines` (BD-10).
+  - ✅ `get_advisors` security/performance: sin ERRORs ni nuevos WARNs introducidos por Cambio 6.5.
 ---
 
 ## 2026-04-29
