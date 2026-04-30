@@ -4,6 +4,409 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-04-30
+
+- [bd-pending] **Cambio 6.5 — refinamiento del modelo de eventos: migración consolidada `cambio6_5_event_model_refinement`.** PARADA: Chat aplica via Supabase MCP en staging (`vonwkciosksqspyljzfy`) tras correr las 4 pre-merge queries (deben retornar 0 rows). Pendiente prod en merge final v2 unificado (post-Cambio 6.5 implementación + smoke OK).
+
+  **Resumen del cambio:** corrige la semántica del trigger `recalc_qty_for_line` para que entregas con líneas rechazadas liberen al backlog en el momento de la Entrega (no en Retorno). Da efecto operacional real al `line_status='rejected'` vía nueva columna `qty_rejected` en `trip_line_assignments` y triggers BD de sincronización (forward + reverse). Reescribe H1 con 3 condiciones de bloqueo. UNIQUE INDEX previene doble revert. Trigger BD bloquea revert Entrega en trip cerrado. Trigger BD valida notas obligatorias cuando alguna línea tiene `with_observations`.
+
+  **Pre-merge queries (4 — todas deben retornar 0 rows en staging):**
+
+  ```sql
+  -- Query 1 — drift previo al CHECK qty_delivered + qty_rejected ≤ qty_dispatched
+  SELECT id, trip_id, request_line_id, qty_dispatched, qty_delivered, COALESCE(qty_rejected, 0) AS qty_rejected
+  FROM trip_line_assignments
+  WHERE qty_delivered + COALESCE(qty_rejected, 0) > qty_dispatched;
+
+  -- Query 2 — líneas zombie 'En Transito' sin trip activo (verificar Bug #2 sigue resuelto)
+  SELECT srl.id, srl.description, srl.status, srl.qty_scheduled, srl.qty_delivered
+  FROM sm_request_lines srl
+  WHERE srl.status = 'En Transito'
+    AND NOT EXISTS (
+      SELECT 1 FROM trip_line_assignments tla
+      JOIN trips t ON t.id = tla.trip_id
+      WHERE tla.request_line_id = srl.id AND t.status NOT IN ('Cancelado', 'Completado')
+    );
+
+  -- Query 3 — eventos múltiples revertidos del mismo origen (verificar BD-9 safe)
+  SELECT reverts_event_id, COUNT(*) AS revert_count
+  FROM trip_events
+  WHERE reverts_event_id IS NOT NULL
+  GROUP BY reverts_event_id
+  HAVING COUNT(*) > 1;
+
+  -- Query 4 — revert Entrega en trips cerrados ya existentes (verificar BD-8 backward compat)
+  SELECT te.id, te.trip_id, te.event_type, t.status AS trip_status
+  FROM trip_events te
+  JOIN trip_events te_orig ON te_orig.id = te.reverts_event_id
+  JOIN trips t ON t.id = te.trip_id
+  WHERE te_orig.event_type = 'Entrega'
+    AND t.status IN ('Completado', 'Cancelado');
+  ```
+
+  **Migración consolidada (1 transacción para atomicidad):**
+
+  ```sql
+  BEGIN;
+
+  -- BD-1: ADD COLUMN qty_rejected en trip_line_assignments
+  ALTER TABLE trip_line_assignments ADD COLUMN qty_rejected NUMERIC NOT NULL DEFAULT 0;
+
+  COMMENT ON COLUMN trip_line_assignments.qty_rejected IS
+    'Cantidad rechazada en sitio durante Entrega (line_status=rejected). Se preserva como dato histórico junto con qty_dispatched. Suma con qty_delivered debe ser <= qty_dispatched.';
+
+  -- BD-2 paso a: DROP CHECK qty_delivered_le_dispatched (de Cambio 6 H8)
+  ALTER TABLE trip_line_assignments DROP CONSTRAINT IF EXISTS qty_delivered_le_dispatched;
+
+  -- BD-2 paso b + BD-3: ADD CHECKs nuevos
+  ALTER TABLE trip_line_assignments
+    ADD CONSTRAINT qty_rejected_non_negative CHECK (qty_rejected >= 0),
+    ADD CONSTRAINT qty_delivered_plus_rejected_le_dispatched
+      CHECK (qty_delivered + qty_rejected <= qty_dispatched);
+
+  -- BD-4: REPLACE recalc_qty_for_line (cuerpo completo)
+  CREATE OR REPLACE FUNCTION recalc_qty_for_line(p_request_line_id uuid)
+  RETURNS void AS $$
+  DECLARE
+    v_quantity numeric;
+    v_current_status text;
+    v_qty_delivered_total numeric;
+    v_qty_scheduled_active numeric;
+    v_quantity_assigned_active numeric;
+    v_new_status text;
+  BEGIN
+    SELECT quantity, status INTO v_quantity, v_current_status
+    FROM sm_request_lines WHERE id = p_request_line_id;
+
+    -- Branch defensivo: preservar status terminal Cancelada
+    IF v_current_status = 'Cancelada' THEN
+      RETURN;
+    END IF;
+
+    -- Calcular qty_delivered_total agregando 3 fuentes (subqueries independientes)
+    SELECT
+      COALESCE((SELECT SUM(qty_delivered) FROM trip_line_assignments WHERE request_line_id = p_request_line_id), 0) +
+      COALESCE((SELECT SUM(qty_delivered) FROM pickup_order_lines WHERE request_line_id = p_request_line_id), 0) +
+      COALESCE((SELECT SUM(qty_delivered) FROM external_order_lines WHERE request_line_id = p_request_line_id), 0)
+    INTO v_qty_delivered_total;
+
+    -- Calcular qty_scheduled_active (descontando qty_rejected en assignments,
+    -- sin qty_rejected en pickup/external porque allí no aplica)
+    SELECT COALESCE(SUM(GREATEST(0,
+      tla.quantity_assigned - COALESCE(tla.qty_delivered, 0) - COALESCE(tla.qty_rejected, 0)
+    )), 0)
+    INTO v_qty_scheduled_active
+    FROM trip_line_assignments tla
+    JOIN trips t ON t.id = tla.trip_id
+    WHERE tla.request_line_id = p_request_line_id
+      AND t.status NOT IN ('Cancelado', 'Completado');
+
+    v_qty_scheduled_active := v_qty_scheduled_active +
+      COALESCE((
+        SELECT SUM(GREATEST(0, pol.quantity_assigned - COALESCE(pol.qty_delivered, 0)))
+        FROM pickup_order_lines pol
+        JOIN pickup_orders po ON po.id = pol.pickup_order_id
+        WHERE pol.request_line_id = p_request_line_id
+          AND po.status NOT IN ('Cancelado', 'Entregado')
+      ), 0) +
+      COALESCE((
+        SELECT SUM(GREATEST(0, eol.quantity_assigned - COALESCE(eol.qty_delivered, 0)))
+        FROM external_order_lines eol
+        JOIN external_orders eo ON eo.id = eol.external_order_id
+        WHERE eol.request_line_id = p_request_line_id
+          AND eo.status NOT IN ('Cancelado', 'Entregado')
+      ), 0);
+
+    -- Calcular quantity_assigned_active total (para distinguir Programada vs Pendiente)
+    SELECT COALESCE(SUM(tla.quantity_assigned), 0) INTO v_quantity_assigned_active
+    FROM trip_line_assignments tla
+    JOIN trips t ON t.id = tla.trip_id
+    WHERE tla.request_line_id = p_request_line_id
+      AND t.status NOT IN ('Cancelado', 'Completado');
+
+    v_quantity_assigned_active := v_quantity_assigned_active +
+      COALESCE((
+        SELECT SUM(pol.quantity_assigned) FROM pickup_order_lines pol
+        JOIN pickup_orders po ON po.id = pol.pickup_order_id
+        WHERE pol.request_line_id = p_request_line_id AND po.status NOT IN ('Cancelado', 'Entregado')
+      ), 0) +
+      COALESCE((
+        SELECT SUM(eol.quantity_assigned) FROM external_order_lines eol
+        JOIN external_orders eo ON eo.id = eol.external_order_id
+        WHERE eol.request_line_id = p_request_line_id AND eo.status NOT IN ('Cancelado', 'Entregado')
+      ), 0);
+
+    -- Orden de evaluación de status (6 puntos)
+    IF v_quantity_assigned_active = 0 AND v_qty_delivered_total = 0 THEN
+      v_new_status := 'Pendiente';
+    ELSIF v_qty_delivered_total >= v_quantity THEN
+      v_new_status := 'Entregada';
+    ELSIF v_qty_scheduled_active > 0 THEN
+      v_new_status := 'En Transito';
+    ELSIF v_qty_delivered_total > 0 THEN
+      v_new_status := 'Parcial';
+    ELSIF v_quantity_assigned_active > 0 THEN
+      v_new_status := 'Programada';
+    ELSE
+      v_new_status := 'Pendiente';
+    END IF;
+
+    UPDATE sm_request_lines
+    SET
+      qty_scheduled = v_qty_scheduled_active,
+      qty_delivered = v_qty_delivered_total,
+      status = v_new_status,
+      delivered_at = CASE WHEN v_new_status = 'Entregada' AND delivered_at IS NULL
+                          THEN NOW() ELSE delivered_at END
+    WHERE id = p_request_line_id;
+  END;
+  $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+  -- BD-5: trigger sync_assignment_on_delivery_event
+  CREATE OR REPLACE FUNCTION sync_assignment_on_delivery_event()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    v_event_type text;
+    v_trip_id uuid;
+  BEGIN
+    SELECT event_type, trip_id INTO v_event_type, v_trip_id
+    FROM trip_events WHERE id = NEW.trip_event_id;
+
+    IF v_event_type != 'Entrega' THEN
+      RETURN NEW;
+    END IF;
+
+    IF NEW.line_status IN ('ok', 'with_observations') THEN
+      UPDATE trip_line_assignments
+      SET qty_delivered = COALESCE(qty_delivered, 0) + NEW.quantity
+      WHERE trip_id = v_trip_id
+        AND request_line_id = NEW.request_line_id;
+    ELSIF NEW.line_status = 'rejected' THEN
+      UPDATE trip_line_assignments
+      SET qty_rejected = qty_rejected + NEW.quantity
+      WHERE trip_id = v_trip_id
+        AND request_line_id = NEW.request_line_id;
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER sync_assignment_on_delivery_event_trg
+  AFTER INSERT ON trip_event_lines
+  FOR EACH ROW EXECUTE FUNCTION sync_assignment_on_delivery_event();
+
+  -- BD-6: trigger sync_assignment_on_delivery_revert
+  CREATE OR REPLACE FUNCTION sync_assignment_on_delivery_revert()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    v_reverted_event_type text;
+    v_reverted_trip_id uuid;
+  BEGIN
+    IF NEW.reverts_event_id IS NULL THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT event_type, trip_id INTO v_reverted_event_type, v_reverted_trip_id
+    FROM trip_events WHERE id = NEW.reverts_event_id;
+
+    IF v_reverted_event_type != 'Entrega' THEN
+      RETURN NEW;
+    END IF;
+
+    UPDATE trip_line_assignments tla
+    SET
+      qty_delivered = GREATEST(0, qty_delivered - COALESCE((
+        SELECT SUM(tel.quantity) FROM trip_event_lines tel
+        WHERE tel.trip_event_id = NEW.reverts_event_id
+          AND tel.request_line_id = tla.request_line_id
+          AND tel.line_status IN ('ok', 'with_observations')
+      ), 0)),
+      qty_rejected = GREATEST(0, qty_rejected - COALESCE((
+        SELECT SUM(tel.quantity) FROM trip_event_lines tel
+        WHERE tel.trip_event_id = NEW.reverts_event_id
+          AND tel.request_line_id = tla.request_line_id
+          AND tel.line_status = 'rejected'
+      ), 0))
+    WHERE tla.trip_id = v_reverted_trip_id
+      AND tla.request_line_id IN (
+        SELECT request_line_id FROM trip_event_lines
+        WHERE trip_event_id = NEW.reverts_event_id
+      );
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER sync_assignment_on_delivery_revert_trg
+  AFTER INSERT ON trip_events
+  FOR EACH ROW
+  WHEN (NEW.reverts_event_id IS NOT NULL)
+  EXECUTE FUNCTION sync_assignment_on_delivery_revert();
+
+  -- BD-7: REPLACE H1 enforce_quantity_immutable_with_active_assignments con 3 condiciones
+  CREATE OR REPLACE FUNCTION enforce_quantity_immutable_with_active_assignments()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    v_qty_dispatched_total numeric;
+    v_qty_delivered_total numeric;
+    v_quantity_assigned_active numeric;
+  BEGIN
+    IF NEW.quantity = OLD.quantity THEN
+      RETURN NEW;
+    END IF;
+
+    -- Aumentar quantity siempre permitido
+    IF NEW.quantity > OLD.quantity THEN
+      RETURN NEW;
+    END IF;
+
+    -- Para reducciones, calcular los 3 totales y bloquear si nuevo qty rompe alguno
+    SELECT COALESCE(SUM(qty_dispatched), 0) INTO v_qty_dispatched_total
+    FROM trip_line_assignments WHERE request_line_id = NEW.id;
+
+    SELECT
+      COALESCE((SELECT SUM(qty_delivered) FROM trip_line_assignments WHERE request_line_id = NEW.id), 0) +
+      COALESCE((SELECT SUM(qty_delivered) FROM pickup_order_lines WHERE request_line_id = NEW.id), 0) +
+      COALESCE((SELECT SUM(qty_delivered) FROM external_order_lines WHERE request_line_id = NEW.id), 0)
+    INTO v_qty_delivered_total;
+
+    SELECT COALESCE(SUM(tla.quantity_assigned), 0) INTO v_quantity_assigned_active
+    FROM trip_line_assignments tla
+    JOIN trips t ON t.id = tla.trip_id
+    WHERE tla.request_line_id = NEW.id
+      AND t.status NOT IN ('Cancelado', 'Completado');
+
+    v_quantity_assigned_active := v_quantity_assigned_active +
+      COALESCE((
+        SELECT SUM(pol.quantity_assigned) FROM pickup_order_lines pol
+        JOIN pickup_orders po ON po.id = pol.pickup_order_id
+        WHERE pol.request_line_id = NEW.id AND po.status NOT IN ('Cancelado', 'Entregado')
+      ), 0) +
+      COALESCE((
+        SELECT SUM(eol.quantity_assigned) FROM external_order_lines eol
+        JOIN external_orders eo ON eo.id = eol.external_order_id
+        WHERE eol.request_line_id = NEW.id AND eo.status NOT IN ('Cancelado', 'Entregado')
+      ), 0);
+
+    IF NEW.quantity < v_qty_dispatched_total THEN
+      RAISE EXCEPTION 'No se puede reducir la cantidad por debajo de % (cantidad ya despachada en viajes activos). Coordina con logística si necesitas reducir más.', v_qty_dispatched_total;
+    END IF;
+
+    IF NEW.quantity < v_qty_delivered_total THEN
+      RAISE EXCEPTION 'No se puede reducir la cantidad por debajo de % (cantidad ya entregada).', v_qty_delivered_total;
+    END IF;
+
+    IF NEW.quantity < v_quantity_assigned_active THEN
+      RAISE EXCEPTION 'No se puede reducir la cantidad por debajo de % (cantidad ya programada en viajes/órdenes activos). Coordina con logística si necesitas reducir más.', v_quantity_assigned_active;
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  -- BD-8: trigger enforce_revert_only_on_active_trip
+  CREATE OR REPLACE FUNCTION enforce_revert_only_on_active_trip()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    v_reverted_event_type text;
+    v_trip_status text;
+  BEGIN
+    IF NEW.reverts_event_id IS NULL THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT event_type, t.status INTO v_reverted_event_type, v_trip_status
+    FROM trip_events te
+    JOIN trips t ON t.id = te.trip_id
+    WHERE te.id = NEW.reverts_event_id;
+
+    -- Solo aplica para revertir Entrega
+    IF v_reverted_event_type != 'Entrega' THEN
+      RETURN NEW;
+    END IF;
+
+    IF v_trip_status IN ('Completado', 'Cancelado') THEN
+      RAISE EXCEPTION 'No se puede revertir una Entrega de un viaje cerrado (status %). Revierte primero el Retorno desde la sección de eventos del viaje.', v_trip_status;
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_revert_only_on_active_trip_trg
+  BEFORE INSERT ON trip_events
+  FOR EACH ROW
+  WHEN (NEW.reverts_event_id IS NOT NULL)
+  EXECUTE FUNCTION enforce_revert_only_on_active_trip();
+
+  -- BD-9: UNIQUE INDEX one_revert_per_event
+  CREATE UNIQUE INDEX one_revert_per_event
+    ON trip_events(reverts_event_id)
+    WHERE reverts_event_id IS NOT NULL;
+
+  -- BD-10: trigger enforce_notes_on_with_observations
+  CREATE OR REPLACE FUNCTION enforce_notes_on_with_observations()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    v_event_type text;
+    v_notes text;
+  BEGIN
+    IF NEW.line_status != 'with_observations' THEN
+      RETURN NEW;
+    END IF;
+
+    SELECT event_type, COALESCE(notes, '') INTO v_event_type, v_notes
+    FROM trip_events WHERE id = NEW.trip_event_id;
+
+    IF v_event_type != 'Entrega' THEN
+      RETURN NEW;
+    END IF;
+
+    IF length(trim(v_notes)) < 10 THEN
+      RAISE EXCEPTION 'Las notas son obligatorias (mínimo 10 caracteres) cuando alguna línea tiene observaciones.';
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql SET search_path = public;
+
+  CREATE TRIGGER enforce_notes_on_with_observations_trg
+  BEFORE INSERT ON trip_event_lines
+  FOR EACH ROW EXECUTE FUNCTION enforce_notes_on_with_observations();
+
+  COMMIT;
+  ```
+
+  **Rollback (si necesario):**
+
+  ```sql
+  BEGIN;
+  DROP INDEX IF EXISTS one_revert_per_event;
+  DROP TRIGGER IF EXISTS enforce_notes_on_with_observations_trg ON trip_event_lines;
+  DROP TRIGGER IF EXISTS enforce_revert_only_on_active_trip_trg ON trip_events;
+  DROP TRIGGER IF EXISTS sync_assignment_on_delivery_revert_trg ON trip_events;
+  DROP TRIGGER IF EXISTS sync_assignment_on_delivery_event_trg ON trip_event_lines;
+  DROP FUNCTION IF EXISTS enforce_notes_on_with_observations();
+  DROP FUNCTION IF EXISTS enforce_revert_only_on_active_trip();
+  DROP FUNCTION IF EXISTS sync_assignment_on_delivery_revert();
+  DROP FUNCTION IF EXISTS sync_assignment_on_delivery_event();
+  -- Restaurar versiones Cambio 6 de recalc_qty_for_line y H1 (referenciar CHANGELOG 2026-04-29)
+  ALTER TABLE trip_line_assignments
+    DROP CONSTRAINT IF EXISTS qty_delivered_plus_rejected_le_dispatched,
+    DROP CONSTRAINT IF EXISTS qty_rejected_non_negative;
+  ALTER TABLE trip_line_assignments
+    ADD CONSTRAINT qty_delivered_le_dispatched CHECK (qty_delivered <= qty_dispatched);
+  ALTER TABLE trip_line_assignments DROP COLUMN IF EXISTS qty_rejected;
+  COMMIT;
+  ```
+
+  **PARADA:** Chat aplica las 4 pre-merge queries. Si las 4 retornan 0 rows, aplica la migración consolidada via `apply_migration` con name `cambio6_5_event_model_refinement`. Después marca `[bd]` con confirmación post-aplicación (timestamp, version, advisors check). Code reanuda con T2.
+
+  **Aplicar en:** staging primero (BD wipeada en Cambio 6, las 4 pre-merge queries deben dar 0). Para prod en merge final v2 unificado: aplicar las 4 pre-merge queries; si retornan rows → entender el caso primero; aplicar migración. Spec: `Docs/superpowers/specs/2026-04-30-cambio6-5-event-model-refinement.md` (commit `b323de7`). Plan: `Docs/superpowers/plans/2026-04-30-cambio6-5-event-model-refinement.md` (commit `1aabcf2` + refinamientos `725a4ff`).
+
+---
+
 ## 2026-04-29
 
 - [bd] **Cambio 6 — migración consolidada `cambio6_cancellation_integrity` (cancel preservation + integridad de cálculos) aplicada en staging.** Aplicada por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-29 vía Supabase MCP. Version `20260429204609`. 1 sola transacción para atomicidad. Pendiente prod en merge final v2 unificado (post-Cambio 6 implementación + smoke OK).
