@@ -448,14 +448,108 @@ export async function registerParada(
 }
 
 // --- Register Entrega ---
+//
+// Cambio 6.5: opt extendido para entrega per-línea con line_status (ok/rejected/with_observations),
+// qty, observationType y observationNotes. Si `lines` se omite, comportamiento default
+// (todas las líneas quedan 'ok' con qty default que setea el modal).
+//
+// Selectores (verificados en DeliveryModal.tsx Cambio 6.5):
+//   - Línea container: <div className="rounded-lg border p-3 ..."> (sin data-testid)
+//   - Qty input per línea: input[type="number"] con title="Cantidad a entregar de {description}"
+//   - Status select per línea: componente custom <Select placeholder="Estado"> que renderiza
+//     un <button> cuyo texto es la label seleccionada o el placeholder
+//   - Observation type per línea: <Select placeholder="Seleccionar..."> dentro del bloque
+//     que aparece cuando status='with_observations'
+//   - Observation notes per línea: <textarea placeholder="Detalle de la observación">
+//   - Notes a nivel del evento: <textarea placeholder="Observaciones de la entrega">
+//
+// El anchor por lineIndex usa nth(idx) sobre los inputs de qty (que son únicos por línea)
+// y luego sube al div container ancestor para encontrar el resto de campos de esa línea.
 export async function registerEntrega(
   page: Page,
-  opts: { receiverName?: string; confirmationCode?: string },
+  opts: {
+    receiverName?: string
+    confirmationCode?: string
+    /**
+     * Cambio 6.5: per-line status. Si se omite, todas las líneas quedan 'ok'.
+     * lineIndex es 0-based en el orden visual del modal.
+     */
+    lines?: Array<{
+      lineIndex: number
+      status: 'ok' | 'rejected' | 'with_observations'
+      qty?: number
+      observationType?: 'damaged' | 'wrong_qty' | 'wrong_item' | 'other'
+      observationNotes?: string
+    }>
+    /**
+     * Cambio 6.5: notas a nivel del evento (requeridas si hay líneas
+     * con line_status='with_observations' — BD-10 + FE-4).
+     */
+    notes?: string
+    /**
+     * Cambio 6.5: para Test 5 (FE-4) — si true, verifica que el botón
+     * Confirmar Entrega queda disabled tras setear los campos y NO clickea.
+     */
+    expectSubmitBlocked?: boolean
+  } = {},
 ) {
   const entregaBtn = page.getByRole('button', { name: 'Registrar Entrega' })
   await expect(entregaBtn).toBeVisible({ timeout: 5000 })
   await entregaBtn.click()
   await page.waitForTimeout(1500)
+
+  // Cambio 6.5: per-line status + qty + observations
+  if (opts.lines?.length) {
+    const observationLabels: Record<string, string> = {
+      damaged: 'Material dañado',
+      wrong_qty: 'Cantidad incorrecta',
+      wrong_item: 'Item equivocado',
+      other: 'Otro',
+    }
+
+    for (const line of opts.lines) {
+      // Anchor por nth() sobre el input qty de cada línea
+      const qtyInput = page.locator('input[type="number"][title^="Cantidad a entregar"]').nth(line.lineIndex)
+      const lineContainer = qtyInput.locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]')
+
+      // Set qty si se pasa (antes del status — rejected disabled el input después)
+      if (line.qty !== undefined) {
+        await qtyInput.fill(String(line.qty))
+        await page.waitForTimeout(200)
+      }
+
+      // Set status si no es 'ok' (default del modal)
+      if (line.status !== 'ok') {
+        const statusBtn = lineContainer
+          .getByRole('button', { name: /^(OK|Rechazado|Con observaciones|Estado)$/ })
+          .first()
+        await statusBtn.click()
+        await page.waitForTimeout(300)
+
+        const statusLabel = line.status === 'rejected' ? 'Rechazado' : 'Con observaciones'
+        await page.getByRole('option', { name: statusLabel }).click()
+        await page.waitForTimeout(300)
+      }
+
+      // Detalles de with_observations
+      if (line.status === 'with_observations') {
+        if (line.observationType) {
+          // El Select "Tipo de observación" aparece dentro del lineContainer cuando status cambia
+          const obsTypeBtn = lineContainer
+            .getByRole('button', { name: /^(Seleccionar\.\.\.|Material dañado|Cantidad incorrecta|Item equivocado|Otro)$/ })
+            .first()
+          await obsTypeBtn.click()
+          await page.waitForTimeout(300)
+          await page.getByRole('option', { name: observationLabels[line.observationType] }).click()
+          await page.waitForTimeout(300)
+        }
+        if (line.observationNotes) {
+          const obsTextarea = lineContainer.locator('textarea[placeholder="Detalle de la observación"]')
+          await obsTextarea.fill(line.observationNotes)
+        }
+      }
+    }
+  }
 
   // Receiver — try fallback text first, then dropdown
   const fallbackLink = page.getByText('No esta en la lista').first()
@@ -482,11 +576,46 @@ export async function registerEntrega(
     }
   }
 
-  // Confirm
+  // Cambio 6.5: notas a nivel del evento (textarea con placeholder "Observaciones de la entrega")
+  if (opts.notes !== undefined) {
+    const notesTextarea = page.locator('textarea[placeholder="Observaciones de la entrega"]')
+    if (await notesTextarea.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await notesTextarea.fill(opts.notes)
+      await page.waitForTimeout(200)
+    }
+  }
+
+  // Cambio 6.5: si expectSubmitBlocked, verificar disabled y NO clickear
   const confirmBtn = page.getByRole('button', { name: 'Confirmar Entrega' })
+  if (opts.expectSubmitBlocked) {
+    await expect(confirmBtn).toBeDisabled({ timeout: 5000 })
+    return
+  }
+
+  // Confirm
   await expect(confirmBtn).toBeEnabled({ timeout: 5000 })
   await confirmBtn.click()
   await page.waitForTimeout(3000)
+}
+
+// --- Close trip (Cambio 6.5) ---
+//
+// Cierra un trip vía registro de Retorno → trip pasa a 'Completado'.
+// Útil para tests que necesitan setup post-cierre (ej. Test 9: revert
+// Entrega en trip cerrado bloqueado).
+//
+// Asume page sin navegación previa (la hace internamente). Lanza error
+// si trip no quedó en status 'Completado' tras Retorno.
+export async function closeTrip(page: Page, tripId: string) {
+  await openTripDetail(page, tripId)
+  await registerRetorno(page)
+
+  const { data } = await db.from('trips').select('status').eq('id', tripId).single()
+  if (data?.status !== 'Completado') {
+    throw new Error(
+      `closeTrip: trip ${tripId} sigue en status '${data?.status}', esperado 'Completado'`,
+    )
+  }
 }
 
 // --- Register Retorno ---
