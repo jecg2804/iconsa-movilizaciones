@@ -2764,6 +2764,7 @@ export type Database = {
           id: string
           qty_delivered: number | null
           qty_dispatched: number | null
+          qty_rejected: number
           quantity_assigned: number
           request_line_id: string
           trip_id: string
@@ -2774,6 +2775,7 @@ export type Database = {
           id?: string
           qty_delivered?: number | null
           qty_dispatched?: number | null
+          qty_rejected?: number
           quantity_assigned: number
           request_line_id: string
           trip_id: string
@@ -2784,6 +2786,7 @@ export type Database = {
           id?: string
           qty_delivered?: number | null
           qty_dispatched?: number | null
+          qty_rejected?: number
           quantity_assigned?: number
           request_line_id?: string
           trip_id?: string
@@ -3501,5 +3504,6 @@ export const Constants = {
   },
 } as const
 
-// Helper type for row access
-export type Row<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
+// Helper manual — re-añadido post-regen (npx supabase gen types lo wipea)
+export type Row<T extends keyof Database['public']['Tables']> =
+  Database['public']['Tables'][T]['Row']
