@@ -4,69 +4,69 @@
     {
       "id": 1,
       "subject": "Task 1: Cleanup atomic + regen database.ts (7 sub-pasos, commit único)",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Regen database.ts post-4 BD migrations + DELETE 5 archivos obsoletos + cleanup masivo de refs en hooks/components/pages — TODO en commit único. 7 sub-pasos working tree (NO commits intermedios), commit único al final del sub-paso 1.7.\n\n**Files:**\n- Modify: src/lib/types/database.ts (regen), src/hooks/useTrips.ts, src/hooks/useTripEvents.ts, src/hooks/useSolicitudes.ts, src/components/solicitudes/LineRow.tsx, src/components/programacion/BacklogTable.tsx, src/app/(app)/programacion/page.tsx, src/app/(app)/programacion/viaje/[id]/page.tsx, src/app/(app)/solicitudes/[id]/page.tsx\n- Delete: src/hooks/usePickup.ts, src/hooks/useExternal.ts, src/components/programacion/ExternalApprovalForm.tsx, src/components/programacion/ExternalDeliveryModal.tsx, src/components/programacion/PickupDeliveryModal.tsx (verificar)\n\n**Acceptance Criteria:**\n- [ ] database.ts regenerado con 4 nuevas tablas + DROP 16 cols viejas\n- [ ] 0 grep matches refs viejas (pickup_by_project, external_by_provider, usePickup, useExternal, ExternalApprovalForm, ExternalDeliveryModal, PickupDeliveryModal)\n- [ ] 0 UPDATEs manuales qty_scheduled en useTrips/useTripEvents\n- [ ] T8 Cost editable + T9 Polish round 2 PRESERVADOS\n- [ ] npm run build verde\n\n**Verify:** `grep -rn \"pickup_by_project\\|external_by_provider\\|usePickup\\|useExternal\" src/ tests/ && npm run build`\n\n```json:metadata\n{\"files\":[\"src/lib/types/database.ts\",\"src/hooks/useTrips.ts\",\"src/hooks/useTripEvents.ts\",\"src/hooks/useSolicitudes.ts\",\"src/components/solicitudes/LineRow.tsx\",\"src/components/programacion/BacklogTable.tsx\",\"src/app/(app)/programacion/page.tsx\",\"src/app/(app)/programacion/viaje/[id]/page.tsx\",\"src/app/(app)/solicitudes/[id]/page.tsx\"],\"verifyCommand\":\"grep -rn \\\"pickup_by_project\\\\|external_by_provider\\\\|usePickup\\\\|useExternal\\\" src/ tests/ && npm run build\",\"acceptanceCriteria\":[\"database.ts regenerado con 4 tablas nuevas + DROP 16 cols\",\"0 grep matches refs viejas\",\"build verde\",\"Polish round 2 + Cost editable preservados\",\"sub-pasos 1.1-1.6 working tree, commit único 1.7\"]}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: Hook usePickupOrders.ts con 4 funciones bulk",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** Hook centralizado de operaciones pickup_orders. 4 funciones: createPickupOrder, completePickupOrder, cancelPickupOrder (con pre-flight stats para UI confirmation), removeLineFromPickupOrder (con auto-cancel detection).\n\n**Files:**\n- Create: src/hooks/usePickupOrders.ts\n\n**Acceptance Criteria:**\n- [ ] 4 funciones + 4 result types + PickupOrderLineInput exportados\n- [ ] createPickupOrder valida quantity_assigned > 0 && <= available pre-INSERT\n- [ ] cancelPickupOrder pre-flight SELECT devuelve { deliveredCount, deliveredQty }\n- [ ] removeLineFromPickupOrder devuelve { orderCancelled, orderId } post auto-cancel\n- [ ] translateBdError para qty_invariant CHECK constraint\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"createPickupOrder\\|completePickupOrder\\|cancelPickupOrder\\|removeLineFromPickupOrder\" src/hooks/usePickupOrders.ts`\n\n```json:metadata\n{\"files\":[\"src/hooks/usePickupOrders.ts\"],\"verifyCommand\":\"npm run build && grep -n \\\"createPickupOrder\\\\|completePickupOrder\\\\|cancelPickupOrder\\\\|removeLineFromPickupOrder\\\" src/hooks/usePickupOrders.ts\",\"acceptanceCriteria\":[\"4 funciones exportadas\",\"validación pre-INSERT con available\",\"translateBdError para qty_invariant\",\"cancelPickupOrder pre-flight stats\",\"removeLineFromPickupOrder detecta auto-cancel\",\"build verde\"]}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: Hook useExternalOrders.ts con 4 funciones (paralelo + provider/invoice/cost)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** Hook paralelo a usePickupOrders + provider/invoice/cost. Validación strict (provider trim, amount > 0, attachments >= 1). cancelExternalOrder PRESERVA invoice_attachments (Q4 cerrado).\n\n**Files:**\n- Create: src/hooks/useExternalOrders.ts\n\n**Acceptance Criteria:**\n- [ ] 4 funciones + 4 result types + ExternalOrderLineInput exportados\n- [ ] createExternalOrder validación strict + INSERT external_orders + INSERT external_order_lines\n- [ ] cancelExternalOrder NO setea invoice_attachments a NULL\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"createExternalOrder\\|completeExternalOrder\\|cancelExternalOrder\\|removeLineFromExternalOrder\" src/hooks/useExternalOrders.ts`\n\n```json:metadata\n{\"files\":[\"src/hooks/useExternalOrders.ts\"],\"verifyCommand\":\"npm run build && grep -n \\\"createExternalOrder\\\\|completeExternalOrder\\\\|cancelExternalOrder\\\\|removeLineFromExternalOrder\\\" src/hooks/useExternalOrders.ts\",\"acceptanceCriteria\":[\"4 funciones exportadas paralelas a pickup\",\"validación strict provider/amount/attachments\",\"cancelExternalOrder PRESERVA invoice_attachments\",\"build verde\"]}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Cards reusables — PickupOrderCard.tsx + ExternalOrderCard.tsx",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** Componentes reusables consumidos por /programacion + /solicitudes/[id]. Header (id+status+fecha+approver) + lista colapsable + acciones gateadas por permission props.\n\n**Files:**\n- Create: src/components/programacion/PickupOrderCard.tsx\n- Create: src/components/programacion/ExternalOrderCard.tsx\n\n**Acceptance Criteria:**\n- [ ] PickupOrderCard exports types + componente\n- [ ] ExternalOrderCard paralelo + provider/amount/Ver factura\n- [ ] Botones gateados por canConfirmDelivery/canCancelOrder\n- [ ] Sin emojis, texto puro\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"PickupOrderCard\\|ExternalOrderCard\" src/components/programacion/`\n\n```json:metadata\n{\"files\":[\"src/components/programacion/PickupOrderCard.tsx\",\"src/components/programacion/ExternalOrderCard.tsx\"],\"verifyCommand\":\"npm run build\",\"acceptanceCriteria\":[\"2 cards reusables exportadas\",\"header con id+status+fecha+approver+lines count\",\"lista colapsable\",\"botones gated por permission props\",\"ExternalOrderCard con provider+amount+Ver factura\"]}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: Create modals — CreatePickupOrderModal + CreateExternalOrderModal",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2, 3],
       "description": "**Goal:** Modales bulk N líneas con qty editable per línea. CreateExternalOrderModal agrega sección provider/cost/factura/notas con validación strict.\n\n**Files:**\n- Create: src/components/programacion/CreatePickupOrderModal.tsx\n- Create: src/components/programacion/CreateExternalOrderModal.tsx\n\n**Acceptance Criteria:**\n- [ ] Lista N líneas con qty editable (default available, max available)\n- [ ] Filtrar líneas con qty=0 en submit\n- [ ] CreateExternalOrderModal: provider+cost+FileUploader (min 1) + validación pre-submit\n- [ ] Botones primary amber\n- [ ] npm run build verde\n\n**Verify:** `npm run build`\n\n```json:metadata\n{\"files\":[\"src/components/programacion/CreatePickupOrderModal.tsx\",\"src/components/programacion/CreateExternalOrderModal.tsx\"],\"verifyCommand\":\"npm run build\",\"acceptanceCriteria\":[\"modales bulk con N líneas + qty editable per línea\",\"validación pre-submit (filtrar qty=0 + provider/cost/factura strict para externo)\",\"FileUploader con tempFolderId para externo\",\"build verde\"]}\n```"
     },
     {
       "id": 6,
       "subject": "Task 6: Confirm delivery modals — ConfirmPickupOrderDeliveryModal + ConfirmExternalOrderDeliveryModal",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2, 3, 4],
       "description": "**Goal:** Modales para confirmar entrega de un order activo. Read-only quantity_assigned (todo-o-nada v1). Receptor opcional + notas + foto adicional opcional.\n\n**Files:**\n- Create: src/components/programacion/ConfirmPickupOrderDeliveryModal.tsx\n- Create: src/components/programacion/ConfirmExternalOrderDeliveryModal.tsx\n\n**Acceptance Criteria:**\n- [ ] Read-only quantity_assigned per línea\n- [ ] Receptor SelectWithFallback opcional\n- [ ] Submit valida solo confirmation checkbox\n- [ ] ExternalConfirm header con provider/amount/Ver factura read-only\n- [ ] npm run build verde\n\n**Verify:** `npm run build`\n\n```json:metadata\n{\"files\":[\"src/components/programacion/ConfirmPickupOrderDeliveryModal.tsx\",\"src/components/programacion/ConfirmExternalOrderDeliveryModal.tsx\"],\"verifyCommand\":\"npm run build\",\"acceptanceCriteria\":[\"read-only quantity_assigned por línea\",\"receptor SelectWithFallback opcional\",\"notas + foto adicional opcionales\",\"ExternalConfirm header con provider/amount/Ver factura\",\"build verde\"]}\n```"
     },
     {
       "id": 7,
       "subject": "Task 7: programacion/page.tsx integration (bulk toolbar D1 + 2 secciones D5/D6 + cancel modales)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [4, 5, 6],
       "description": "**Goal:** Integration full en programacion/page.tsx: bulk toolbar 3 botones + 2 secciones cards (Pickups Pendientes + Externos Pendientes) + handlers + 2 modales create + 2 modales confirm + 2 modales cancel con stats contextual.\n\n**Files:**\n- Modify: src/app/(app)/programacion/page.tsx\n\n**Acceptance Criteria:**\n- [ ] Bulk toolbar 3 botones admin/logistica only\n- [ ] 2 secciones cards hide-when-empty\n- [ ] Confirm delivery modales reutilizables\n- [ ] Cancel modales con copy contextual de stats\n- [ ] Permission gate admin/logistica\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"CreatePickupOrderModal\\|CreateExternalOrderModal\\|PickupOrderCard\\|ExternalOrderCard\" 'src/app/(app)/programacion/page.tsx'`\n\n```json:metadata\n{\"files\":[\"src/app/(app)/programacion/page.tsx\"],\"verifyCommand\":\"npm run build && grep -n \\\"CreatePickupOrderModal\\\\|CreateExternalOrderModal\\\\|PickupOrderCard\\\\|ExternalOrderCard\\\" 'src/app/(app)/programacion/page.tsx'\",\"acceptanceCriteria\":[\"bulk toolbar 3 botones admin/logistica\",\"2 secciones cards hide-when-empty\",\"confirm delivery modales\",\"cancel modales con stats contextual\",\"permission gate\",\"build verde\"]}\n```"
     },
     {
       "id": 8,
       "subject": "Task 8: solicitudes/[id] integration (orders related + PM permission D8/J)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [4, 6],
       "description": "**Goal:** Secciones Pickup Orders + External Orders related a la solicitud. PM del proyecto destino con AT LEAST 1 match + lowercase 'proyecto' + pp.is_active=true. E11 free-text destination handled via INNER JOIN behavior.\n\n**Files:**\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx\n\n**Acceptance Criteria:**\n- [ ] 2 secciones cards related con cards reusables\n- [ ] PM permission AT LEAST 1 match (location_type='proyecto' lowercase + pp.is_active=true)\n- [ ] E11 free-text destination: PM no puede confirmar (admin/logistica only)\n- [ ] Modales reutilizables\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"PickupOrderCard\\|ExternalOrderCard\\|relatedPickupOrders\\|relatedExternalOrders\" 'src/app/(app)/solicitudes/[id]/page.tsx'`\n\n```json:metadata\n{\"files\":[\"src/app/(app)/solicitudes/[id]/page.tsx\"],\"verifyCommand\":\"npm run build && grep -n \\\"PickupOrderCard\\\\|ExternalOrderCard\\\\|relatedPickupOrders\\\" 'src/app/(app)/solicitudes/[id]/page.tsx'\",\"acceptanceCriteria\":[\"secciones orders related\",\"PM permission AT LEAST 1 match + lowercase + is_active\",\"E11 free-text destination handled\",\"cards reusables\",\"modales reutilizables\",\"build verde\"]}\n```"
     },
     {
       "id": 9,
       "subject": "Task 9: useSolicitudes LEFT JOIN fulfillments + LineRow badges 0-N",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1],
       "description": "**Goal:** useSolicitudes.fetchSolicitud agrega LEFT JOIN a 3 tablas pivot + parents activos. LineWithRelations gana campo fulfillments (FulfillmentInfo discriminated union). LineRow renderiza 0-N badges con tooltips informativos.\n\n**Files:**\n- Modify: src/hooks/useSolicitudes.ts\n- Modify: src/components/solicitudes/LineRow.tsx\n- Modify: src/app/(app)/solicitudes/[id]/page.tsx\n\n**Acceptance Criteria:**\n- [ ] FulfillmentInfo discriminated union exportado\n- [ ] LEFT JOIN 3 tablas con filtro Cancelado (D9)\n- [ ] LineRow renderiza 0-N badges (trip green / pickup blue / external violet)\n- [ ] Tooltips informativos\n- [ ] Polish round 2 preservado\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"fulfillments\\|FulfillmentInfo\" src/hooks/useSolicitudes.ts src/components/solicitudes/LineRow.tsx`\n\n```json:metadata\n{\"files\":[\"src/hooks/useSolicitudes.ts\",\"src/components/solicitudes/LineRow.tsx\",\"src/app/(app)/solicitudes/[id]/page.tsx\"],\"verifyCommand\":\"npm run build && grep -n \\\"fulfillments\\\\|FulfillmentInfo\\\" src/hooks/useSolicitudes.ts\",\"acceptanceCriteria\":[\"FulfillmentInfo discriminated union exportado\",\"LEFT JOIN 3 tablas con filtro Cancelado\",\"LineRow renderiza 0-N badges\",\"trip green / pickup blue / external violet\",\"tooltips informativos\",\"Polish round 2 preservado\"]}\n```"
     },
     {
       "id": 10,
       "subject": "Task 10: cancelSolicitud refactor (lógica G — cancelar orders relacionados)",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [2, 3],
       "description": "**Goal:** cancelSolicitud cancela pickup_orders + external_orders relacionados con lógica G: cancel order entero si TODAS líneas son de la solicitud, DELETE selectivo si ALGUNAS (auto_cancel_empty maneja último caso).\n\n**Files:**\n- Modify: src/hooks/useSolicitudes.ts (función cancelSolicitud)\n\n**Acceptance Criteria:**\n- [ ] Cancel order entero si TODAS líneas son de la solicitud\n- [ ] DELETE selectivo de order_lines si ALGUNAS\n- [ ] auto_cancel_empty trigger maneja último caso\n- [ ] Líneas Pendiente/Programada/Parcial pasan a 'Cancelada'\n- [ ] UPDATE sm_requests.status='Cancelada'\n- [ ] npm run build verde\n\n**Verify:** `npm run build && grep -n \"cancelSolicitud\" src/hooks/useSolicitudes.ts`\n\n```json:metadata\n{\"files\":[\"src/hooks/useSolicitudes.ts\"],\"verifyCommand\":\"npm run build && grep -n \\\"cancelSolicitud\\\" src/hooks/useSolicitudes.ts\",\"acceptanceCriteria\":[\"cancel orders enteros si TODAS líneas son de la solicitud\",\"DELETE selectivo de order_lines si solo ALGUNAS\",\"auto_cancel_empty trigger maneja último caso\",\"status líneas a Cancelada\",\"build verde\"]}\n```"
     },

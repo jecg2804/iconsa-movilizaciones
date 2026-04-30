@@ -1,6 +1,6 @@
 {
   "output": {
-    "filePath": "repomix-output.xml",
+    "filePath": "repomix-MovimientOS.xml",
     "style": "xml",
     "fileSummary": true,
     "directoryStructure": true,
@@ -13,43 +13,39 @@
   },
   "include": [
     "src/**",
-    "superpowers/**",
+    "tests/**",
+    "scripts/**",
     "Docs/**",
     ".claude/**",
     "CLAUDE.md",
+    "README.md",
     "package.json",
     "tsconfig.json",
     "next.config.*",
     "tailwind.config.*",
+    "postcss.config.*",
+    "playwright.config.ts",
     "middleware.ts",
-    "proxy.ts"
+    "proxy.ts",
+    ".env.example"
   ],
   "ignore": {
     "useGitignore": true,
     "useDefaultPatterns": true,
     "customPatterns": [
-      "node_modules/**",
-      ".next/**",
-      "dist/**",
-      "build/**",
+      "node_modules/**", ".next/**", "dist/**", "build/**",
       "*.log",
-      ".env*",
-      "package-lock.json",
-      "yarn.lock",
-      "pnpm-lock.yaml",
+      ".env",
+      ".env.local",
+      ".env.*.local",
+      ".env.production",
+      ".env.development",
+      ".env.test",
+      "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
       "*.test.*.snap",
-      "playwright-report/**",
-      "test-results/**",
+      "playwright-report/**", "test-results/**",
       "public/**",
-      "*.ico",
-      "*.png",
-      "*.jpg",
-      "*.jpeg",
-      "*.svg",
-      "*.woff*"
+      "*.ico", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.woff*"
     ]
-  },
-  "security": {
-    "enableSecurityCheck": true
   }
 }
