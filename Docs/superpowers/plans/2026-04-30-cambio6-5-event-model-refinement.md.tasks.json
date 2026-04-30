@@ -1,0 +1,86 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-30-cambio6-5-event-model-refinement.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "T1: [bd-pending] migración consolidada en CHANGELOG.md (PARADA Chat)",
+      "status": "pending",
+      "description": "**Goal:** Crear entry [bd-pending] en Docs/CHANGELOG.md con SQL completo de la migración consolidada cambio6_5_event_model_refinement (10 items BD en una transacción) + 4 pre-merge queries + rollback. PARADA: Chat aplica via Supabase MCP en staging.\n\n**Files:**\n- Modify: Docs/CHANGELOG.md\n\n**Acceptance Criteria:**\n- Entry [bd-pending] agregado con SQL completo de las 7 funciones (BD-4 a BD-10)\n- 4 pre-merge queries listadas literal\n- Rollback SQL incluido\n- PARADA explícita para Chat\n\n**Verify:** Entry visible en CHANGELOG.md con marker [bd-pending].\n\n```json:metadata\n{\"files\": [\"Docs/CHANGELOG.md\"], \"verifyCommand\": \"grep -n bd-pending Docs/CHANGELOG.md\", \"acceptanceCriteria\": [\"entry [bd-pending] presente\", \"SQL 7 funciones literal\", \"4 pre-merge queries\", \"rollback incluido\", \"PARADA explícita\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "T2: Regen types post-aplicación BD",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** Regenerar src/lib/types/database.ts desde staging para que qty_rejected aparezca en tipos.\n\n**Files:**\n- Modify: src/lib/types/database.ts\n\n**Acceptance Criteria:**\n- qty_rejected: number en Row/Insert/Update de trip_line_assignments\n- Helper Row<T> manual re-appendeado\n- Sin warn exec lines\n- npm run build pasa\n\n**Verify:** npm run build → exit 0\n\n```json:metadata\n{\"files\": [\"src/lib/types/database.ts\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"qty_rejected en types\", \"Row<T> helper presente\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "T3: 13 tests E2E nuevos (RED phase) con cleanup obligatorio",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Crear tests/cambio6-5-event-refinement.spec.ts con los 13 tests del spec. Cleanup obligatorio en afterEach. RED phase — verde se verifica en T9.\n\n**Files:**\n- Create: tests/cambio6-5-event-refinement.spec.ts\n\n**Acceptance Criteria:**\n- 13 tests escritos\n- afterEach con cleanupSolicitud\n- Verifica BD post-operación\n- Mensajes en español neutro Panamá\n\n**Verify:** npx playwright test cambio6-5-event-refinement.spec.ts --list → 13 tests\n\n```json:metadata\n{\"files\": [\"tests/cambio6-5-event-refinement.spec.ts\"], \"verifyCommand\": \"npx playwright test cambio6-5-event-refinement.spec.ts --list\", \"acceptanceCriteria\": [\"13 tests escritos\", \"cleanup en afterEach\", \"verificaciones BD\", \"español neutro\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "T4: FE-1 eliminar UPDATE manual qty_delivered en handleDelivery",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** El sync trigger BD-5 actualiza qty_delivered/qty_rejected automáticamente. Eliminar el bloque duplicado del frontend (mis-viajes/[id]:729-743).\n\n**Files:**\n- Modify: src/app/(app)/mis-viajes/[id]/page.tsx (líneas ~729-743)\n\n**Acceptance Criteria:**\n- Bloque SELECT fresco + UPDATE qty_delivered eliminado\n- handleDelivery sigue: INSERT trip_events + trip_event_lines + delivery_observations + notificaciones\n- npm run build pasa\n\n**Verify:** npm run build → exit 0; manual: registrar Entrega, verificar incremento único en BD\n\n```json:metadata\n{\"files\": [\"src/app/(app)/mis-viajes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"UPDATE manual eliminado\", \"INSERTs preservados\", \"notificaciones preservadas\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "T5: FE-2 eliminar decremento manual qty_delivered en handleRevert",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** El sync trigger BD-6 revierte qty_delivered/qty_rejected automáticamente. Eliminar branch Entrega de handleRevert (mis-viajes/[id]:887-930).\n\n**Files:**\n- Modify: src/app/(app)/mis-viajes/[id]/page.tsx (branch Entrega de handleRevert)\n\n**Acceptance Criteria:**\n- Branch Entrega no decrementa qty_delivered manual\n- handleRevert sigue insertando evento Reversion\n- Otros branches (Salida, Llegada, Retorno) sin cambios\n- npm run build pasa\n\n**Verify:** npm run build → exit 0\n\n```json:metadata\n{\"files\": [\"src/app/(app)/mis-viajes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"decremento manual eliminado\", \"INSERT Reversion preservado\", \"otros branches sin cambios\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "T6: FE-3 guard frontend revert Entrega en trip cerrado",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Defense-in-depth con BD-8. Antes del INSERT del Reversion, chequear trip.status. Si Completado/Cancelado, mostrar mensaje claro.\n\n**Files:**\n- Modify: src/app/(app)/mis-viajes/[id]/page.tsx (handleRevert, antes del INSERT)\n\n**Acceptance Criteria:**\n- Guard chequea trip.status para revert Entrega\n- Mensaje user-facing en español neutro Panamá\n- npm run build pasa\n\n**Verify:** npm run build → exit 0; manual: cerrar trip con Retorno, intentar revert Entrega → ver mensaje\n\n```json:metadata\n{\"files\": [\"src/app/(app)/mis-viajes/[id]/page.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"guard implementado\", \"mensaje español neutro\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "T7: FE-4 DeliveryModal validación notas required",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Cuando alguna línea tiene line_status='with_observations', el campo notes pasa a required (≥10 chars). Validación bloquea submit. Defense-in-depth con BD-10.\n\n**Files:**\n- Modify: src/components/viajes/DeliveryModal.tsx\n\n**Acceptance Criteria:**\n- Asterisco rojo en label notes cuando hasObservations\n- handleSubmit valida notes.length >= 10\n- Mensaje en español neutro Panamá\n- Submit disabled si validación falla\n- npm run build pasa\n\n**Verify:** npm run build → exit 0; manual: marcar with_observations, ver botón disabled\n\n```json:metadata\n{\"files\": [\"src/components/viajes/DeliveryModal.tsx\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"asterisco visible\", \"validación implementada\", \"mensaje español neutro\", \"submit disabled\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "T8: CL-1 cleanup código muerto refs a 'Pickup Aprobado'/'Externo Aprobado'",
+      "status": "pending",
+      "description": "**Goal:** Eliminar refs muertas a status eliminados en Cambio 5 (cases en format.ts:173,177 + comentario obsoleto useSolicitudes.ts:927).\n\n**Files:**\n- Modify: src/lib/utils/format.ts\n- Modify: src/hooks/useSolicitudes.ts\n\n**Acceptance Criteria:**\n- Cases muertos en format.ts eliminados\n- Comentario obsoleto en useSolicitudes.ts eliminado/actualizado\n- grep confirma solo refs vivas (en hooks de pickup_orders/external_orders status)\n- npm run build pasa\n- Tests no regresión\n\n**Verify:** npm run build + grep -rn 'Pickup Aprobado' src/ muestra solo vivos\n\n```json:metadata\n{\"files\": [\"src/lib/utils/format.ts\", \"src/hooks/useSolicitudes.ts\"], \"verifyCommand\": \"npm run build\", \"acceptanceCriteria\": [\"cases muertos eliminados\", \"comentario obsoleto removido\", \"grep limpio\", \"build verde\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "T9: Suite completa verde (Cambio 6 + 6.5 = 31 tests)",
+      "status": "pending",
+      "blockedBy": [2, 3, 4, 5, 6, 7],
+      "description": "**Goal:** Verificar que TODOS los tests E2E pasan verde (18 Cambio 6 + 13 Cambio 6.5). Si hay fallos, debugging sistemático.\n\n**Files:**\n- No code changes esperados (solo verificación). Si hay fixes, modificar lo necesario.\n\n**Acceptance Criteria:**\n- 31 tests pasando\n- Sin regresión Cambio 6\n\n**Verify:** npx playwright test cambio6 entrega-complete cancellation-integrity quantity-immutable retorno-complete backlog-quantities → all passed\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"npx playwright test cambio6 entrega-complete cancellation-integrity quantity-immutable retorno-complete backlog-quantities --reporter=list\", \"acceptanceCriteria\": [\"31 tests verde\", \"sin regresión Cambio 6\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "T10: BACKLOG entries (BL-EXCLUSIVITY, BL-RPC-CONVERSION, BL-SESSION-START-RULE, BL-CLAUDE-FOLDER-CLEANUP)",
+      "status": "pending",
+      "description": "**Goal:** Agregar 4 entries nuevas a Docs/BACKLOG.md con detalle suficiente para retomar en sprint futuro.\n\n**Files:**\n- Modify: Docs/BACKLOG.md\n\n**Acceptance Criteria:**\n- BL-EXCLUSIVITY con query SQL diagnóstico (CTE multi_modality) + edge cases + nota \"correr en prod ANTES\"\n- BL-RPC-CONVERSION con razón y prioridad\n- BL-SESSION-START-RULE con scope claro\n- BL-CLAUDE-FOLDER-CLEANUP referencia a Docs/reference/2026-04-29-claude-folder-audit.md\n\n**Verify:** grep -E 'BL-EXCLUSIVITY|BL-RPC-CONVERSION|BL-SESSION-START-RULE|BL-CLAUDE-FOLDER-CLEANUP' Docs/BACKLOG.md → 4 matches\n\n```json:metadata\n{\"files\": [\"Docs/BACKLOG.md\"], \"verifyCommand\": \"grep -E 'BL-EXCLUSIVITY|BL-RPC-CONVERSION|BL-SESSION-START-RULE|BL-CLAUDE-FOLDER-CLEANUP' Docs/BACKLOG.md\", \"acceptanceCriteria\": [\"4 entries presentes\", \"BL-EXCLUSIVITY con SQL\", \"todas con prioridad\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "T11: Crear deployment-plan-prod.md esqueleto",
+      "status": "pending",
+      "description": "**Goal:** Crear Docs/reference/deployment-plan-prod.md con estructura tentativa del plan de aplicación a producción.\n\n**Files:**\n- Create: Docs/reference/deployment-plan-prod.md\n\n**Acceptance Criteria:**\n- Secciones: Estado prod, Estado jaime/dev, Orden migraciones, Pre-merge queries, Validación, Rollback, Comunicación, Post-merge\n- Nota \"PLAN TENTATIVO — se actualiza al hacer merge real\"\n- Cambios 1-6.5 listados con orden cronológico\n\n**Verify:** cat Docs/reference/deployment-plan-prod.md | head -20 muestra header\n\n```json:metadata\n{\"files\": [\"Docs/reference/deployment-plan-prod.md\"], \"verifyCommand\": \"head -20 Docs/reference/deployment-plan-prod.md\", \"acceptanceCriteria\": [\"archivo creado\", \"todas las secciones presentes\", \"nota tentativo\", \"Cambios 1-6.5 listados\"]}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "T-final: PARADA smoke manual por James",
+      "status": "pending",
+      "blockedBy": [8, 9, 10],
+      "description": "**Goal:** James verifica los 3 escenarios críticos en UI staging. Si OK: actualizar TRAIL + CHANGELOG entry [feat] + spec status:shipped + borrar plan files.\n\n**Files:**\n- Modify: Docs/CHANGELOG.md (entry [feat] final)\n- Modify: Docs/TRAIL.md\n- Modify: Docs/superpowers/specs/2026-04-30-cambio6-5-event-model-refinement.md (frontmatter status:shipped)\n- Delete: Docs/superpowers/plans/2026-04-30-cambio6-5-event-model-refinement.md\n- Delete: Docs/superpowers/plans/2026-04-30-cambio6-5-event-model-refinement.md.tasks.json\n\n**Acceptance Criteria:**\n- James confirma OK los 3 escenarios (entrega ok parcial → Parcial inmediato; entrega mixta → línea rejected vuelve al backlog; entrega with_observations sin notas → bloqueada)\n- TRAIL actualizado\n- Spec frontmatter status:shipped + shipped_commits range\n- Plan files borrados per plan-lifecycle.md\n\n**Verify:** James confirma en chat. Solo entonces se cierra Cambio 6.5.\n\n```json:metadata\n{\"files\": [\"Docs/CHANGELOG.md\", \"Docs/TRAIL.md\", \"Docs/superpowers/specs/2026-04-30-cambio6-5-event-model-refinement.md\"], \"verifyCommand\": \"manual smoke por James\", \"acceptanceCriteria\": [\"3 escenarios OK\", \"TRAIL actualizado\", \"spec shipped\", \"plan borrado\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-30T18:00:00Z"
+}
