@@ -1180,9 +1180,10 @@ EOF
 - [ ] Si `trip.status IN ('Completado', 'Cancelado')`: mostrar toast/mensaje claro y abortar el revert sin INSERT
 - [ ] Mensaje user-facing en español neutro Panamá: *"Este viaje ya fue cerrado. Para corregir esta entrega, primero revierte el Retorno desde la sección de eventos del viaje."*
 - [ ] Si BD-8 dispara igual (defense-in-depth), el error visible es legible
+- [ ] **Verificación enforcement español neutro:** `grep -nE "querés|podés|tenés|necesitás|registrá|tomá|verificá|ejecutá|mandá|confirmá" src/app/\(app\)/mis-viajes/\[id\]/page.tsx` → 0 matches en líneas tocadas por este task
 - [ ] `npm run build` pasa
 
-**Verify:** `npm run build` exit 0. Manual: cerrar trip con Retorno, intentar revertir Entrega, verificar que aparece el mensaje sin INSERT a BD.
+**Verify:** `npm run build` exit 0 + grep español neutro = 0 matches. Manual: cerrar trip con Retorno, intentar revertir Entrega, verificar que aparece el mensaje sin INSERT a BD.
 
 **Steps:**
 
@@ -1247,9 +1248,10 @@ EOF
 - [ ] handleSubmit valida `notes.trim().length >= 10` cuando hay líneas con observations
 - [ ] Mensaje de error visible en español neutro Panamá: *"Las notas son obligatorias (mínimo 10 caracteres) cuando alguna línea tiene observaciones."*
 - [ ] Submit button disabled si validación falla
+- [ ] **Verificación enforcement español neutro:** `grep -nE "querés|podés|tenés|necesitás|registrá|tomá|verificá|ejecutá|mandá|confirmá" src/components/viajes/DeliveryModal.tsx` → 0 matches
 - [ ] `npm run build` pasa
 
-**Verify:** `npm run build` exit 0. Manual: abrir DeliveryModal con línea, marcar `with_observations`, verificar que el botón submit queda disabled hasta que notes tenga ≥10 chars.
+**Verify:** `npm run build` exit 0 + grep español neutro = 0 matches. Manual: abrir DeliveryModal con línea, marcar `with_observations`, verificar que el botón submit queda disabled hasta que notes tenga ≥10 chars.
 
 **Steps:**
 
@@ -1408,6 +1410,7 @@ EOF
 - [ ] Suite Cambio 6.5 (13 tests) verde
 - [ ] Suite Cambio 6 existente (18 tests) sigue verde — sin regresión
 - [ ] Total: 31 tests pasando
+- [ ] **Límite de retries:** si después de 3 intentos de fix iterativo no se logra verde, PARAR y reportar incidente al usuario. NO continuar a T-final con tests rojos. Tests rojos persistentes = señal de bug en diseño, no de problema de tests — requiere re-discusión con James/Chat antes de proceder.
 
 **Verify:**
 ```bash
@@ -1444,9 +1447,16 @@ Si fallan tests por regresión:
 - Si el problema es que el frontend ya no actualiza qty_delivered manual (FE-1) y algún test viejo asumía ese comportamiento, revisar el test — el comportamiento BD post-trigger debe ser equivalente.
 - Si el problema es FE-2 (revert), verificar que el trigger BD-6 hace lo mismo que el código eliminado.
 
-- [ ] **Step 3: Si todo verde, marcar T9 done. Si hay fallos, fix iterativo**
+- [ ] **Step 3: Si todo verde, marcar T9 done. Si hay fallos, fix iterativo (MÁXIMO 3 intentos)**
 
 Cada fix debe ir en commit separado del task que originó el problema. Por ejemplo, si FE-1 (T4) introdujo regresión, el fix va en commit con prefijo `fix: T9 — regresión FE-1 ajuste...`.
+
+**Límite estricto de 3 intentos:** si después del tercer intento todavía hay tests rojos, STOP. NO continuar a T-final. Reportar a James:
+- Qué tests siguen rojos
+- Qué fixes intenté
+- Hipótesis de root cause (probablemente bug de diseño, no de implementación)
+
+Tests rojos persistentes son señal de que algo en el diseño BD/FE necesita re-evaluación con James/Chat. Forzar verde con hacks (skip, .only, mocks) está PROHIBIDO — produce false positives que se descubren en producción.
 
 - [ ] **Step 4: Commit final de T9 (solo verificación, sin code changes esperados)**
 
@@ -1476,7 +1486,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 - [ ] BL-EXCLUSIVITY agregado con: descripción, query SQL diagnóstico (CTE multi_modality), edge cases, nota explícita "correr en prod ANTES de diseñar y aplicar el constraint"
 - [ ] BL-RPC-CONVERSION agregado: descripción, razón (atomicidad), prioridad (post-merge polish)
 - [ ] BL-SESSION-START-RULE agregado: scope (crear .claude/rules/session-start.md o agregar a tool-usage.md)
-- [ ] BL-CLAUDE-FOLDER-CLEANUP agregado: referencia al doc auditoría `Docs/reference/2026-04-29-claude-folder-audit.md` (ya existe per git status)
+- [ ] BL-CLAUDE-FOLDER-CLEANUP agregado: referencia al doc auditoría `Docs/reference/claude-folder-audit.md` (ya existe per git status)
 
 **Verify:** `grep -E "BL-EXCLUSIVITY|BL-RPC-CONVERSION|BL-SESSION-START-RULE|BL-CLAUDE-FOLDER-CLEANUP" Docs/BACKLOG.md` retorna 4 matches.
 
@@ -1541,6 +1551,12 @@ EOF
 > **NOTA IMPORTANTE:** Este documento es PLAN TENTATIVO. Se actualiza con detalles
 > concretos de migrations y orden cuando se haga el merge real `jaime/dev → main`.
 > Última actualización: 2026-04-30 (esqueleto inicial post-Cambio 6.5).
+>
+> **Para la sesión de merge:** usar AMBOS repomix para diff exhaustivo —
+> `repomix-MovimientOS-main.xml` (snapshot de main) y `repomix-MovimientOS.xml`
+> (snapshot de jaime/dev). Ambos disponibles en project knowledge. Sin esa
+> comparación, fácil olvidar diferencias entre lo que está en prod y lo que
+> queremos aplicar.
 
 ## Estado actual de prod (verificado 2026-04-30)
 
@@ -1650,11 +1666,14 @@ EOF
 
 **Goal:** James corre smoke manual del flow completo en staging antes de cerrar Cambio 6.5 y declararlo listo para merge final v2.
 
+**Relación con T9:** T9 verifica lógica BD/funcional con 31 tests automatizados (PRECONDICIÓN — sin T9 verde, no se llega a T-final). T-final es **validación VISUAL de UX**: que los mensajes son legibles, los modales no están rotos, el flow operativo se siente correcto al usuario real. No sustituyen a los 13 tests E2E — los complementan en la dimensión que automated testing no cubre.
+
 **Files:**
 - No code changes. Solo verificación manual + actualización TRAIL/CHANGELOG.
 
 **Acceptance Criteria:**
-- [ ] James verifica los 3 escenarios críticos en UI:
+- [ ] T9 verde como precondición (31 tests passed)
+- [ ] James verifica los 3 escenarios críticos visualmente en UI staging:
   - Entrega ok parcial → línea pasa a Parcial inmediato (sin esperar Retorno)
   - Entrega mixta ok+rejected → línea rejected pasa a Pendiente, línea ok a Parcial, ambas inmediatas
   - Entrega with_observations sin notas → bloqueada con mensaje claro
