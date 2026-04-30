@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../src/lib/types/database'
+import { config } from 'dotenv'
+config({ path: '.env.local' })
 
 // ─────────────────────────────────────────────────────────────────────
 // Setup: cliente Supabase admin con service_role para bypass RLS en seeds.
@@ -11,11 +13,72 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const admin = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE)
 
-// Charris (logistica) seed user — created via /admin/masters in staging
-const CHARRIS_ID = process.env.TEST_CHARRIS_ID!
-const PROJECT_ID = process.env.TEST_PROJECT_ID!  // 26-604 Inyecciones Metro
-const REQUESTER_ID = process.env.TEST_PM_ID!     // PM seed
-const RATE_ID = process.env.TEST_RATE_ID!        // Rate seed
+// Test fixture IDs. Si las env vars TEST_* no están seteadas, se resuelven en
+// beforeAll() consultando staging directamente — auto-healing setup.
+let CHARRIS_ID: string
+let PROJECT_ID: string
+let REQUESTER_ID: string
+let RATE_ID: string
+
+test.beforeAll(async () => {
+  // Charris (logistica) — usa env var si existe, sino fetch primer logistica activo
+  if (process.env.TEST_CHARRIS_ID) {
+    CHARRIS_ID = process.env.TEST_CHARRIS_ID
+  } else {
+    const { data, error } = await admin
+      .from('people')
+      .select('id')
+      .eq('app_role', 'logistica')
+      .eq('status', 'Activo')
+      .limit(1)
+      .single()
+    if (error || !data) throw new Error(`Cambio 6 tests: no logistica seed found en staging. ${error?.message ?? ''}`)
+    CHARRIS_ID = data.id
+  }
+
+  // Project (cualquier activo, default 26-604 Inyecciones Metro si está)
+  if (process.env.TEST_PROJECT_ID) {
+    PROJECT_ID = process.env.TEST_PROJECT_ID
+  } else {
+    const { data, error } = await admin
+      .from('projects')
+      .select('id')
+      .eq('status', 'Activo')
+      .order('code')
+      .limit(1)
+      .single()
+    if (error || !data) throw new Error(`Cambio 6 tests: no project activo found en staging. ${error?.message ?? ''}`)
+    PROJECT_ID = data.id
+  }
+
+  // Requester PM — usa env var si existe, sino primer PM activo
+  if (process.env.TEST_PM_ID) {
+    REQUESTER_ID = process.env.TEST_PM_ID
+  } else {
+    const { data, error } = await admin
+      .from('people')
+      .select('id')
+      .eq('app_role', 'pm')
+      .eq('status', 'Activo')
+      .limit(1)
+      .single()
+    if (error || !data) throw new Error(`Cambio 6 tests: no PM seed found en staging. ${error?.message ?? ''}`)
+    REQUESTER_ID = data.id
+  }
+
+  // Rate — usa env var si existe, sino primer mobilization_rate (cualquiera sirve para los tests)
+  if (process.env.TEST_RATE_ID) {
+    RATE_ID = process.env.TEST_RATE_ID
+  } else {
+    const { data, error } = await admin
+      .from('mobilization_rates')
+      .select('id')
+      .limit(1)
+      .single()
+    if (error || !data) throw new Error(`Cambio 6 tests: no mobilization_rate found en staging. ${error?.message ?? ''}`)
+    RATE_ID = data.id
+  }
+})
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers (AD-5 helpers existentes están rotos, usamos seed manual)
@@ -30,12 +93,14 @@ async function seedSolicitudWithLines(opts: SeedLineOpts[]): Promise<{
   requestId: string
   lineIds: string[]
 }> {
+  // 1. Crear solicitud en Borrador (trigger enforce_line_add_delete_only_in_borrador
+  //    bloquea INSERT/DELETE de líneas en otros estados — auditoría Fase B.1)
   const { data: req, error: reqErr } = await admin
     .from('sm_requests')
     .insert({
       project_id: PROJECT_ID,
       requester_id: REQUESTER_ID,
-      status: 'Enviada',
+      status: 'Borrador',
       date_required: new Date().toISOString().slice(0, 10),
       cost_code_id: null,
       cost_category_id: null,
@@ -44,6 +109,7 @@ async function seedSolicitudWithLines(opts: SeedLineOpts[]): Promise<{
     .single()
   if (reqErr || !req) throw new Error(`seed solicitud failed: ${reqErr?.message}`)
 
+  // 2. INSERT líneas (permitido en Borrador)
   const lines = opts.map((o, i) => ({
     request_id: req.id,
     line_number: i + 1,
@@ -63,6 +129,13 @@ async function seedSolicitudWithLines(opts: SeedLineOpts[]): Promise<{
     .insert(lines)
     .select('id')
   if (linesErr || !lineRows) throw new Error(`seed lines failed: ${linesErr?.message}`)
+
+  // 3. Cambiar solicitud a Enviada (estado operativo donde aplican los flows de Cambio 6)
+  const { error: submitErr } = await admin
+    .from('sm_requests')
+    .update({ status: 'Enviada' })
+    .eq('id', req.id)
+  if (submitErr) throw new Error(`seed update Enviada failed: ${submitErr.message}`)
 
   return { requestId: req.id, lineIds: lineRows.map((l) => l.id) }
 }
@@ -105,7 +178,13 @@ async function seedTripWithAssignment(
 }
 
 async function dispatchTrip(tripId: string, lineId: string, qty: number): Promise<void> {
+  // Replica handleDispatch en mis-viajes/[id]/page.tsx:551+ — el trigger BD NO
+  // mueve líneas de 'Programada' a 'En Transito' automáticamente; el código
+  // hace ese UPDATE explícitamente.
   await admin.from('trips').update({ status: 'En Ruta', actual_departure: new Date().toISOString() }).eq('id', tripId)
+  // 1. Status = 'En Transito' (paralelo a handleDispatch:622)
+  await admin.from('sm_request_lines').update({ status: 'En Transito' }).eq('id', lineId)
+  // 2. qty_dispatched (paralelo a handleDispatch:635)
   await admin.from('trip_line_assignments').update({ qty_dispatched: qty }).eq('trip_id', tripId).eq('request_line_id', lineId)
   await admin.from('trip_events').insert({
     trip_id: tripId,
