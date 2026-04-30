@@ -547,486 +547,216 @@ EOF
 
 ---
 
-## Task 3: Tests E2E nuevos (13) — escribir RED phase
+## Task 3: Tests híbridos (5 E2E + 8 BD-direct) — escribir RED phase
 
-**Goal:** Crear los 13 tests E2E del spec en `tests/cambio6-5-event-refinement.spec.ts` con cleanup obligatorio. Los tests pueden fallar inicialmente (RED) hasta que FE-1 a FE-4 estén aplicados (T4-T7) y la suite pase verde en T9.
+**Goal:** Crear los 13 tests del spec divididos en 2 archivos: 5 tests E2E (UI completa) en `tests/cambio6-5-event-refinement.spec.ts` + 8 tests BD-direct (INSERT/UPDATE directo) en `tests/cambio6-5-bd-triggers.spec.ts`. División proporcional al riesgo: el riesgo está en (a) integración FE↔BD post-FE-1/FE-2, y (b) flows nuevos UI; resto es lógica BD aislada.
+
+**Por qué híbrido y no todo E2E:** los CHECKs y triggers BD nuevos son lógica autónoma que no necesita pasar por login + crear solicitud + crear trip + dispatch para verificarse. Test BD-direct corre en 2-5s vs 60-90s E2E. Pero los tests que verifican que el FE delega correctamente al BD (post-FE-1/FE-2 borraron UPDATE manual) DEBEN pasar por UI — sino el bug "olvidé borrar el UPDATE manual" pasa silente.
 
 **Files:**
-- Create: `tests/cambio6-5-event-refinement.spec.ts`
+- Create: `tests/cambio6-5-event-refinement.spec.ts` (5 tests E2E)
+- Create: `tests/cambio6-5-bd-triggers.spec.ts` (8 tests BD-direct)
+- Modify: `tests/helpers.ts` (extensión registerEntrega para Test 3 y Test 5)
 
 **Acceptance Criteria:**
-- [ ] 13 tests escritos (numerados conforme spec)
-- [ ] Cada test usa `cleanupSolicitud(solicitudId)` en `afterEach` o `afterAll` (helper en `tests/helpers.ts`)
-- [ ] Imports siguen patrón de tests existentes (ver `tests/entrega-complete.spec.ts` y `tests/backlog-quantities.spec.ts`)
-- [ ] Cada test verifica explícitamente el estado BD post-operación (no solo UI)
-- [ ] Tests escritos en español neutro Panamá en mensajes/comentarios user-facing
+- [ ] 5 tests E2E + 8 BD-direct = 13 total
+- [ ] E2E: cleanup obligatorio con `cleanupSolicitud(solicitudId)` en `afterEach`
+- [ ] BD-direct: cleanup propio en `afterEach` (ROLLBACK no aplica porque cada operación es una transacción separada — usar `cleanupSolicitud` o `db.from(...).delete()` explícito de las filas insertadas)
+- [ ] Imports siguen patrón de tests existentes
+- [ ] Tests escritos en español neutro Panamá
+- [ ] Helper extendido `registerEntrega(page, opts)` acepta nuevo opt `lines: [{ lineIndex, status: 'ok' | 'rejected' | 'with_observations', qty? }]` para Test 3 (entrega mixta). Lectura previa de DeliveryModal.tsx OBLIGATORIA — armar helper basado en selectores reales, NO inventar
+- [ ] Helper nuevo `closeTrip(tripId)` para Test 9 (registra Retorno → trip Completado)
 
-**Verify:** `npx playwright test cambio6-5-event-refinement.spec.ts --list` muestra 13 tests.
+**Verify:** 
+```bash
+npx playwright test cambio6-5-event-refinement cambio6-5-bd-triggers --list
+```
+Expected: 13 tests listados (5 + 8).
+
+### Distribución 5 E2E + 8 BD-direct
+
+**E2E (UI completa):**
+
+| # | Test | Por qué E2E |
+|---|------|-------------|
+| 1 | `entrega_ok_parcial_lleva_a_parcial_inmediato` | Cubre FE-1 + BD-5 + BD-4 en path real. Si FE-1 deja UPDATE manual → doble incremento detectable acá |
+| 3 | `entrega_mixta_ok_rejected_libera_solo_rejected` | Reproductor literal del bug MOV-2026-058. Tiene que pasar por UI completa para dar confianza de fix |
+| 5 | `entrega_with_observations_requiere_notas` | Validación frontend que bloquea submit (FE-4). BD-direct no aplica — la BD ya tiene BD-10, lo que probamos acá es FE-4 |
+| 7 | `revert_entrega_revierte_qty_delivered_y_qty_rejected` | Cubre FE-2 + BD-6 en path real |
+| 9 | `revert_entrega_en_trip_cerrado_bloqueado` | Mensaje user-facing FE-3 + BD-8 backstop. Verificar UX requiere UI |
+
+**BD-direct (INSERT/UPDATE directo + verificar resultado):**
+
+| # | Test | Approach BD-direct |
+|---|------|--------------------|
+| 2 | `entrega_rejected_libera_al_backlog` | Setup: insert solicitud + trip + assignment con qty_dispatched=5. Insert trip_event + trip_event_lines con line_status='rejected', qty=5. Verificar: assignment.qty_rejected=5, qty_delivered=0; línea.status='Pendiente' |
+| 4 | `entrega_with_observations_inserta_observation` | Setup similar. Insert con line_status='with_observations'. Verificar: trigger BD-5 actualiza qty_delivered. (delivery_observations es responsabilidad del frontend, no del trigger — cubierto en E2E #5) |
+| 6 | `retorno_no_modifica_lineas` | Setup: trip con Entrega ya completada. Snapshot BD. Insert trip_event(event_type='Retorno', notes='...') manual. Verificar snapshot líneas/assignments idéntico, solo trip.status='Completado' |
+| 8 | `revert_doble_del_mismo_evento_bloqueado` | Setup: trip con Entrega registrada. Insert primer revert (trip_event con reverts_event_id). Insert segundo revert con mismo reverts_event_id. Esperar PostgrestError code='23505' (UNIQUE INDEX BD-9) |
+| 10 | `edit_quantity_permitido_post_envio_pre_salida` | Setup: solicitud Enviada + trip Programado (assignment quantity_assigned=8) sin Salida. UPDATE sm_request_lines.quantity de 10 a 8. Esperar éxito |
+| 11 | `edit_quantity_bloqueado_por_qty_dispatched` | Setup: trip con Salida (qty_dispatched=10). UPDATE quantity de 10 a 5. Esperar PostgrestError "cantidad ya despachada" (H1 condición 1) |
+| 12 | `edit_quantity_bloqueado_por_qty_delivered` | Setup: trip con Entrega parcial (qty_delivered=4). UPDATE quantity de 10 a 3. Esperar "cantidad ya entregada" (H1 condición 2) |
+| 13 | `edit_quantity_aumentar_siempre_permitido` | Setup: cualquier estado. UPDATE quantity +5. Esperar éxito sin importar dispatched/delivered |
+
+### Helper extensions (modificar `tests/helpers.ts`)
+
+**Lectura previa OBLIGATORIA:** antes de escribir helpers nuevos, leer `src/components/viajes/DeliveryModal.tsx` para entender selectores reales (probablemente dropdown o radio per línea con `data-testid` específicos). NO inventar selectores.
+
+**Nuevo overload `registerEntrega`:**
+
+```typescript
+// Firma actual (NO romper):
+export async function registerEntrega(
+  page: Page,
+  opts: { receiverName?: string; confirmationCode?: string },
+)
+
+// Firma extendida (agregar opcionales):
+export async function registerEntrega(
+  page: Page,
+  opts: {
+    receiverName?: string
+    confirmationCode?: string
+    // Nuevo: per-line status. Si se omite, todas las líneas quedan 'ok'.
+    // lineIndex es 0-based dentro del modal.
+    lines?: Array<{ lineIndex: number; status: 'ok' | 'rejected' | 'with_observations'; qty?: number }>
+    // Nuevo: notas a nivel del evento (requeridas si hay with_observations)
+    notes?: string
+    // Nuevo: para Test 5 — flag para verificar que submit queda disabled cuando notes vacías + with_observations
+    expectSubmitBlocked?: boolean
+  },
+)
+```
+
+Si `lines` se omite, comportamiento actual (todo ok). Si se provee, iterar selectores per-línea según el JSX real.
+
+**Helper nuevo `closeTrip(tripId)`:**
+
+```typescript
+// Para Test 9: cerrar trip via UI (registrar Retorno) para que quede 'Completado'.
+// Asume el page ya está en /mis-viajes/{tripId}.
+export async function closeTrip(page: Page, tripId: string) {
+  await openTripDetail(page, tripId)
+  await registerRetorno(page)
+  // Verificar BD: trip.status='Completado'
+  const { data } = await db.from('trips').select('status').eq('id', tripId).single()
+  if (data?.status !== 'Completado') {
+    throw new Error(`closeTrip: trip ${tripId} sigue en status ${data?.status}, esperado 'Completado'`)
+  }
+}
+```
 
 **Steps:**
 
-- [ ] **Step 1: Leer helpers existentes para patrón**
+- [ ] **Step 1: Leer DeliveryModal.tsx para selectores reales**
 
 ```bash
-grep -n "export" tests/helpers.ts | head -30
+grep -n "data-testid\|line_status\|with_observations\|<select\|<input" src/components/viajes/DeliveryModal.tsx | head -40
 ```
 
-Identificar helpers disponibles: `db`, `BASE`, `login`, `createSolicitud`, `createTrip`, `openTripDetail`, `dispatch`, `registerEntrega`, `registerRetorno`, `cleanupSolicitud`, `pick`. Pueden faltar helpers nuevos para revert + cerrar trip — agregarlos en este task si necesario.
+OBLIGATORIO antes de extender `registerEntrega`. Identificar selectores por línea (probablemente `data-testid` con índice o `getByRole`). Documentar en comentarios del helper qué selectores usa y por qué.
 
-- [ ] **Step 2: Crear archivo con scaffolding y los 13 tests**
+- [ ] **Step 2: Extender `registerEntrega` y crear `closeTrip` en `tests/helpers.ts`**
+
+Mantener firma actual sin romper tests existentes. Agregar opcionales `lines: [{ lineIndex, status, qty? }]`, `notes`, `expectSubmitBlocked` según sección "Helper extensions" del header del Task. Crear `closeTrip(page, tripId)` que registra Retorno y verifica trip.status='Completado'.
+
+Verificar que tests existentes (Cambio 6) siguen verde tras la extensión:
+
+```bash
+npx playwright test entrega-complete --list
+```
+
+Expected: 1+ tests listados. Si falla porque cambió la firma, revertir y rediseñar el overload.
+
+- [ ] **Step 3: Crear `tests/cambio6-5-event-refinement.spec.ts` con 5 tests E2E**
+
+Tests #1, #3, #5, #7, #9 según tabla de la sección "Distribución 5 E2E + 8 BD-direct" del header. Cada test:
+
+1. `await login(page)`
+2. `const { dbId, displayId } = await createSolicitud(page, { project, lines, costCode })` — usar firma REAL del helper (verificar `tests/helpers.ts:66-93`)
+3. Setup adicional: query lineIds desde BD usando dbId (helper no los retorna)
+4. `const { dbId: tripId, confirmationCode } = await createTrip(page, { solicitudId: dbId })` — pasar `solicitudId` para evitar collision
+5. Operaciones según test (dispatch, registerEntrega con lines per-line, etc.)
+6. Verificar BD con `db.from('table').select(...).eq(...)` — NUNCA `db('SQL', [params])`
+7. Cleanup en `afterEach` con `cleanupSolicitud(solicitudId)`
+
+Imports siguiendo patrón de `tests/entrega-complete.spec.ts`. Mensajes/comentarios en español neutro Panamá.
+
+- [ ] **Step 4: Crear `tests/cambio6-5-bd-triggers.spec.ts` con 8 tests BD-direct**
+
+Tests #2, #4, #6, #8, #10, #11, #12, #13 según tabla. Cada test:
+
+1. Setup BD-direct vía `db.from(...).insert(...)` (skip UI completamente)
+   - Crear sm_request, sm_request_lines, trip, trip_line_assignments según necesidad
+   - Estado inicial específico al test (ej: trip con qty_dispatched=10 si test es de dispatched-bound)
+2. Operación bajo test: INSERT trip_event + trip_event_lines, o UPDATE quantity, etc.
+3. Verificar resultado con `db.from(...).select(...)`
+4. Para tests que esperan error (8, 11, 12): catch `PostgrestError` y verificar `error.code` ('23505') o `error.message` (regex de mensaje BD)
+5. Cleanup en `afterEach` con `cleanupSolicitud(dbId)` o `db.from(...).delete()` explícito de las filas
+
+Patrón de cleanup OBLIGATORIO — tests de Cambio 6 dejaron 33 solicitudes huérfanas por falta de cleanup. NO repetir.
+
+Ejemplo de setup BD-direct (referencia, no copy literal):
 
 ```typescript
-// tests/cambio6-5-event-refinement.spec.ts
-import { test, expect } from '@playwright/test'
-import {
-  db, BASE, login, createSolicitud, createTrip, openTripDetail,
-  dispatch, registerEntrega, registerRetorno, cleanupSolicitud, pick,
-} from './helpers'
+const { data: req } = await db.from('sm_requests').insert({
+  request_id: `26-506-SM-T${Date.now() % 1000}`,
+  project_id: '<uuid>',
+  // ... resto de columnas requeridas
+}).select('id').single()
 
-test.describe('Cambio 6.5 — Refinamiento del modelo de eventos', () => {
-  let solicitudIds: string[] = []
+const { data: line } = await db.from('sm_request_lines').insert({
+  request_id: req.id,
+  description: 'Test BD-direct',
+  quantity: 10,
+  // ...
+}).select('id').single()
 
-  test.afterEach(async () => {
-    for (const id of solicitudIds) {
-      await cleanupSolicitud(id).catch(() => {})
-    }
-    solicitudIds = []
-  })
-
-  // Test 1: entrega_ok_parcial_lleva_a_parcial_inmediato
-  test('1. Entrega ok parcial lleva línea a Parcial inmediato (no espera Retorno)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Cemento', quantity: 10 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 10 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 10 }] })
-
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 6, status: 'ok' }],
-    })
-
-    // Verificar BD: línea = Parcial, qty_delivered = 6, qty_scheduled refleja 4 pendientes
-    const line = await db(`SELECT status, qty_delivered, qty_scheduled FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    expect(line[0].status).toBe('Parcial')
-    expect(Number(line[0].qty_delivered)).toBe(6)
-  })
-
-  // Test 2: entrega_rejected_libera_al_backlog_inmediato
-  test('2. Entrega rejected total libera al backlog inmediato', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Varilla', quantity: 5 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 5 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 5 }] })
-
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 5, status: 'rejected' }],
-    })
-
-    // BD: qty_rejected = 5, qty_delivered = 0, qty_dispatched = 5 (Opción α preservado)
-    const tla = await db(`SELECT qty_dispatched, qty_delivered, qty_rejected FROM trip_line_assignments WHERE request_line_id = $1`, [lineIds[0]])
-    expect(Number(tla[0].qty_dispatched)).toBe(5)
-    expect(Number(tla[0].qty_delivered)).toBe(0)
-    expect(Number(tla[0].qty_rejected)).toBe(5)
-
-    // Línea status = Pendiente (todo se rechazó), qty_scheduled = 0
-    const line = await db(`SELECT status, qty_scheduled FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    expect(line[0].status).toBe('Pendiente')
-    expect(Number(line[0].qty_scheduled)).toBe(0)
-  })
-
-  // Test 3: entrega_mixta_ok_rejected (REPRODUCTOR DEL BUG)
-  test('3. Entrega mixta ok+rejected libera solo rejected al backlog (reproductor MOV-2026-058)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [
-        { description: 'Línea 1 rechazada', quantity: 4 },
-        { description: 'Línea 2 entrega parcial', quantity: 6 },
-      ],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [
-        { requestLineId: lineIds[0], qty: 4 },
-        { requestLineId: lineIds[1], qty: 6 },
-      ],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, {
-      lines: [
-        { requestLineId: lineIds[0], qty: 4 },
-        { requestLineId: lineIds[1], qty: 6 },
-      ],
-    })
-
-    await registerEntrega(page, {
-      lines: [
-        { requestLineId: lineIds[0], qty: 4, status: 'rejected' },
-        { requestLineId: lineIds[1], qty: 3, status: 'ok' },
-      ],
-    })
-
-    // Línea 1: rejected → Pendiente (libera al backlog)
-    const line1 = await db(`SELECT status FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    expect(line1[0].status).toBe('Pendiente')
-
-    // Línea 2: ok parcial → Parcial (3 entregados de 6)
-    const line2 = await db(`SELECT status, qty_delivered FROM sm_request_lines WHERE id = $1`, [lineIds[1]])
-    expect(line2[0].status).toBe('Parcial')
-    expect(Number(line2[0].qty_delivered)).toBe(3)
-  })
-
-  // Test 4: entrega_with_observations_inserta_observation
-  test('4. Entrega with_observations inserta delivery_observations + qty_delivered se incrementa', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Cemento dañado', quantity: 8 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 8 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 8 }] })
-
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 8, status: 'with_observations', observationType: 'damaged', observationNotes: 'Bolsas rotas' }],
-      notes: 'Material recibido pero con bolsas rotas en el transporte',
-    })
-
-    const obs = await db(`SELECT observation_type FROM delivery_observations WHERE request_line_id = $1`, [lineIds[0]])
-    expect(obs.length).toBe(1)
-    expect(obs[0].observation_type).toBe('damaged')
-
-    const tla = await db(`SELECT qty_delivered FROM trip_line_assignments WHERE request_line_id = $1`, [lineIds[0]])
-    expect(Number(tla[0].qty_delivered)).toBe(8)
-  })
-
-  // Test 5: entrega_with_observations_requiere_notas (BD-10)
-  test('5. Entrega con with_observations sin notas suficientes es bloqueada por BD (BD-10)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test notas obligatorias', quantity: 3 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 3 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 3 }] })
-
-    // Intentar entrega con with_observations + notas vacías → debe fallar
-    let errorMsg = ''
-    try {
-      await registerEntrega(page, {
-        lines: [{ requestLineId: lineIds[0], qty: 3, status: 'with_observations', observationType: 'wrong_qty' }],
-        notes: '',
-      })
-    } catch (e: unknown) {
-      errorMsg = (e as Error).message
-    }
-    expect(errorMsg).toMatch(/notas son obligatorias/i)
-  })
-
-  // Test 6: retorno_no_modifica_lineas
-  test('6. Retorno no modifica líneas ni assignments — solo cambia trip.status', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test retorno no-op', quantity: 5 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 5 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 5 }] })
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 5, status: 'ok' }],
-    })
-
-    // Snapshot BD pre-Retorno
-    const lineBefore = await db(`SELECT status, qty_delivered, qty_scheduled FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    const tlaBefore = await db(`SELECT qty_dispatched, qty_delivered, qty_rejected, quantity_assigned FROM trip_line_assignments WHERE request_line_id = $1`, [lineIds[0]])
-
-    await registerRetorno(page)
-
-    const lineAfter = await db(`SELECT status, qty_delivered, qty_scheduled FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    const tlaAfter = await db(`SELECT qty_dispatched, qty_delivered, qty_rejected, quantity_assigned FROM trip_line_assignments WHERE request_line_id = $1`, [lineIds[0]])
-    const trip = await db(`SELECT status FROM trips WHERE id = $1`, [tripId])
-
-    expect(lineAfter[0]).toEqual(lineBefore[0])
-    expect(tlaAfter[0]).toEqual(tlaBefore[0])
-    expect(trip[0].status).toBe('Completado')
-  })
-
-  // Test 7: revert_entrega_revierte_qty_delivered_y_qty_rejected (BD-6)
-  test('7. Revert de Entrega revierte qty_delivered y qty_rejected (BD-6)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test revert', quantity: 5 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 5 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 5 }] })
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 3, status: 'ok' }],
-    })
-    // Segundo evento Entrega rejected (asumiendo Bug #4 ya permite si la primera fue parcial — verificar en código)
-    // Si Bug #4 bloquea, este test se simplifica a una sola Entrega ok=3 + revert.
-
-    // Pre-revert: qty_delivered = 3, qty_rejected = 0
-    const tlaPreRevert = await db(`SELECT qty_delivered, qty_rejected FROM trip_line_assignments WHERE request_line_id = $1`, [lineIds[0]])
-    expect(Number(tlaPreRevert[0].qty_delivered)).toBe(3)
-    expect(Number(tlaPreRevert[0].qty_rejected)).toBe(0)
-
-    // Revert el evento Entrega
-    await page.click('button:has-text("Revertir")') // ajustar selector según UI
-    await page.fill('textarea[name="reason"]', 'Test revert qty_delivered')
-    await page.click('button:has-text("Confirmar revertir")')
-    await page.waitForTimeout(500)
-
-    // Post-revert: qty_delivered = 0
-    const tlaPostRevert = await db(`SELECT qty_delivered, qty_rejected FROM trip_line_assignments WHERE request_line_id = $1`, [lineIds[0]])
-    expect(Number(tlaPostRevert[0].qty_delivered)).toBe(0)
-    expect(Number(tlaPostRevert[0].qty_rejected)).toBe(0)
-  })
-
-  // Test 8: revert_doble_del_mismo_evento_bloqueado (BD-9)
-  test('8. Doble revert del mismo evento bloqueado por UNIQUE INDEX (BD-9)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test doble revert', quantity: 4 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 4 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 4 }] })
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 4, status: 'ok' }],
-    })
-
-    // Capturar event_id de la Entrega
-    const ev = await db(`SELECT id FROM trip_events WHERE trip_id = $1 AND event_type = 'Entrega'`, [tripId])
-    const eventId = ev[0].id
-
-    // Primer revert via UI
-    await page.click('button:has-text("Revertir")')
-    await page.fill('textarea[name="reason"]', 'Primer revert')
-    await page.click('button:has-text("Confirmar")')
-    await page.waitForTimeout(500)
-
-    // Segundo INSERT directo de revert (simulando race / doble click) → debe fallar con 23505
-    let errorCode = ''
-    try {
-      await db(`INSERT INTO trip_events (trip_id, event_type, reverts_event_id, notes) VALUES ($1, 'Reversion', $2, 'Segundo revert')`, [tripId, eventId])
-    } catch (e: unknown) {
-      errorCode = (e as { code?: string }).code ?? ''
-    }
-    expect(errorCode).toBe('23505')
-  })
-
-  // Test 9: revert_entrega_en_trip_cerrado_bloqueado (BD-8 + FE-3)
-  test('9. Revert Entrega en trip Completado bloqueado (BD-8 + FE-3)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test revert trip cerrado', quantity: 3 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 3 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 3 }] })
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 3, status: 'ok' }],
-    })
-    await registerRetorno(page) // trip ahora 'Completado'
-
-    // Intentar revert Entrega → debe fallar con mensaje claro
-    let errorMsg = ''
-    try {
-      await page.click('button:has-text("Revertir Entrega")')
-      await page.fill('textarea[name="reason"]', 'Test bloqueo')
-      await page.click('button:has-text("Confirmar")')
-      await page.waitForTimeout(500)
-      // Si llegó acá, capturar error visible en UI
-      const toast = await page.locator('[role="alert"]').textContent()
-      errorMsg = toast ?? ''
-    } catch (e: unknown) {
-      errorMsg = (e as Error).message
-    }
-    expect(errorMsg).toMatch(/viaje ya fue cerrado/i)
-
-    // Verificar BD: el revert no se insertó
-    const reverts = await db(`SELECT COUNT(*) AS c FROM trip_events WHERE reverts_event_id IS NOT NULL AND trip_id = $1`, [tripId])
-    expect(Number(reverts[0].c)).toBe(0)
-  })
-
-  // Test 10: edit_quantity_permitido_post_envio_pre_salida (H1)
-  test('10. Edit quantity permitido post-envío pre-Salida si nuevo qty ≥ assigned', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test H1 permitido', quantity: 10 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 8 }],
-    })
-    // No dispatch — línea queda 'Programada'
-
-    // Reducir quantity de 10 a 8 (= assigned) — debe permitir
-    let errorMsg = ''
-    try {
-      await db(`UPDATE sm_request_lines SET quantity = 8 WHERE id = $1`, [lineIds[0]])
-    } catch (e: unknown) {
-      errorMsg = (e as Error).message
-    }
-    expect(errorMsg).toBe('')
-
-    const line = await db(`SELECT quantity FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    expect(Number(line[0].quantity)).toBe(8)
-  })
-
-  // Test 11: edit_quantity_bloqueado_por_qty_dispatched (H1 condición 1)
-  test('11. Edit quantity bloqueado por qty_dispatched (H1)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test H1 dispatched', quantity: 10 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 10 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 10 }] })
-
-    // Intentar reducir quantity a 5 — debe fallar (qty_dispatched=10)
-    let errorMsg = ''
-    try {
-      await db(`UPDATE sm_request_lines SET quantity = 5 WHERE id = $1`, [lineIds[0]])
-    } catch (e: unknown) {
-      errorMsg = (e as Error).message
-    }
-    expect(errorMsg).toMatch(/cantidad ya despachada/i)
-  })
-
-  // Test 12: edit_quantity_bloqueado_por_qty_delivered (H1 condición 2)
-  test('12. Edit quantity bloqueado por qty_delivered (H1 condición 2)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test H1 delivered', quantity: 10 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 10 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 10 }] })
-    await registerEntrega(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 4, status: 'ok' }],
-    })
-
-    // Intentar reducir quantity a 3 — debe fallar (qty_delivered=4)
-    let errorMsg = ''
-    try {
-      await db(`UPDATE sm_request_lines SET quantity = 3 WHERE id = $1`, [lineIds[0]])
-    } catch (e: unknown) {
-      errorMsg = (e as Error).message
-    }
-    expect(errorMsg).toMatch(/cantidad ya entregada/i)
-  })
-
-  // Test 13: edit_quantity_aumentar_siempre_permitido (H1)
-  test('13. Aumentar quantity siempre permitido (H1)', async ({ page }) => {
-    await login(page)
-    const { solicitudId, lineIds } = await createSolicitud(page, {
-      lines: [{ description: 'Test H1 aumentar', quantity: 5 }],
-    })
-    solicitudIds.push(solicitudId)
-
-    const { tripId } = await createTrip(page, {
-      lines: [{ requestLineId: lineIds[0], qty: 5 }],
-    })
-    await openTripDetail(page, tripId)
-    await dispatch(page, { lines: [{ requestLineId: lineIds[0], qty: 5 }] })
-
-    // Aumentar a 10 — siempre permitido
-    let errorMsg = ''
-    try {
-      await db(`UPDATE sm_request_lines SET quantity = 10 WHERE id = $1`, [lineIds[0]])
-    } catch (e: unknown) {
-      errorMsg = (e as Error).message
-    }
-    expect(errorMsg).toBe('')
-
-    const line = await db(`SELECT quantity FROM sm_request_lines WHERE id = $1`, [lineIds[0]])
-    expect(Number(line[0].quantity)).toBe(10)
-  })
-})
+// ... etc
 ```
 
-- [ ] **Step 3: Verificar listado de tests**
+NO inventar columnas — leer schema actual via `src/lib/types/database.ts` (tipos generados post-T2).
+
+- [ ] **Step 5: Verificar listado de los 13 tests**
 
 ```bash
-npx playwright test cambio6-5-event-refinement.spec.ts --list
+npx playwright test cambio6-5-event-refinement cambio6-5-bd-triggers --list
 ```
 
-Expected: 13 tests listados.
+Expected: 13 tests listados (5 + 8). Si menos, falta alguno; si más, hay duplicación.
 
-- [ ] **Step 4: NO correr tests verde aún — espera T9**
+- [ ] **Step 6: NO correr verde aún — espera T9**
 
-Los tests pueden fallar parcialmente hasta que FE-1 a FE-4 (T4-T7) eliminen el doble UPDATE y agreguen guards. Verde se verifica en T9.
+Los tests E2E pueden fallar parcialmente hasta que FE-1 a FE-4 (T4-T7) eliminen el doble UPDATE y agreguen guards. Tests BD-direct deberían pasar verde desde el inicio (BD ya está aplicada en T1).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add tests/cambio6-5-event-refinement.spec.ts
+git add tests/cambio6-5-event-refinement.spec.ts tests/cambio6-5-bd-triggers.spec.ts tests/helpers.ts
 git commit -m "$(cat <<'EOF'
-test: T3 Cambio 6.5 — 13 tests E2E nuevos para refinamiento del modelo de eventos
+test: T3 Cambio 6.5 — 13 tests híbridos (5 E2E + 8 BD-direct)
 
-Tests RED phase. Cubren los 10 items BD + 4 items FE del spec. Cleanup
-obligatorio en afterEach para prevenir solicitudes huérfanas. Verde se
-verifica en T9 después de aplicar cambios FE.
+División proporcional al riesgo (Opción B aprobada por James):
+- 5 E2E (cambio6-5-event-refinement.spec.ts): tests #1, #3, #5, #7, #9 —
+  cubren integración FE↔BD post-FE-1/FE-2 y flows nuevos UI
+- 8 BD-direct (cambio6-5-bd-triggers.spec.ts): tests #2, #4, #6, #8,
+  #10-13 — verifican lógica BD pura sin UI overhead
 
-Tests críticos:
-- Test 3: reproductor literal del bug MOV-2026-058 (entrega mixta)
-- Test 7: BD-6 sync_assignment_on_delivery_revert
-- Test 8: BD-9 UNIQUE INDEX one_revert_per_event
-- Test 12: H1 condición 2 (bloqueado por qty_delivered)
+Helpers extendidos: registerEntrega acepta opt nuevo lines: [{lineIndex,
+status, qty?}] para entrega mixta (Test 3, reproductor del bug
+MOV-2026-058). closeTrip helper nuevo para Test 9.
+
+Cleanup obligatorio en afterEach (E2E + BD-direct). Tests de Cambio 6
+dejaron 33 solicitudes huérfanas; no repetir.
+
+Tests RED phase para los E2E hasta T9. BD-direct pueden ya estar verde
+(BD aplicada en T1).
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
 
----
 
 ## Task 4: FE-1 — Eliminar UPDATE manual qty_delivered en handleDelivery
 
