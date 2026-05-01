@@ -100,21 +100,25 @@ test.describe('Cambio 6.5 — Refinamiento del modelo de eventos (E2E)', () => {
   })
 
   /**
-   * Test 3 (escrito PRIMERO — stress-testea helper extendido registerEntrega con lines per-línea).
-   * Reproductor literal del bug MOV-2026-058 (smoke 2026-04-30).
+   * Test 3 (reproductor literal del bug MOV-2026-058 — smoke 2026-04-30).
    *
    * Setup: solicitud con 2 líneas. Trip con assignments para ambas. Salida.
    * Acción: Entrega mixta — línea 1 rejected (qty=4), línea 2 ok parcial (qty=3 de 6).
-   * Verifica:
-   *   - Línea 1 status='Pendiente' inmediato (rejected libera al backlog).
-   *   - Línea 2 status='Parcial' inmediato (3 entregados de 6, sin esperar Retorno).
-   *   - Assignments: línea 1 qty_rejected=4 / qty_delivered=0; línea 2 qty_delivered=3 / qty_rejected=0.
-   *   - qty_dispatched preservado en ambas (Opción α).
    *
-   * RED until T4 (FE-1 elimina doble UPDATE) + T5 (FE-2). Si FE-1 no se aplica:
-   * doble incremento de qty_delivered línea 2 → falla aserción.
+   * Verificación dual alineada con Decisión #13 del spec ('Parcial' es terminal,
+   * requiere qty_scheduled_active=0):
+   *   1. Inmediato post-Entrega (trip activo):
+   *      - Línea 1 (rejected total): 'Pendiente' (libera al backlog post-amend BD recalc)
+   *      - Línea 2 (ok parcial 3/6): 'En Transito' (qty_scheduled_active=3>0 → step 3)
+   *   2. Post-cierre trip (Retorno → trip='Completado'):
+   *      - Línea 1: sigue 'Pendiente' (estado operacional no cambia con cierre)
+   *      - Línea 2: 'Parcial' (qty_scheduled_active=0, qty_delivered=3<6 → step 4)
+   *
+   * Assignments preservados en ambos puntos:
+   *   - Línea 1: qty_dispatched=4, qty_delivered=0, qty_rejected=4 (Opción α)
+   *   - Línea 2: qty_dispatched=6, qty_delivered=3, qty_rejected=0
    */
-  test('3. Entrega mixta ok+rejected libera solo rejected al backlog (reproductor MOV-2026-058)', async ({ page }) => {
+  test('3. Entrega mixta ok+rejected: rejected libera al backlog inmediato, ok parcial transiciona En Transito → Parcial al cerrar trip', async ({ page }) => {
     const sol = await createSolicitud(page, {
       lines: [
         {
@@ -162,43 +166,64 @@ test.describe('Cambio 6.5 — Refinamiento del modelo de eventos (E2E)', () => {
       ],
     })
 
-    // Verificar BD: traer líneas + assignments via tripId nuevo
     const tripId = trip.tripId
 
-    // Verificar BD: traer líneas + assignments
-    const { data: lines } = await db
+    // ASERCIÓN 1 — post-Entrega, trip todavía activo:
+    // - Línea 1 (rejected total): 'Pendiente' inmediato (libera al backlog)
+    // - Línea 2 (ok parcial 3/6): 'En Transito' (qty_scheduled_active=3>0 → step 3)
+    const { data: linesActive } = await db
       .from('sm_request_lines')
       .select('id, description, status, qty_delivered, qty_scheduled, line_number')
       .eq('request_id', sol.dbId)
       .order('line_number')
-    expect(lines?.length).toBe(2)
+    expect(linesActive?.length).toBe(2)
 
-    const line1 = lines![0]
-    const line2 = lines![1]
+    const line1Active = linesActive![0]
+    const line2Active = linesActive![1]
 
-    // Línea 1 (rejected total): vuelve a Pendiente, qty_delivered=0
-    expect(line1.status).toBe('Pendiente')
-    expect(Number(line1.qty_delivered)).toBe(0)
+    expect(line1Active.status).toBe('Pendiente')
+    expect(Number(line1Active.qty_delivered)).toBe(0)
 
-    // Línea 2 (ok parcial 3 de 6): Parcial, qty_delivered=3
-    expect(line2.status).toBe('Parcial')
-    expect(Number(line2.qty_delivered)).toBe(3)
+    expect(line2Active.status).toBe('En Transito')
+    expect(Number(line2Active.qty_delivered)).toBe(3)
 
-    // Assignments: verificar qty_rejected y qty_dispatched preservado
-    const { data: assignments } = await db
+    // Assignments post-Entrega (verifican B1 fix + T4 fix):
+    //   línea 1 qty_rejected=4 / qty_delivered=0 (B1 envía maxQty cuando rejected)
+    //   línea 2 qty_delivered=3 / qty_rejected=0 (T4 elimina doble UPDATE)
+    //   qty_dispatched preservado en ambas (Opción α)
+    const { data: assignmentsActive } = await db
       .from('trip_line_assignments')
       .select('request_line_id, qty_dispatched, qty_delivered, qty_rejected, quantity_assigned')
       .eq('trip_id', tripId)
-    const tla1 = assignments?.find((a) => a.request_line_id === line1.id)
-    const tla2 = assignments?.find((a) => a.request_line_id === line2.id)
+    const tla1Active = assignmentsActive?.find((a) => a.request_line_id === line1Active.id)
+    const tla2Active = assignmentsActive?.find((a) => a.request_line_id === line2Active.id)
 
-    expect(Number(tla1?.qty_dispatched)).toBe(4)
-    expect(Number(tla1?.qty_delivered)).toBe(0)
-    expect(Number(tla1?.qty_rejected)).toBe(4)
+    expect(Number(tla1Active?.qty_dispatched)).toBe(4)
+    expect(Number(tla1Active?.qty_delivered)).toBe(0)
+    expect(Number(tla1Active?.qty_rejected)).toBe(4)
 
-    expect(Number(tla2?.qty_dispatched)).toBe(6)
-    expect(Number(tla2?.qty_delivered)).toBe(3)
-    expect(Number(tla2?.qty_rejected)).toBe(0)
+    expect(Number(tla2Active?.qty_dispatched)).toBe(6)
+    expect(Number(tla2Active?.qty_delivered)).toBe(3)
+    expect(Number(tla2Active?.qty_rejected)).toBe(0)
+
+    // Cerrar trip (Retorno → trip='Completado')
+    await closeTrip(page, tripId)
+
+    // ASERCIÓN 2 — post-Retorno, trip cerrado:
+    // - Línea 1: sigue 'Pendiente' (estado operacional no cambia con cierre)
+    // - Línea 2: 'Parcial' (qty_scheduled_active=0 porque trip Completado no cuenta,
+    //   qty_delivered_total=3 < quantity=6 → step 4 recalc)
+    const { data: linesClosed } = await db
+      .from('sm_request_lines')
+      .select('status, qty_delivered, line_number')
+      .eq('request_id', sol.dbId)
+      .order('line_number')
+
+    expect(linesClosed![0].status).toBe('Pendiente')
+    expect(Number(linesClosed![0].qty_delivered)).toBe(0)
+
+    expect(linesClosed![1].status).toBe('Parcial')
+    expect(Number(linesClosed![1].qty_delivered)).toBe(3)
   })
 
   /**

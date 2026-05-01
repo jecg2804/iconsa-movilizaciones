@@ -809,6 +809,78 @@ Total: 12/14 verde + 2 RED esperados. Match exacto del plan T3 — los 2 RED son
 
 ---
 
+## Task 4-pre: Bug B fix — DeliveryModal envía qty_dispatched cuando line_status='rejected'
+
+**Goal:** Cuando el usuario selecciona `'Rechazado'` en una línea del DeliveryModal, el modal fuerza `qty=0` (input disabled). El handler `handleConfirm` enviaba ese qty=0 al INSERT de `trip_event_lines`, y el trigger BD-5 hacía `qty_rejected += 0 = 0` — la columna `qty_rejected` quedaba inerte y toda la mecánica del Cambio 6.5 para rejected (libera al backlog vía `qty_rejected`) NO funcionaba con el frontend actual.
+
+**Bug descubierto durante T3 testing** (Test 3 línea 1 reportaba `'En Transito'` post-Entrega rejected en vez de `'Pendiente'` esperado). No estaba en el plan T1-T11 original — emergió como trabajo bloqueante adicional. T4-pre se ejecuta ANTES de T4 porque T4 (eliminar UPDATE manual qty_delivered) sin T4-pre dejaría el Cambio 6.5 inerte para casos rejected.
+
+**Decisión de diseño aprobada por James (B1 vs B2 vs B3):**
+
+- **B1 elegida** — fix puramente FE, cero cambios BD. `handleConfirm` envía `quantity = l.maxQty` cuando `line_status='rejected'`. Cambio 1-line ternario.
+- B2 (trigger BD-5 calcula qty_dispatched automático) — descartada por anti-DRY (FE ya tiene `maxQty` en mano) y mover lógica a BD opaca.
+- B3 (rejected con qty parcial) — descartada por scope, requiere rediseño UI con 2 inputs.
+
+Modelo conceptual ya alineado con UX existente: el input disabled forzado a 0 cuando rejected refuerza visualmente que rejected = "todo o nada respecto al qty del despacho".
+
+**Files:**
+
+- Modify: `src/components/viajes/DeliveryModal.tsx` (handleConfirm payload, líneas ~192-198)
+
+**Acceptance Criteria:**
+
+- [ ] Cambio 1-line ternario en `handleConfirm`: `quantity: l.status === 'rejected' ? l.maxQty : l.qty`
+- [ ] Comentario explicando el WHY (Bug B fix Cambio 6.5)
+- [ ] `npm run build` pasa
+- [ ] Manual: registrar entrega con línea rejected, verificar BD que `trip_event_lines.quantity = qty_dispatched original` (no 0)
+
+**Edge cases verificados:**
+
+- `deliverableAssignments` filtra por `line.status === 'En Transito' AND qty_delivered === 0` → `maxQty > 0` siempre.
+- Validación `canConfirm` (`hasDeliverableLines = lines.some((l) => l.status !== 'rejected' && l.quantity > 0)`) no se afecta — sigue exigiendo al menos 1 línea no-rejected con qty>0.
+- CHECK `qty_delivered + qty_rejected ≤ qty_dispatched`: con B1 línea rejected → trigger sube qty_rejected = qty_dispatched. Suma con qty_delivered=0 = qty_dispatched. CHECK pasa exactamente en el borde.
+- Multi-viaje (línea con 2 trips, trip #1 entregó parcial, trip #2 rechaza el resto): qty_delivered_total preserva la entrega del trip #1, qty_scheduled_active = 0 post-rejected, recalc step 4 → `'Parcial'`. Cubierto por Decisión #13 del spec.
+
+**Verify:** `npm run build` exit 0. Test 3 línea 1 transiciona a `'Pendiente'` post-T4-pre + post-T4.
+
+**Steps:**
+
+- [ ] **Step 1: Aplicar el ternario en handleConfirm**
+
+```typescript
+lines: lines.map((l) => ({
+  request_line_id: l.request_line_id,
+  // Bug B fix (Cambio 6.5): cuando line_status='rejected', el modal fuerza
+  // l.qty=0 (input disabled). Pero el trigger BD-5 sync_assignment_on_delivery_event
+  // hace qty_rejected += quantity, entonces enviar 0 dejaría qty_rejected=0.
+  // Modelo conceptual: rejected = "rechazó toda la línea de este viaje" → enviamos
+  // l.maxQty (= qty_dispatched original).
+  quantity: l.status === 'rejected' ? l.maxQty : l.qty,
+  line_status: l.status,
+  observation_type: l.status === 'with_observations' ? l.observationType || undefined : undefined,
+  observation_notes: l.status === 'with_observations' ? l.observationNotes || undefined : undefined,
+})),
+```
+
+- [ ] **Step 2: Build**
+
+```bash
+npm run build
+```
+
+Expected: exit 0.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/components/viajes/DeliveryModal.tsx
+git commit -m "fix(DeliveryModal): envía qty_dispatched cuando line_status=rejected (Bug B descubierto en T3)"
+```
+
+Mensaje detallado debe documentar el bug, decisión B1 vs B2 vs B3, edge cases verificados, y referencia a Decisión #13 del spec.
+
+---
+
 ## Task 4: FE-1 — Eliminar UPDATE manual qty_delivered en handleDelivery
 
 **Goal:** El sync trigger BD-5 ya actualiza `qty_delivered`/`qty_rejected` en `trip_line_assignments` automáticamente al INSERT de `trip_event_lines`. Eliminar el código duplicado del frontend (`mis-viajes/[id]:729-743`) que hacía `UPDATE qty_delivered += quantity` manualmente — ese doble UPDATE generaría incrementos duplicados.
