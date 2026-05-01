@@ -721,26 +721,13 @@ export default function Page() {
           await supabase.from('delivery_observations').insert(observations)
         }
 
-        // 4. UPDATE trip_line_assignments: qty_delivered (fresh SELECT para evitar race
-        // condition bajo entregas concurrentes desde dos dispositivos. El idempotency
-        // checkpoint de step 1 protege contra retries; este fresh SELECT protege contra
-        // concurrencia real. El trigger BD recalc_qty_for_line se dispara al UPDATE
-        // y reconcilia qty_scheduled, qty_delivered y status en sm_request_lines.
-        for (const line of accepted) {
-          const { data: freshAssignment } = await supabase
-            .from('trip_line_assignments')
-            .select('qty_delivered')
-            .eq('trip_id', trip.id)
-            .eq('request_line_id', line.request_line_id)
-            .single()
-
-          const currentDelivered = freshAssignment?.qty_delivered ?? 0
-          await supabase
-            .from('trip_line_assignments')
-            .update({ qty_delivered: currentDelivered + line.quantity })
-            .eq('trip_id', trip.id)
-            .eq('request_line_id', line.request_line_id)
-        }
+        // 4. qty_delivered y qty_rejected en trip_line_assignments se sincronizan
+        // automáticamente vía trigger BD-5 sync_assignment_on_delivery_event al
+        // INSERT del paso 2 (FOR EACH ROW). El recalc_qty_for_line se dispara
+        // en cascada y reconcilia qty_scheduled/qty_delivered/status de
+        // sm_request_lines. Race entre dispositivos concurrentes resuelta por el
+        // CHECK qty_delivered+qty_rejected<=qty_dispatched (BD-2/BD-3) — la
+        // segunda concurrent transaction falla con CHECK violation si excede.
 
         // 5. UPDATE sm_request_lines.delivered_at (no calculado por trigger).
         //    Setear timestamp solo cuando la línea quedó completamente Entregada.
