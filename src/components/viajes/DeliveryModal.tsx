@@ -191,7 +191,12 @@ export function DeliveryModal({
         confirmation_code: code,
         lines: lines.map((l) => ({
           request_line_id: l.request_line_id,
-          quantity: l.qty,
+          // Bug B fix (Cambio 6.5): cuando line_status='rejected', el modal fuerza
+          // l.qty=0 (input disabled). Pero el trigger BD-5 sync_assignment_on_delivery_event
+          // hace qty_rejected += quantity, entonces enviar 0 dejaría qty_rejected=0 — el
+          // sistema no marca nada como rechazado. Modelo conceptual: rejected = "rechazó
+          // toda la línea de este viaje" → enviamos l.maxQty (= qty_dispatched original).
+          quantity: l.status === 'rejected' ? l.maxQty : l.qty,
           line_status: l.status,
           observation_type: l.status === 'with_observations' ? l.observationType || undefined : undefined,
           observation_notes: l.status === 'with_observations' ? l.observationNotes || undefined : undefined,
