@@ -33,7 +33,19 @@ setup('authenticate admin user', async ({ page }) => {
 
   // Capturar cookies que el SSR client trata de setear durante signIn.
   // Los nombres son los exactos que @supabase/ssr usa (sb-{ref}-auth-token...).
-  const capturedCookies: Array<{ name: string; value: string; options?: { maxAge?: number; httpOnly?: boolean; secure?: boolean; sameSite?: 'lax' | 'strict' | 'none'; path?: string } }> = []
+  // Tipo amplio para sameSite — @supabase/ssr usa SerializeOptions de cookie lib que
+  // acepta boolean además de los strings 'lax'/'strict'/'none'. Narrowing al consumir.
+  const capturedCookies: Array<{
+    name: string
+    value: string
+    options?: {
+      maxAge?: number
+      httpOnly?: boolean
+      secure?: boolean
+      sameSite?: boolean | 'lax' | 'strict' | 'none'
+      path?: string
+    }
+  }> = []
 
   const supabase = createServerClient(url, anonKey, {
     cookies: {
@@ -55,16 +67,23 @@ setup('authenticate admin user', async ({ page }) => {
 
   // Inyectar las cookies capturadas al browser context con dominio localhost.
   await page.context().addCookies(
-    capturedCookies.map((c) => ({
-      name: c.name,
-      value: c.value,
-      domain: 'localhost',
-      path: c.options?.path ?? '/',
-      httpOnly: c.options?.httpOnly ?? true,
-      secure: c.options?.secure ?? false,
-      sameSite: ((c.options?.sameSite ?? 'lax').charAt(0).toUpperCase() + (c.options?.sameSite ?? 'lax').slice(1)) as 'Lax' | 'Strict' | 'None',
-      // expires opcional — sin él la cookie es session-only, suficiente para tests
-    })),
+    capturedCookies.map((c) => {
+      // Narrowing: si options.sameSite es boolean, mapear a default 'Lax'. Solo
+      // strings se pasan al toUpperCase() de Playwright.
+      const rawSameSite = c.options?.sameSite
+      const sameSiteStr: 'lax' | 'strict' | 'none' =
+        typeof rawSameSite === 'string' ? rawSameSite : 'lax'
+      return {
+        name: c.name,
+        value: c.value,
+        domain: 'localhost',
+        path: c.options?.path ?? '/',
+        httpOnly: c.options?.httpOnly ?? true,
+        secure: c.options?.secure ?? false,
+        sameSite: (sameSiteStr.charAt(0).toUpperCase() + sameSiteStr.slice(1)) as 'Lax' | 'Strict' | 'None',
+        // expires opcional — sin él la cookie es session-only, suficiente para tests
+      }
+    }),
   )
 
   // Verificar autenticación navegando a /dashboard.
