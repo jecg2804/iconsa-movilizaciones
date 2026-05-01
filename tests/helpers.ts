@@ -534,10 +534,11 @@ export async function registerEntrega(
       // Detalles de with_observations
       if (line.status === 'with_observations') {
         if (line.observationType) {
-          // El Select "Tipo de observación" aparece dentro del lineContainer cuando status cambia
-          const obsTypeBtn = lineContainer
-            .getByRole('button', { name: /^(Seleccionar\.\.\.|Material dañado|Cantidad incorrecta|Item equivocado|Otro)$/ })
-            .first()
+          // El Select "Tipo de observación" aparece dentro del lineContainer cuando status cambia.
+          // Usamos getByLabel — matchea por la asociación <label htmlFor="tipo-de-observación">
+          // ↔ <button id="tipo-de-observación"> que el Select component renderiza (ver
+          // src/components/ui/Select.tsx). Más determinístico que regex sobre nombre accesible.
+          const obsTypeBtn = lineContainer.getByLabel('Tipo de observación')
           await obsTypeBtn.click()
           await page.waitForTimeout(300)
           await page.getByRole('option', { name: observationLabels[line.observationType] }).click()

@@ -758,6 +758,57 @@ EOF
 ```
 
 
+### Notas de ejecución T3 (post-implementación)
+
+Durante la ejecución del Task 3 emergieron 3 desviaciones del plan original que se documentan acá para no perder contexto:
+
+**1. Decisión arquitectural — `rejected total con assignment vivo` → `'Pendiente'` (no `'Programada'`).**
+
+Al escribir Test 3 (reproductor MOV-2026-058) descubrí que el step 5 del recalc `recalc_qty_for_line` (versión BD-4 de la migración consolidada) mapeaba el caso edge "todo el qty asignado fue rechazado y nada entregado" a `'Programada'`. Eso contradice literalmente el spec del Cambio 6.5:
+
+> "Entrega finaliza el destino de cada línea entregada — `ok` y `with_observations` cuentan a `qty_delivered`; `rejected` libera al backlog vía nueva columna `qty_rejected`."
+
+"Liberar al backlog" se manifiesta operacionalmente como `'Pendiente'` (el pool del que Charris reprograma), no `'Programada'` (que implica "ya hay un trip activo cubriéndola").
+
+Justificación tripartita (más allá del spec):
+
+- **Industria construcción** (Procore, Sage 300 CRE, e-Builder) — material rejected vuelve a "open requirements" del PM, no permanece "scheduled".
+- **State machines limpias** — `sm_request_lines.status` lo leen múltiples consumers (backlog UI, reportes, calendario, futuras notificaciones). Si dice `'Programada'` cuando la realidad es "rejected total, necesita reprogramar", cada consumer debe recordar aplicar filtro `qty_scheduled_active > 0`. Anti-patrón distribuido que el Cambio 6.5 buscó eliminar al mover mutación de FE a BD.
+- **ICONSA operacional** — Charris usa `/programacion` como source of truth. Líneas zombie en `'Programada'` no aparecen en backlog, pero el plan rechazó el material y necesita reasignación.
+
+Amend BD aplicado: migración `cambio6_5_recalc_simplify_pendiente_on_rejected_total` (version `20260501015941`, 2026-05-01 ~01:59 UTC). Simplifica el orden del recalc de 6 puntos a 5 (elimina step 5 `'Programada'`). Backfill ejecutado, sin zombies en staging. Documentado como entry `[bd]` en `Docs/CHANGELOG.md` con SQL completo + rollback.
+
+Test #4 BD-direct ajustado en consecuencia: aserción `'Programada'` → `'Pendiente'` con comentario reescrito explicando los 5 puntos post-amend. Lección operativa: ante amend de un trigger/función, grep todos los tests que assert sobre esa lógica — incluso los que no son target del amend.
+
+**2. Bug ambiental — login form rompe en Playwright headless (BL-E2E-AUTH-BLOCKED).**
+
+El form de login retorna "Correo o contraseña incorrectos" al ejecutarse en Playwright headless aunque las credenciales sean correctas y `supabase-js` Node con las mismas funciona perfecto. Verificado: env vars idénticas, password hex dump idéntico, curl directo a `/auth/v1/token?grant_type=password` retorna session válida. Sospechosos: Sentry tunnel interceptando network calls, Next.js 16 SSR cookie handling, drift entre `@supabase/ssr` y la action del form.
+
+Workaround aplicado en Cambio 6.5: `tests/auth.setup.ts` hace `signInWithPassword` via `@supabase/ssr` Node con cookie tracker custom, captura las cookies con los nombres exactos que el SSR client setea, las inyecta al browser context con `domain='localhost'`, y guarda `storageState` en `tests/.auth/user.json`. Los specs Cambio 6.5 arrancan ya autenticados via `playwright.config.ts` project `cambio6-5-e2e` con `storageState` + dependencia del project `cambio6-5-setup`.
+
+Solo cubre 1 spec (cambio6-5-event-refinement). Suite Cambio 6 (18 tests) sigue con bug latente — no se tocó para no introducir riesgo. Resolver globalmente cuando se aborde fuera del scope del Cambio 6.5. Documentado en BACKLOG como BL-E2E-AUTH-BLOCKED (5to entry de T10 — agregado tras este descubrimiento).
+
+**3. Test 1 aserción dual.**
+
+Aserción original era `status='Parcial'` post-Entrega. Pero el recalc post-amend correctamente retorna `'En Transito'` mientras el trip está activo (`qty_scheduled_active=4>0` → step 3) y solo transiciona a `'Parcial'` al cerrar el trip (`qty_scheduled_active=0`, `qty_delivered=6<10` → step 4). Test 1 ahora verifica AMBOS estados en el flujo completo:
+
+1. Inmediato post-Entrega (trip activo) → `'En Transito'` + qty correctos.
+2. Post-`closeTrip()` (Retorno → trip `'Completado'`) → `'Parcial'` + qty preservado.
+
+Cubre el flujo completo y atrapa tanto el doble UPDATE de FE-1 incompleto (en step 1) como una hipotética regresión del cierre (en step 2).
+
+**Resultado real de la suite (post-amend BD):**
+
+- ✅ 8/8 BD-direct verde (Test #4 ahora con `'Pendiente'`)
+- ✅ E2E setup 1/1 verde (storageState bypass funciona)
+- ✅ E2E Tests 1, 7, 9 verde (3/5)
+- ❌ E2E Test 3 RED esperado hasta T4-T5 (FE-1/FE-2 elimina UPDATE manual `qty_delivered`)
+- ❌ E2E Test 5 RED esperado hasta T7 (FE-4 valida `notes` required cuando hay `with_observations`)
+
+Total: 12/14 verde + 2 RED esperados. Match exacto del plan T3 — los 2 RED son los tests que el plan documenta como dependientes de FE-1/FE-2/FE-4.
+
+---
+
 ## Task 4: FE-1 — Eliminar UPDATE manual qty_delivered en handleDelivery
 
 **Goal:** El sync trigger BD-5 ya actualiza `qty_delivered`/`qty_rejected` en `trip_line_assignments` automáticamente al INSERT de `trip_event_lines`. Eliminar el código duplicado del frontend (`mis-viajes/[id]:729-743`) que hacía `UPDATE qty_delivered += quantity` manualmente — ese doble UPDATE generaría incrementos duplicados.
@@ -1205,20 +1256,21 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 10: BACKLOG entries — 4 nuevos items
+## Task 10: BACKLOG entries — 5 nuevos items
 
-**Goal:** Agregar a `Docs/BACKLOG.md` los 4 items que se decidieron mover ahí (no scope de Cambio 6.5 pero importantes para sprint futuro).
+**Goal:** Agregar a `Docs/BACKLOG.md` los 5 items que se decidieron mover ahí (no scope de Cambio 6.5 pero importantes para sprint futuro). El 5to (BL-E2E-AUTH-BLOCKED) emergió durante T3 al descubrir el bug del form de login en Playwright headless.
 
 **Files:**
-- Modify: `Docs/BACKLOG.md` (agregar 4 entries en sección apropiada)
+- Modify: `Docs/BACKLOG.md` (agregar 5 entries en sección apropiada)
 
 **Acceptance Criteria:**
 - [ ] BL-EXCLUSIVITY agregado con: descripción, query SQL diagnóstico (CTE multi_modality), edge cases, nota explícita "correr en prod ANTES de diseñar y aplicar el constraint"
 - [ ] BL-RPC-CONVERSION agregado: descripción, razón (atomicidad), prioridad (post-merge polish)
 - [ ] BL-SESSION-START-RULE agregado: scope (crear .claude/rules/session-start.md o agregar a tool-usage.md)
 - [ ] BL-CLAUDE-FOLDER-CLEANUP agregado: referencia al doc auditoría `Docs/reference/claude-folder-audit.md` (ya existe per git status)
+- [ ] BL-E2E-AUTH-BLOCKED agregado: form de login retorna "Correo o contraseña incorrectos" en Playwright headless aunque credenciales correctas y supabase-js Node con las mismas funciona; sospechosos (Sentry tunnel, Next.js 16 SSR cookie handling, drift @supabase/ssr ↔ form action); workaround aplicado en Cambio 6.5 (`tests/auth.setup.ts` con storageState bypass via @supabase/ssr Node, solo cubre 1 spec, Cambio 6 sigue con bug latente); resolver globalmente cuando se aborde fuera del scope del Cambio 6.5
 
-**Verify:** `grep -E "BL-EXCLUSIVITY|BL-RPC-CONVERSION|BL-SESSION-START-RULE|BL-CLAUDE-FOLDER-CLEANUP" Docs/BACKLOG.md` retorna 4 matches.
+**Verify:** `grep -E "BL-EXCLUSIVITY|BL-RPC-CONVERSION|BL-SESSION-START-RULE|BL-CLAUDE-FOLDER-CLEANUP|BL-E2E-AUTH-BLOCKED" Docs/BACKLOG.md` retorna 5 matches.
 
 **Steps:**
 
@@ -1230,12 +1282,13 @@ head -100 Docs/BACKLOG.md
 
 Identificar dónde encajan los nuevos items (sección "Items pendientes" o equivalente, ordenados por prioridad).
 
-- [ ] **Step 2: Agregar las 4 entries**
+- [ ] **Step 2: Agregar las 5 entries**
 
 Copiar el contenido literal de las entries del spec sección "Items para BACKLOG", asegurando que cada entry tenga:
 - Título con prefijo `BL-`
 - Descripción concisa
 - Para BL-EXCLUSIVITY: bloque SQL completo + 3 edge cases (transiciones, double-click, legacy)
+- Para BL-E2E-AUTH-BLOCKED: síntoma exacto + lo que se descartó (env vars verificadas, password hex dump idéntico, curl directo a auth/v1/token funciona) + sospechosos + workaround aplicado en Cambio 6.5
 - Para todas: nota de prioridad (post-merge / sprint futuro)
 
 - [ ] **Step 3: Commit**
@@ -1243,12 +1296,13 @@ Copiar el contenido literal de las entries del spec sección "Items para BACKLOG
 ```bash
 git add Docs/BACKLOG.md
 git commit -m "$(cat <<'EOF'
-docs: T10 Cambio 6.5 — BACKLOG entries (BL-EXCLUSIVITY, BL-RPC-CONVERSION, BL-SESSION-START-RULE, BL-CLAUDE-FOLDER-CLEANUP)
+docs: T10 Cambio 6.5 — BACKLOG entries (BL-EXCLUSIVITY, BL-RPC-CONVERSION, BL-SESSION-START-RULE, BL-CLAUDE-FOLDER-CLEANUP, BL-E2E-AUTH-BLOCKED)
 
-4 items movidos de scope Cambio 6.5 a BACKLOG. BL-EXCLUSIVITY incluye
+5 items movidos de scope Cambio 6.5 a BACKLOG. BL-EXCLUSIVITY incluye
 query SQL de diagnóstico para correr en prod ANTES de diseñar el
 constraint. BL-CLAUDE-FOLDER-CLEANUP referencia el doc de auditoría
-ya existente en Docs/reference/.
+ya existente en Docs/reference/. BL-E2E-AUTH-BLOCKED documenta el bug
+descubierto durante T3 con workaround storageState aplicado.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF

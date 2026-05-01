@@ -6,6 +6,210 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ## 2026-04-30
 
+- [bd] **Cambio 6.5 amend — `recalc_qty_for_line`: rejected total con assignment vivo → 'Pendiente' (no 'Programada').** Aplicada por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-05-01 ~01:59 UTC vía Supabase MCP. Version `20260501015941`. Migration name: `cambio6_5_recalc_simplify_pendiente_on_rejected_total`. Pendiente prod en merge final v2 unificado (aplicar **después** de `cambio6_5_event_model_refinement` en el script consolidado).
+
+  **Verificación post-aplicación (4/4 confirmados):**
+  - ✅ Migration registrada en `schema_migrations` con timestamp correcto.
+  - ✅ Función `recalc_qty_for_line` REPLACED con orden simplificado de 5 puntos. Step 5 que mapeaba a `'Programada'` eliminado. Caso edge "rejected total con assignment vivo" cae al ELSE final → `'Pendiente'`.
+  - ✅ Backfill ejecutado (`PERFORM recalc_qty_for_line(r.id)` para todas las líneas). Snapshot pre/post idéntico (6 `Pendiente` + 1 `Parcial`) — no había zombies en `'Programada'` en staging, comportamiento esperado.
+  - ✅ `get_advisors` security: sin nuevos WARNs introducidos por el amend (la WARN sobre `recalc_qty_for_line` es preexistente del amend anterior, no introducida ahora).
+
+  **Motivación.** El spec aprobado del Cambio 6.5 dice literalmente:
+
+  > "Entrega finaliza el destino de cada línea entregada — `ok` y `with_observations` cuentan a `qty_delivered`; `rejected` libera al backlog vía nueva columna `qty_rejected`."
+
+  "Liberar al backlog" se manifiesta operacionalmente como `status='Pendiente'` (el pool del que Charris vuelve a programar), no `'Programada'` (que implica "ya hay un trip activo cubriéndola"). Bug semántico descubierto durante T3 testing del Cambio 6.5 cuando Test 3 (reproductor MOV-2026-058) reportó la línea rechazada como `'En Transito'` en vez de `'Pendiente'` esperado por el spec — análisis identificó que el step 5 del recalc actual (`'Programada'` cuando `quantity_assigned_active>0`) producía status engañoso justamente en el caso edge que el Cambio 6.5 buscaba corregir.
+
+  **Justificación cruzada (más allá del spec):**
+  - **Industria construcción.** Procore, Sage 300 CRE, e-Builder — material rejected en sitio vuelve a "open requirements" del PM, no permanece "scheduled". El plan original falló, requiere reprogramación.
+  - **State machines limpias.** `sm_request_lines.status` lo leen múltiples consumers (backlog UI, reportes, calendario, futuras notificaciones). Si dice `'Programada'` cuando la realidad es "rejected total, necesita reprogramar", cada consumer debe recordar aplicar filtro `qty_scheduled_active > 0`. Anti-patrón distribuido que el Cambio 6.5 buscó eliminar al mover la mutación de FE a BD.
+  - **ICONSA operacional.** Charris usa `/programacion` como fuente de verdad. Si línea rejected total queda `'Programada'`, Charris no la ve en backlog — pero el plan rechazó el material y necesita reasignación.
+
+  **Cambio del SQL (5 puntos en vez de 6):** se elimina el step 5 que ponía `'Programada'` cuando `v_quantity_assigned_active > 0` con todo lo demás en cero. El nuevo ELSE final sigue siendo `'Pendiente'` — caso edge `quantity_assigned_active>0 AND scheduled_active=0 AND delivered_total=0` cae al ELSE.
+
+  **Por qué eliminar step 5 NO rompe el caso normal "línea Programada":** el recalc no se invoca al crear assignments (status `'Programada'` se setea manualmente desde `saveTrip`/createTrip, no recalculado). Step 5 solo se alcanza vía triggers post-evento (BD-5/BD-6), y solo en el caso edge "todo el qty asignado fue rechazado y nada entregado, pero el assignment sigue vivo". Esa es exactamente la condición que el spec quiere mapear a `'Pendiente'`.
+
+  **Pre-merge query (debe retornar 0 rows post-amend, garantía de que no quedan zombies en `'Programada'`):**
+
+  ```sql
+  -- Líneas en 'Programada' sin assignment activo programable
+  SELECT srl.id, srl.description, srl.status, srl.qty_scheduled, srl.qty_delivered
+  FROM sm_request_lines srl
+  WHERE srl.status = 'Programada'
+    AND NOT EXISTS (
+      SELECT 1 FROM trip_line_assignments tla
+      JOIN trips t ON t.id = tla.trip_id
+      WHERE tla.request_line_id = srl.id
+        AND t.status NOT IN ('Cancelado', 'Completado')
+        AND GREATEST(0, tla.quantity_assigned - COALESCE(tla.qty_delivered, 0) - COALESCE(tla.qty_rejected, 0)) > 0
+    );
+  ```
+
+  **Migración (1 transacción):**
+
+  ```sql
+  BEGIN;
+
+  CREATE OR REPLACE FUNCTION recalc_qty_for_line(p_request_line_id uuid)
+  RETURNS void AS $$
+  DECLARE
+    v_quantity numeric;
+    v_current_status text;
+    v_qty_delivered_total numeric;
+    v_qty_scheduled_active numeric;
+    v_quantity_assigned_active numeric;
+    v_new_status text;
+  BEGIN
+    SELECT quantity, status INTO v_quantity, v_current_status
+    FROM sm_request_lines WHERE id = p_request_line_id;
+
+    -- Branch defensivo: preservar status terminal Cancelada
+    IF v_current_status = 'Cancelada' THEN
+      RETURN;
+    END IF;
+
+    -- Calcular qty_delivered_total agregando 3 fuentes (subqueries independientes)
+    SELECT
+      COALESCE((SELECT SUM(qty_delivered) FROM trip_line_assignments WHERE request_line_id = p_request_line_id), 0) +
+      COALESCE((SELECT SUM(qty_delivered) FROM pickup_order_lines WHERE request_line_id = p_request_line_id), 0) +
+      COALESCE((SELECT SUM(qty_delivered) FROM external_order_lines WHERE request_line_id = p_request_line_id), 0)
+    INTO v_qty_delivered_total;
+
+    -- Calcular qty_scheduled_active (descontando qty_rejected en assignments,
+    -- sin qty_rejected en pickup/external porque allí no aplica)
+    SELECT COALESCE(SUM(GREATEST(0,
+      tla.quantity_assigned - COALESCE(tla.qty_delivered, 0) - COALESCE(tla.qty_rejected, 0)
+    )), 0)
+    INTO v_qty_scheduled_active
+    FROM trip_line_assignments tla
+    JOIN trips t ON t.id = tla.trip_id
+    WHERE tla.request_line_id = p_request_line_id
+      AND t.status NOT IN ('Cancelado', 'Completado');
+
+    v_qty_scheduled_active := v_qty_scheduled_active +
+      COALESCE((
+        SELECT SUM(GREATEST(0, pol.quantity_assigned - COALESCE(pol.qty_delivered, 0)))
+        FROM pickup_order_lines pol
+        JOIN pickup_orders po ON po.id = pol.pickup_order_id
+        WHERE pol.request_line_id = p_request_line_id
+          AND po.status NOT IN ('Cancelado', 'Entregado')
+      ), 0) +
+      COALESCE((
+        SELECT SUM(GREATEST(0, eol.quantity_assigned - COALESCE(eol.qty_delivered, 0)))
+        FROM external_order_lines eol
+        JOIN external_orders eo ON eo.id = eol.external_order_id
+        WHERE eol.request_line_id = p_request_line_id
+          AND eo.status NOT IN ('Cancelado', 'Entregado')
+      ), 0);
+
+    -- Calcular quantity_assigned_active (mantener para diagnóstico futuro;
+    -- ya no se usa en el orden de evaluación post-amend)
+    SELECT COALESCE(SUM(tla.quantity_assigned), 0) INTO v_quantity_assigned_active
+    FROM trip_line_assignments tla
+    JOIN trips t ON t.id = tla.trip_id
+    WHERE tla.request_line_id = p_request_line_id
+      AND t.status NOT IN ('Cancelado', 'Completado');
+
+    v_quantity_assigned_active := v_quantity_assigned_active +
+      COALESCE((
+        SELECT SUM(pol.quantity_assigned) FROM pickup_order_lines pol
+        JOIN pickup_orders po ON po.id = pol.pickup_order_id
+        WHERE pol.request_line_id = p_request_line_id AND po.status NOT IN ('Cancelado', 'Entregado')
+      ), 0) +
+      COALESCE((
+        SELECT SUM(eol.quantity_assigned) FROM external_order_lines eol
+        JOIN external_orders eo ON eo.id = eol.external_order_id
+        WHERE eol.request_line_id = p_request_line_id AND eo.status NOT IN ('Cancelado', 'Entregado')
+      ), 0);
+
+    -- Orden simplificado a 5 puntos. Cambio respecto a BD-4 vigente: se elimina el
+    -- step 5 que mapeaba a 'Programada' cuando v_quantity_assigned_active>0 con
+    -- v_qty_scheduled_active=0 y v_qty_delivered_total=0 (caso edge "todo rechazado,
+    -- assignment vivo"). Ahora ese caso cae al ELSE → 'Pendiente'.
+    IF v_quantity_assigned_active = 0 AND v_qty_delivered_total = 0 THEN
+      v_new_status := 'Pendiente';
+    ELSIF v_qty_delivered_total >= v_quantity THEN
+      v_new_status := 'Entregada';
+    ELSIF v_qty_scheduled_active > 0 THEN
+      v_new_status := 'En Transito';
+    ELSIF v_qty_delivered_total > 0 THEN
+      v_new_status := 'Parcial';
+    ELSE
+      v_new_status := 'Pendiente';
+    END IF;
+
+    UPDATE sm_request_lines
+    SET
+      qty_scheduled = v_qty_scheduled_active,
+      qty_delivered = v_qty_delivered_total,
+      status = v_new_status,
+      delivered_at = CASE WHEN v_new_status = 'Entregada' AND delivered_at IS NULL
+                          THEN NOW() ELSE delivered_at END
+    WHERE id = p_request_line_id;
+  END;
+  $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+  -- Backfill: refrescar status de todas las líneas existentes para que ninguna
+  -- quede en 'Programada' zombie post-amend. El recalc respeta 'Cancelada' (branch
+  -- defensivo al inicio) y no toca líneas con assignments activos válidos.
+  DO $$
+  DECLARE r RECORD;
+  BEGIN
+    FOR r IN SELECT id FROM sm_request_lines LOOP
+      PERFORM recalc_qty_for_line(r.id);
+    END LOOP;
+  END $$;
+
+  COMMIT;
+  ```
+
+  **Verificación post-amend (la pre-merge query de arriba debe retornar 0 rows; opcional: comparar count de `'Programada'` pre vs post para confirmar que el backfill movió las líneas zombie a `'Pendiente'`).**
+
+  **Rollback (restaurar BD-4 vigente con 6 puntos):**
+
+  ```sql
+  BEGIN;
+  CREATE OR REPLACE FUNCTION recalc_qty_for_line(p_request_line_id uuid)
+  RETURNS void AS $$
+  DECLARE
+    v_quantity numeric;
+    v_current_status text;
+    v_qty_delivered_total numeric;
+    v_qty_scheduled_active numeric;
+    v_quantity_assigned_active numeric;
+    v_new_status text;
+  BEGIN
+    SELECT quantity, status INTO v_quantity, v_current_status
+    FROM sm_request_lines WHERE id = p_request_line_id;
+    IF v_current_status = 'Cancelada' THEN RETURN; END IF;
+    -- (cómputos idénticos al amend, omitidos por brevedad — copiar de BD-4 vigente)
+    -- Orden de evaluación de status (6 puntos — versión BD-4 original)
+    IF v_quantity_assigned_active = 0 AND v_qty_delivered_total = 0 THEN
+      v_new_status := 'Pendiente';
+    ELSIF v_qty_delivered_total >= v_quantity THEN
+      v_new_status := 'Entregada';
+    ELSIF v_qty_scheduled_active > 0 THEN
+      v_new_status := 'En Transito';
+    ELSIF v_qty_delivered_total > 0 THEN
+      v_new_status := 'Parcial';
+    ELSIF v_quantity_assigned_active > 0 THEN
+      v_new_status := 'Programada';
+    ELSE
+      v_new_status := 'Pendiente';
+    END IF;
+    UPDATE sm_request_lines
+    SET qty_scheduled = v_qty_scheduled_active, qty_delivered = v_qty_delivered_total,
+        status = v_new_status,
+        delivered_at = CASE WHEN v_new_status = 'Entregada' AND delivered_at IS NULL
+                            THEN NOW() ELSE delivered_at END
+    WHERE id = p_request_line_id;
+  END;
+  $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+  COMMIT;
+  ```
+
+  **Aplicar en prod (merge final v2 unificado):** agregar este amend al script consolidado **después** del `cambio6_5_event_model_refinement` (orden estricto — el amend depende de la columna `qty_rejected` que crea BD-1). Correr la pre-merge query post-aplicación; debe retornar 0 rows (sin zombies en `'Programada'`).
+
 - [bd] **Cambio 6.5 — refinamiento del modelo de eventos: migración consolidada `cambio6_5_event_model_refinement` aplicada en staging.** Aplicada por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-04-30 ~21:00 UTC vía Supabase MCP. Version `20260430203756`. 1 sola transacción para atomicidad. Pendiente prod en merge final v2 unificado (post-Cambio 6.5 implementación + smoke OK).
 
   **Pre-aplicación: Q1=0, Q2=0, Q3=0, Q4=2** (los 2 rows de Q4 son data histórica del smoke MOV-2026-058 del 30 de abril; BD-8 es BEFORE INSERT, no afecta data existente).

@@ -282,11 +282,19 @@ test.describe('Cambio 6.5 — BD triggers (BD-direct)', () => {
     expect(Number(tla?.qty_delivered)).toBe(0)
     expect(Number(tla?.qty_rejected)).toBe(5)
 
-    // Verificar recalc_qty_for_line: línea status='Pendiente' (todo se rechazó, cero entregado, nada activo)
-    // Nota: depende de que el trip esté NOT IN ('Cancelado','Completado'). Si el trip está 'En Ruta' y
-    // qty_scheduled_active = quantity_assigned - delivered - rejected = 5-0-5 = 0, branch En Transito no aplica.
-    // Cae a 'Pendiente' porque qty_delivered=0 y quantity_assigned_active>0 → 'Programada' (queda en programación).
-    // Verifiquemos qty_scheduled de la línea (debería ser 0 post-rejected total):
+    // Verificar recalc_qty_for_line: línea status='Pendiente' post-amend.
+    // Trip está 'En Ruta' (NOT IN 'Cancelado'/'Completado'), entonces:
+    //   qty_scheduled_active = quantity_assigned - qty_delivered - qty_rejected = 5-0-5 = 0
+    //   qty_delivered_total  = 0
+    //   quantity_assigned_active = 5
+    // Post-amend (orden 5 puntos, migración cambio6_5_recalc_simplify_pendiente_on_rejected_total):
+    //   step 1: assigned≠0 → no
+    //   step 2: 0 >= 5    → no
+    //   step 3: scheduled_active = 0 → no
+    //   step 4: delivered_total = 0  → no
+    //   ELSE → 'Pendiente'  ✅ alineado con spec ("rejected libera al backlog")
+    // Pre-amend (BD-4 vigente con step 5) este caso producía 'Programada' — bug semántico que
+    // el amend cambio6_5_recalc_simplify_pendiente_on_rejected_total corrige.
     const { data: line } = await db
       .from('sm_request_lines')
       .select('status, qty_scheduled, qty_delivered')
@@ -294,9 +302,7 @@ test.describe('Cambio 6.5 — BD triggers (BD-direct)', () => {
       .single()
     expect(Number(line?.qty_scheduled)).toBe(0)
     expect(Number(line?.qty_delivered)).toBe(0)
-    // Status: como quantity_assigned_active(5) > 0 pero qty_scheduled_active=0 y qty_delivered=0,
-    // la lógica del recalc cae a 'Programada' (rama 5: quantity_assigned_active > 0).
-    expect(line?.status).toBe('Programada')
+    expect(line?.status).toBe('Pendiente')
   })
 
   // ─────────────── TEST 5: Retorno no modifica líneas/assignments ───────────────

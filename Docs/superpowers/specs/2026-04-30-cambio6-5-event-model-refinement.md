@@ -706,6 +706,7 @@ Anticipo siguiendo patrón de Cambio 6:
 9. UNIQUE INDEX para prevenir double revert (vs trigger BEFORE INSERT con EXISTS).
 10. Bloqueo de revert Entrega en trip cerrado vía trigger BD + guard frontend (defense-in-depth).
 11. CL-1 incluido en scope tras decisión de James (era BACKLOG, ahora se hace en este Cambio).
+12. **Caso edge "rejected total con assignment vivo" → `status='Pendiente'` (no `'Programada'`).** Decisión emergida durante T3 testing (Test 3 reproductor MOV-2026-058 reveló que el step 5 del recalc original mapeaba este caso a `'Programada'`, contradiciendo el spec literal "rejected libera al backlog"). Amend BD aplicado: migración `cambio6_5_recalc_simplify_pendiente_on_rejected_total` (orden simplificado de 6 a 5 puntos, elimina step 5). Justificación tripartita: (a) spec literal, (b) industria construcción (Procore/Sage/e-Builder mapean rejected → "open requirements"), (c) state machines limpias (evita filtro `qty_scheduled_active>0` distribuido en cada consumer). Documentado en CHANGELOG entry `[bd]` 2026-05-01 con SQL completo + rollback.
 
 ## Referencias
 
