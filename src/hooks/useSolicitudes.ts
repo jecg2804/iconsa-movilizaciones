@@ -924,7 +924,6 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         }
 
         // 5. UPDATE líneas Pendiente/Programada/Parcial a 'Cancelada'
-        // (post-Migration 4: status 'Pickup Aprobado'/'Externo Aprobado' eliminados)
         const lineIdsToCancel = (lines ?? [])
           .filter((l) => l.status === 'Pendiente' || l.status === 'Programada' || l.status === 'Parcial')
           .map((l) => l.id)

@@ -170,15 +170,6 @@ export function statusContextString(
 ): string {
   if (!info) return status
   switch (status) {
-    case 'Pickup Aprobado':
-      return info.pickup_approved_at
-        ? `Pickup Aprobado el ${formatDate(info.pickup_approved_at)}`
-        : status
-    case 'Externo Aprobado':
-      if (info.external_provider_name && info.external_invoice_amount != null) {
-        return `Externo: ${info.external_provider_name}, ${formatCurrency(info.external_invoice_amount)}, aprobado ${info.external_approved_at ? formatDate(info.external_approved_at) : '—'}`
-      }
-      return status
     case 'Entregada':
       if (info.external_completed_at) {
         const receiver = info.external_received_by_name ?? '(no captado)'
