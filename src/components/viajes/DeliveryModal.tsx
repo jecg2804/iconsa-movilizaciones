@@ -137,7 +137,13 @@ export function DeliveryModal({
   const codeValid = code.length === 4 && code === trip.confirmation_code
   const codeIncorrect = code.length === 4 && code !== trip.confirmation_code
   const hasDeliverableLines = lines.some((l) => l.status !== 'rejected' && l.qty > 0)
-  const canConfirm = receiverFilled && codeValid && hasDeliverableLines && !loading
+  // FE-4 (Cambio 6.5): notas a nivel del evento son requeridas (≥10 chars)
+  // cuando alguna línea tiene line_status='with_observations'. Defense-in-depth
+  // con trigger BD-10 enforce_notes_on_with_observations — el FE muestra
+  // mensaje user-friendly y bloquea submit antes de que llegue a la BD.
+  const hasObservations = lines.some((l) => l.status === 'with_observations')
+  const notesValid = !hasObservations || notes.trim().length >= 10
+  const canConfirm = receiverFilled && codeValid && hasDeliverableLines && notesValid && !loading
 
   const handleLineStatusChange = useCallback((idx: number, newStatus: string) => {
     setLines((prev) =>
@@ -392,18 +398,23 @@ export function DeliveryModal({
             hint="PDF, JPG, PNG o WEBP (max 10MB)"
           />
 
-          {/* Notas */}
+          {/* Notas — required cuando hay líneas con observaciones (FE-4) */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
-              Notas (opcional)
+              Notas{hasObservations ? <span className="text-iconsa-red"> *</span> : ' (opcional)'}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observaciones de la entrega"
+              placeholder={hasObservations ? 'Describe las observaciones de la entrega (mínimo 10 caracteres)' : 'Observaciones de la entrega'}
               rows={2}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
             />
+            {hasObservations && !notesValid && (
+              <p className="mt-1 text-xs text-iconsa-red">
+                Las notas son obligatorias (mínimo 10 caracteres) cuando alguna línea tiene observaciones.
+              </p>
+            )}
           </div>
 
           {/* Acciones */}
