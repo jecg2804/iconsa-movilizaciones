@@ -168,6 +168,58 @@ original, cross-checkear G6 (dashboard links) y otros.
 
 ---
 
+## BACKLOG técnico (BL-*)
+
+Items movidos del scope del Cambio 6.5 a BACKLOG con detalle suficiente para retomar en sprint futuro. BL-E2E-AUTH-BLOCKED vive en la tabla AD por su naturaleza de bug de infra (similar a AD-5).
+
+### BL-EXCLUSIVITY — Bug pre-existente: línea sin constraint de exclusividad entre 3 modalidades
+
+Línea (`sm_request_lines`) puede tener simultáneamente entradas en `trip_line_assignments` + `pickup_order_lines` + `external_order_lines`. NO hay CHECK constraint que lo impida. Si data corrupta llega a este estado, `recalc_qty_for_line` cuenta cantidades 3 veces — backlog miente, status incorrecto.
+
+**Diagnóstico SQL — correr en prod ANTES de diseñar el constraint y ANTES de aplicarlo:**
+
+```sql
+WITH multi_modality AS (
+  SELECT srl.id, srl.request_id,
+    EXISTS (SELECT 1 FROM trip_line_assignments WHERE request_line_id = srl.id) AS in_trips,
+    EXISTS (SELECT 1 FROM pickup_order_lines WHERE request_line_id = srl.id) AS in_pickup,
+    EXISTS (SELECT 1 FROM external_order_lines WHERE request_line_id = srl.id) AS in_external
+  FROM sm_request_lines srl
+)
+SELECT * FROM multi_modality
+WHERE (in_trips::int + in_pickup::int + in_external::int) > 1;
+```
+
+Si retorna 0 rows, constraint seguro de agregar. Si retorna rows, entender el caso primero — puede ser:
+
+- Transiciones legítimas (línea fue de fleet → pickup, dejó assignment cancelado pero no borrado).
+- Bug que duplicó por double-click.
+- Data legacy de pre-Cambio 5 cuando el modelo era distinto.
+
+Considerar al diseñar el constraint: ¿incluir status del assignment/order? Quizás el constraint debe excluir entries con `qty_delivered=0 AND order/trip Cancelado`. Si el diagnóstico en prod retorna rows, el constraint NO se aplica hasta entender (y posiblemente cleanup) el caso.
+
+**Prioridad:** sprint futuro (post-merge v2 a main). Bug latente sin manifestación reportada en prod, pero `recalc_qty_for_line` cuenta 3 veces si data corrupta llega.
+
+### BL-RPC-CONVERSION — Deuda técnica de Cambios 3/4
+
+`convertLineToPickup` (Cambio 3) y `convertLineToExternal` (Cambio 4) NO son atómicos server-side. Hacen DELETE assignment + UPDATE línea como 2 queries separadas. Si una falla mid-flow, la otra queda aplicada. Riesgo bajo en v1 (1 Charris operando, sin concurrencia real). Polish post-merge: convertir a RPC SQL con SECURITY DEFINER y transacción server-side.
+
+**Prioridad:** post-merge polish. Bajo riesgo en operación actual (single-user Charris).
+
+### BL-SESSION-START-RULE — Regla operativa de lectura de BACKLOG al inicio
+
+Crear `.claude/rules/session-start.md` (o agregar sección a `.claude/rules/tool-usage.md`): Code lee BACKLOG al inicio de cada sesión, reporta items relevantes al contexto de la tarea en curso, y propone si algo entra al scope actual. Hoy el comportamiento es ad-hoc — Code lee BACKLOG cuando la tarea lo sugiere, no como ritual de inicio. Formalizarlo evita que items dormidos pasen desapercibidos.
+
+**Prioridad:** sprint futuro. Nice-to-have de proceso, no bloqueante.
+
+### BL-CLAUDE-FOLDER-CLEANUP — Cleanup completo de .claude/** y CLAUDE.md
+
+Cambio dedicado, no se mezcla con feature work. Doc de auditoría completo en `Docs/reference/2026-04-29-claude-folder-audit.md` (existe). Cubre 16 hallazgos: archivos referenciados que no existen, redundancias entre `commit-after-step.md` y `git-workflow.md`, naming inconsistente de skills, plugins habilitados sin uso, etc. Requiere sesión dedicada para no mezclar con feature work.
+
+**Prioridad:** sprint futuro dedicado. Sin urgencia operacional, pero entrega valor de mantenibilidad de la setup de Code.
+
+---
+
 ## Features por Tier
 
 ### Tier 1: Perfeccionar movilizaciones
