@@ -769,7 +769,7 @@ export default function Page() {
         // Cambio 6 Bug #4: trigger BD enforce_one_active_delivery_trg rechaza
         // segundo INSERT en trip_event_lines si ya hay Entrega no-revertida.
         if (errMsg.includes('ya tiene una Entrega activa')) {
-          setEventError('Esta línea ya fue entregada en este viaje. Reversá la Entrega anterior primero si necesitás corregir.')
+          setEventError('Esta línea ya fue entregada en este viaje. Revierte la Entrega anterior primero si necesitas corregir.')
         } else {
           setEventError(errMsg)
         }
@@ -789,6 +789,23 @@ export default function Page() {
       // solo puede revertir eventos que ella misma registró.
       if (role !== 'admin' && revertEvent.registered_by?.id !== person?.id) {
         setEventError('Solo puedes revertir eventos que tú registraste. Contacta a un administrador.')
+        return
+      }
+
+      // FE-3 (Cambio 6.5): defense-in-depth con trigger BD-8
+      // enforce_revert_only_on_active_trip. La UI ya oculta el botón Revertir
+      // cuando el trip está cerrado (lastRevertible se calcula con !tripDone),
+      // pero protegemos contra: (a) race entre sesiones — trip cerrado en otra
+      // pestaña mientras este modal estaba abierto; (b) regresión futura del
+      // gate de la UI. Mensaje explica el siguiente paso al usuario sin esperar
+      // al error genérico de la BD.
+      if (
+        revertEvent.event_type === 'Entrega' &&
+        (trip.status === 'Completado' || trip.status === 'Cancelado')
+      ) {
+        setEventError(
+          'Este viaje ya fue cerrado. Para corregir esta entrega, primero revierte el Retorno desde la sección de eventos del viaje.',
+        )
         return
       }
 
