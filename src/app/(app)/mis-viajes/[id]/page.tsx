@@ -872,33 +872,23 @@ export default function Page() {
         }
 
         if (eventType === 'Entrega') {
-          // Decrementar qty_delivered en trip_line_assignments. El trigger BD
-          // recalc_qty_for_line se dispara al UPDATE y reconcilia
-          // qty_scheduled + qty_delivered + status en sm_request_lines.
+          // qty_delivered y qty_rejected en trip_line_assignments se revierten
+          // automáticamente vía trigger BD-6 sync_assignment_on_delivery_revert
+          // al INSERT del Reversion event del paso 1 (filtra por line_status:
+          // ok/with_observations decrementa qty_delivered, rejected decrementa
+          // qty_rejected, ambos con GREATEST(0, ...) anti-negativo).
           // Las filas de delivery_observations sobreviven intactas — son
           // evidencia histórica inmutable del reporte original del conductor.
+          //
+          // Limpieza de delivered_at en sm_request_lines: NO es trigger-managed
+          // (recalc_qty_for_line solo SETEA delivered_at cuando status=Entregada,
+          // nunca lo CLEAREA). El FE debe limpiarlo cuando un revert hace que
+          // la línea ya no esté Entregada.
           const { data: eventLines } = await supabase
             .from('trip_event_lines')
-            .select('request_line_id, quantity')
+            .select('request_line_id')
             .eq('trip_event_id', revertEvent.id)
 
-          for (const el of eventLines ?? []) {
-            const { data: tla } = await supabase
-              .from('trip_line_assignments')
-              .select('qty_delivered')
-              .eq('trip_id', trip.id)
-              .eq('request_line_id', el.request_line_id)
-              .single()
-
-            await supabase
-              .from('trip_line_assignments')
-              .update({ qty_delivered: Math.max(0, (tla?.qty_delivered ?? 0) - el.quantity) })
-              .eq('trip_id', trip.id)
-              .eq('request_line_id', el.request_line_id)
-          }
-
-          // Limpiar delivered_at en sm_request_lines: el trigger ya recalculó
-          // el status, pero delivered_at no es trigger-managed.
           for (const el of eventLines ?? []) {
             const { data: postTrigger } = await supabase
               .from('sm_request_lines')
