@@ -5,37 +5,38 @@
 > autocargo al inicio de cada sesión para recuperar el hilo sin leer
 > todo el plan file.
 
-**Última actualización:** 2026-06-10 (Plan Maestro adoptado — secuencia
-unificada hacia merge v2; auditorías huérfanas commiteadas)
+**Última actualización:** 2026-06-10 PM (fase DISCOVERY en curso —
+decisión rectora de James: harness-first, "sin un buen harness ni
+quiero tocar nada del código". D1 re-ABIERTA pendiente de discovery)
 
 ## Root task
 
 Llevar movimientOS a producción estable (merge v2) y luego a L5 de
-madurez de ingeniería. Documento rector: `Docs/plan-maestro-2026-06.md`.
+madurez de ingeniería. Documento rector: `Docs/plan-maestro-2026-06.md`
+(OJO: D1 degradada a pregunta abierta; las fases 0-5 del plan se
+re-secuencian POST-discovery con la decisión harness-first).
 
 ## Position actual
 
-```
-Plan Maestro (Docs/plan-maestro-2026-06.md)
- ├─ [✅] Auditoría integral 2026-06-03 (50+ findings, 6 fases)
- ├─ [✅] Bug-registry pre-merge (42 bugs, scope Cambio 6.6 acordado)
- ├─ [✅] Comparación harness HumanOS + scorecard madurez (2026-06-10)
- ├─ [✅] Decisiones D1-D7: NO restart desde main; merge v2 = final del
- │       ciclo con Definition of Done; un repo a la vez; multi-schema
- │       medallion como target (Fase 4); GPS no bloquea merge (recom.)
- ├─ [⏳] Siguiente: spec canónico del state-machine (anti-alucinación,
- │       input de todas las fases)
- ├─ [⏳] FASE 0 — Integridad para el merge (BLOQUEANTE):
- │       migraciones versionadas + script BD consolidado + decisión
- │       James (promover Cambios 2-6.5 a prod vs reconstruir staging)
- │       + credenciales + confirm_delivery RPC + RBAC proxy
- ├─ [ ] FASE 1 — Atomicidad (split trigger/RPC/Action) + Cambio 6.6
- ├─ [ ] FASE 2 — Gates (tsc, pgTAP, CI) + harness [HUM] (hooks,
- │       AGENTS.md, constitution, ADRs, vitest, subagents revisores)
- ├─ [ ] ═══ MERGE v2 (DoD en plan §2) → trunk-based ═══
- ├─ [ ] FASE 3 — SOP IC-LOG-PO-06 + UX quick wins (post-merge)
- ├─ [ ] FASE 4 — Plataforma datos multi-schema + Inspecciones
- └─ [ ] FASE 5 — Expansión de módulos (clusters)
+```text
+DISCOVERY → HARNESS → DISEÑO/CÓDIGO  (orden decidido por James 2026-06-10)
+ ├─ [✅] Auditoría integral 2026-06-03 + bug-registry (Cambio 6.6)
+ ├─ [✅] Comparación harness HumanOS + scorecard madurez 9 dims
+ ├─ [✅] Discovery 360° (17 agentes + crítico) → Docs/discovery/
+ │       (canónico + norte + harness blueprint v0 + caveats)
+ ├─ [✅] Visión de James capturada (memoria): plataforma de taller,
+ │       BD centralizada multi-ERP, inventario, usuarios=todos,
+ │       data de prod=parcialmente ficción (cirugía SQL manual)
+ ├─ [⏳] Cierre de huecos (workflow corriendo): main branch (0%→100%),
+ │       src restante, funciones BD reconstruidas + SQL PACK para
+ │       James/Chat, corpus EQUIPO/LOGISTICA (lectura 100% obligatoria)
+ ├─ [⏳] Research: transformación digital/AI/data eng en construcción
+ ├─ [ ] FASE HARNESS: decisiones C1-C8 del blueprint + Supabase
+ │       write-access para Code (modelo HumanOS, Chat fuera del
+ │       workflow) + hooks + AGENTS.md + verify + docs-lint + CI
+ ├─ [ ] Diseño/código con referencia = líderes del mercado
+ │       (fulfillment 4 tipos, UX Charris, tarifas, facturación)
+ └─ [ ] Merge v2 cuando DoD se cumpla (plan §2, a refinar post-harness)
 ```
 
 ## Contexto mínimo
