@@ -5,117 +5,66 @@
 > autocargo al inicio de cada sesión para recuperar el hilo sin leer
 > todo el plan file.
 
-**Última actualización:** 2026-04-27 (Cambio 3 Pickup nuevo shippeado — Events V2 v2 completo en jaime/dev)
+**Última actualización:** 2026-06-10 (Plan Maestro adoptado — secuencia
+unificada hacia merge v2; auditorías huérfanas commiteadas)
 
 ## Root task
 
-Perfeccionar movilizaciones (Tier 1 — sistema core).
+Llevar movimientOS a producción estable (merge v2) y luego a L5 de
+madurez de ingeniería. Documento rector: `Docs/plan-maestro-2026-06.md`.
 
 ## Position actual
 
 ```
-Perfeccionar movilizaciones
- └─ Sistema de eventos y sus registros
-     ├─ [✅] Audit consolidado (código + BD)
-     ├─ [✅] Parking git/github practices
-     ├─ [✅] Higiene de docs + manejo de contexto
-     ├─ [✅] Consolidar EVENTS V2 master + issues → reference/EVENTS_V2.md
-     ├─ [✅] Sprint prod cherry-pick (Abril 15, 2 releases en prod)
-     │   ├─ v2026.04.15-1 (870a8f6): J3 + J4 + J6 + J7 + J8a + J8b
-     │   └─ v2026.04.15-2 (1425cae): hotfix J4-A + J4-B + J7-ext
-     ├─ [✅] Quick wins G1+G6+G7+G10 + doc cleanup G17-G19
-     ├─ [✅] GPS Live Tracking MVP (13 commits jaime/dev, bootstrap staging
-     │   13/13, prod pendiente merge v2)
-     ├─ [✅] Fix constraint valid_event_type (staging + prod sync,
-     │   18 event_types superset)
-     ├─ [✅] ActiveTripPanel (5 commits jaime/dev, consolidación operativa
-     │   en /solicitudes/[id] — mapa único arriba, card histórica sin mapa)
-     ├─ [✅] Events V2 v2 — 3 Cambios atómicos shippeados en jaime/dev
-     │   ├─ [✅] Cambio 1 Parada redesign (2026-04-26)
-     │   ├─ [✅] Cambio 2 Cost code refactor (2026-04-27, J9 cerrado)
-     │   └─ [✅] Cambio 3 Pickup nuevo (2026-04-27, J1+D4+AD-1 cerrados)
-     └─ [⏳] Siguiente: merge v2 staging → prod + post-merge polish
-         ├─ Pre-merge: script BD consolidado (cambio1 stop_type DROP +
-         │   cambio2 BD-1+BD-2 + cambio3_pickup_redesign + cambio3_pickup
-         │   _add_attachments_to_lines + GPS gps_vehicle_id +
-         │   notification_log valid_event_type superset)
-         ├─ J5 Overarching event design (en discusión activa)
-         ├─ G-items sobrevivientes (G4 notifyLineaRechazada,
-         │   G5 timeline per-line, G11 DeliveryModal partial warning)
-         ├─ Pickup post-merge: convertLineToPickup → RPC SQL atómica
-         │   (deuda técnica conocida), tests E2E del flow nuevo (AD-5)
-         ├─ GPS Skydata integration (en discusión activa)
-         └─ Fulfillment methods: fleet/pickup/third_party (en discusión)
+Plan Maestro (Docs/plan-maestro-2026-06.md)
+ ├─ [✅] Auditoría integral 2026-06-03 (50+ findings, 6 fases)
+ ├─ [✅] Bug-registry pre-merge (42 bugs, scope Cambio 6.6 acordado)
+ ├─ [✅] Comparación harness HumanOS + scorecard madurez (2026-06-10)
+ ├─ [✅] Decisiones D1-D7: NO restart desde main; merge v2 = final del
+ │       ciclo con Definition of Done; un repo a la vez; multi-schema
+ │       medallion como target (Fase 4); GPS no bloquea merge (recom.)
+ ├─ [⏳] Siguiente: spec canónico del state-machine (anti-alucinación,
+ │       input de todas las fases)
+ ├─ [⏳] FASE 0 — Integridad para el merge (BLOQUEANTE):
+ │       migraciones versionadas + script BD consolidado + decisión
+ │       James (promover Cambios 2-6.5 a prod vs reconstruir staging)
+ │       + credenciales + confirm_delivery RPC + RBAC proxy
+ ├─ [ ] FASE 1 — Atomicidad (split trigger/RPC/Action) + Cambio 6.6
+ ├─ [ ] FASE 2 — Gates (tsc, pgTAP, CI) + harness [HUM] (hooks,
+ │       AGENTS.md, constitution, ADRs, vitest, subagents revisores)
+ ├─ [ ] ═══ MERGE v2 (DoD en plan §2) → trunk-based ═══
+ ├─ [ ] FASE 3 — SOP IC-LOG-PO-06 + UX quick wins (post-merge)
+ ├─ [ ] FASE 4 — Plataforma datos multi-schema + Inspecciones
+ └─ [ ] FASE 5 — Expansión de módulos (clusters)
 ```
 
 ## Contexto mínimo
 
-Sprint prod cherry-pick **cerrado exitosamente** el 2026-04-15 con 2
-releases tagged en producción y verificados funcionalmente por James:
-
-**v2026.04.15-1** (`870a8f6`, tag pusheado) — 6 fixes base:
-- J3 RBAC conductores (security, test manual OK)
-- J4 Calendarios y filtros unificados (rediseño)
-- J6 Tarifa no editable cuando hay rate seleccionada
-- J7 Código de costo requerido
-- J8a Scroll/zoom modales en mobile
-- J8b Duplicar líneas en solicitud
-
-**v2026.04.15-2** (`1425cae`, tag pusheado) — 3 hotfixes:
-- J4-A Regresión click-día (singleDay separado de dateFrom/dateTo, el
-  calendario sigue mostrando otros días al clickear uno)
-- J4-B Sort server-side (DataTable externalSort contrato, sort re-fetchea
-  toda la data en BD en vez de solo la página actual)
-- J7-ext Código costo 3 campos (extra/sección + fase + categoría, los 3
-  requeridos cuando el proyecto los tiene)
-
-Ambos worktrees cerrados. Vercel prod verde en `1425cae` (requirió
-empty-commit trick para destrabar webhook). Detalle completo de todos
-los fixes en `Docs/CHANGELOG.md` entries 2026-04-15.
-
-## Siguiente dirección: staging-track Events V2 polish
-
-Plan file se abrirá fresh en la próxima sesión cuando James decida
-qué arrancar primero. Hay **3 design discussions pre-requisito** que
-no bloquean el resto pero deben happen antes de los items relacionados:
-
-1. **AD-1 Pickup architecture** — ¿PickupOrder entity separada (como
-   dice `Docs/reference/Self-pickup.md`) vs fix rápido en Trip entity?
-   Prerequisito para J1. En discusión: `transport_method` enum
-   (fleet/self_pickup/third_party).
-2. ~~**J2 requires_code default**~~ — **CERRADO.** Códigos siempre
-   obligatorios. Implementación pendiente (eliminar feature del código).
-3. **J9 cost code refactor** — ¿mover cost_code de `sm_request_lines`
-   a `sm_requests`? Requiere data analysis primero.
-4. **GPS Skydata** — Skydata API investigada (webhooks, geofencing,
-   posición en tiempo real). Fase 1: mapa vivo en Dashboard + trip
-   detail. En discusión.
-
-Parked deliberadamente por James:
-
-- F5 Dashboards por rol, F2 Inspecciones — features grandes, no ahora
-- F1.4 Retorno reconciliación per-line — esperando métricas de uso
-- F1.6 Observaciones de entrega visibles — nice-to-have, baja prioridad
-- Primer `/release` completo de jaime/dev → main — sigue parked, se
-  harán hotfixes puntuales hasta que Events V2 esté completo
+- **Estado real del código:** modelo fulfillment = Cambio 5 (tablas
+  `pickup_orders`/`external_orders` + `*_order_lines`). El modelo
+  Cambio 3 (flag `pickup_by_project`) fue ELIMINADO — referencias a él
+  en CLAUDE.md regla #15 y skills están stale (HAR-01, fix en Fase 2).
+- **Cisma prod/staging:** prod (44 tablas) corre ledger `humanos_v2_*`;
+  staging (51) corre Cambios 2→6.5. Irreconciliables por diff —
+  jaime/dev NO es deployable hasta cerrar Fase 0. 266 commits ahead
+  de main.
+- **Producción hoy:** main en `v2026.04.15-2`, operando (50 SM,
+  48 trips, 159 eventos reales).
+- **GPS:** MVP construido sobre SkyData (aislado en `/api/gps`);
+  ICONSA migra a proveedor nuevo — API aún no disponible (bloqueante
+  externo, no gatea el merge per D6).
+- **HumanOS:** en pausa consciente. Su roadmap vive en plan §6.
 
 ## Reglas de este doc
 
-- Actualizarlo **cada vez que cambio de dirección** (ej. pasar de un
-  track a otro, cerrar una fase, arrancar una nueva).
+- Actualizarlo **cada vez que cambio de dirección**.
 - Nunca más de 1 página — si crece, comprimir.
-- Apunta al plan file activo vigente, no lo duplica.
-- Si este doc y el plan file discrepan, este doc gana (es el resumen
-  canónico).
+- Si este doc y el plan file discrepan, este doc gana.
 
 ## Links
 
-- **Plan file activo:** ninguno activo
-- **BACKLOG completo:** `Docs/BACKLOG.md`
-- **CHANGELOG:** `Docs/CHANGELOG.md`
-- **EVENTS V2 reference:** `Docs/reference/EVENTS_V2.md`
-- **Self-pickup reference:** `Docs/reference/Self-pickup.md`
-- **GPS future opportunities:** `Docs/reference/GPS_Future_Opportunities.md`
-- **Spec ActiveTripPanel (v1.1 shipped):** `Docs/superpowers/specs/2026-04-20-active-trip-panel-design.md`
-- **Spec GPS live tracking (v1.3 shipped):** `Docs/superpowers/specs/2026-04-20-gps-live-tracking-design.md`
-- **Regla de ciclo de vida de plans:** `.claude/rules/plan-lifecycle.md`
+- **Plan rector:** `Docs/plan-maestro-2026-06.md`
+- **Canon de hallazgos:** `Docs/auditoria-integral-2026-06.md`
+- **Canon de bugs:** `Docs/bug-registry-pre-merge.md`
+- **BACKLOG:** `Docs/BACKLOG.md` · **CHANGELOG:** `Docs/CHANGELOG.md`
+- **Regla de lifecycle:** `.claude/rules/plan-lifecycle.md`

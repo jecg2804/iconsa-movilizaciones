@@ -4,6 +4,41 @@ Actualizado con cada commit. Entries > 90 días se archivan.
 
 ---
 
+## 2026-06-10
+
+- [docs] **Plan Maestro adoptado (`Docs/plan-maestro-2026-06.md`) + rescate de docs huérfanos.** Documento rector que reconcilia: auditoría integral 2026-06-03, bug-registry pre-merge (Cambio 6.6), comparación de harness con HumanOS y scorecard de madurez vs gold-standard (2 workflows multi-agente, 2026-06-10, ~31 agentes con crítico adversarial), y decisiones estratégicas D1-D7 de James — destacadas: **NO restart desde main** (D1), **merge v2 = final del ciclo con Definition of Done explícita** (D2), multi-schema medallion como arquitectura objetivo en Fase 4 (D4), GPS no bloquea merge (D6, recomendación). Se commitean además los 4 docs de auditoría que vivían huérfanos en el working tree: `auditoria-integral-2026-06.md`, `bug-registry-pre-merge.md`, `audit-C-codex-full.md`, `audit-D-codex-deep.md`. TRAIL.md reescrito a la posición real (corrige HAR-01: describía el modelo pickup Cambio 3 eliminado). Incluye también el entry `[bd]` pendiente del 2026-05-13 (audit-trigger expansion, aplicado por Chat) que estaba sin commitear. Siguiente paso: spec canónico del state-machine + arranque Fase 0.
+
+## 2026-05-13 — Schema: Audit coverage expansion
+
+**[bd]** Agregado audit_trigger a 19 tablas que estaban sin auditar:
+
+**Tier 1 (compliance/security crítico):**
+- trip_events ← KPI compliance core
+- people, person_projects ← user/access audit
+- equipment ← asset tracking
+- mobilization_rates ← billing audit
+
+**Tier 2 (operacional):**
+- projects, locations
+- equipment_status_log, equipment_inspections, meter_readings, fuel_logs
+- purchase_orders, purchase_order_lines
+- work_orders, work_order_parts
+- rental_agreements, vendors
+- inspection_responses, operator_qualifications
+
+Master data tier 3 (cost_codes, inspection_templates, units, etc.) NO se auditó
+todavía — baja prioridad, agregar después si surge necesidad.
+
+Logs NO auditados intencionalmente: audit_log (recursión), notification_log,
+sequences (mecánico), feedback/suggestions/inspection_photos (insert-only),
+user_app_roles (legacy).
+
+**SQL ejecutado:** trigger CREATE en loop usando función audit_trigger() existente.
+
+**Patrón Claude Chat:** todas las operaciones admin vía SQL ahora setean
+`request.jwt.claims` para que auth.uid() resuelva a Jaime Cucalon UUID y el
+audit_trigger capture changed_by correctamente.
+
 ## 2026-04-30
 
 - [bd] **Cambio 6.5 amend — `recalc_qty_for_line`: rejected total con assignment vivo → 'Pendiente' (no 'Programada').** Aplicada por Chat en staging (`vonwkciosksqspyljzfy`) el 2026-05-01 ~01:59 UTC vía Supabase MCP. Version `20260501015941`. Migration name: `cambio6_5_recalc_simplify_pendiente_on_rejected_total`. Pendiente prod en merge final v2 unificado (aplicar **después** de `cambio6_5_event_model_refinement` en el script consolidado).
