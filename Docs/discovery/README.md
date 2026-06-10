@@ -13,6 +13,7 @@
 | `2026-06-10-movimientos-canonico.md` | El app como ES (código jaime/dev + BD staging/prod): modelo de dominio real, máquina de estados real, madurez de los 3 fulfillment types, tabla de 20 contradicciones docs-vs-código-vs-BD, uso real en prod | ✅ v1 (pendiente addendum del cierre de huecos) |
 | `2026-06-10-norte-vision-iconsa.md` | Visión consolidada (BD centralizada + ERP extraction + apps), inventario de features futuros por grupos [D/M/SOP], implicaciones para el diseño de datos, mapa conceptual de procesos | ✅ v1 |
 | `2026-06-10-harness-blueprint-v0.md` | Estado verificado de ambos harnesses, tabla a-la-carta por necesidad, conflictos C1-C8, 4 piezas propias justificadas, secuencia de dependencia | ✅ v0 — **input de discusión** |
+| `2026-06-10-transformacion-digital-construccion.md` | Research aplicado: por qué falla la adopción en construcción + playbook de recuperación (conductores/Charris/sponsor), AI/data con ROI real vs hype, bus factor, implicaciones para fases | ⚠️ v1 — **leer CON los caveats del crítico embebidos al final: varios stats insignia del body fueron refutados o degradados (47% AGC inexistente, 73% RICS de otra población, benchmark CFMA = blog de vendor, WhatsApp Groups API restringida a 100K+ conv/mes). Las TESIS sobreviven; los números específicos del body NO usar ante gerencia sin ver la corrección.** |
 
 ## Fuentes y metodología
 
@@ -23,6 +24,7 @@
 ## Caveats del crítico (leer antes de citar los docs)
 
 **Disputes (claims corregidos o degradados):**
+
 1. Conteos de scaffolding "16/22 tablas" no reproducibles con exactitud (el concepto sí: ~21-23 tablas en 0 filas sin refs en código).
 2. "Policies rol-only con USING(true)" — plausible vía CHANGELOG pero **pg_policies nunca se leyó** (execute_sql denegado). NO verificado en vivo.
 3. "handleParada único handler no idempotente" — matiz sin soporte completo (depende de EventModal→eventIdRef, no verificado; lo cubre el cierre de huecos).
@@ -32,6 +34,7 @@
 7. Detalles menores: 63 'use client' = 63 ocurrencias en 62 archivos.
 
 **Blind spots (cerrándose en el workflow de cierre + SQL pack):**
+
 - Cuerpos SQL vivos de funciones/triggers y pg_policies completo (requieren SQL pack ejecutado por James/Chat).
 - main branch nunca auditado (el código que PROD corre) — en curso.
 - ~30% de src/ sin leer (components/, EventModal, tests/, .husky/) — en curso.
