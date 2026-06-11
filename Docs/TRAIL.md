@@ -29,8 +29,8 @@ HARNESS MÍNIMO → MERGE TRACK → POST-MERGE (harness completo + cola)
  │       "finalizar Events V2 + GPS y merge" — incompatible con restart)
  ├─ [✅] Doc system validado: 5 tipos + verificación ejecutable como
  │       pieza #0; cola→BACKLOG (fusionar); CHANGELOG a reformar
- ├─ [ ] JAMES: correr SQL pack (39 queries, Docs/sql-diagnostic-pack);
- │       exportar BITACORA xlsb→xlsx + Excel vivo de Charris; push
+ ├─ [ ] JAMES: correr SQL pack (39 queries, Docs/sql-diagnostic-pack)
+ │       — único prerequisito de su lado para el merge track
  ├─ [ ] S1 — PAQUETE H1: Code prepara doc de decisiones con
  │       recomendación por punto (taxonomía enmendada, C1-C5 scope
  │       mínimo, boundaries Supabase write, poda plugins, fusión cola)
@@ -39,11 +39,18 @@ HARNESS MÍNIMO → MERGE TRACK → POST-MERGE (harness completo + cola)
  │       (1) CLAUDE.md reescrito vs canónico + AGENTS.md + CHANGELOG
  │       reformado → (2) hooks + reviewers + Supabase write staging +
  │       migrations-as-files. DIFERIDO: plugin interno, evals, CI full
- ├─ [ ] S4+ — MERGE TRACK: script BD consolidado (gates = SQL pack) →
- │       Cambio 6.6 (30+8 fixes) → GPS vs API nueva → Q15/J6 →
- │       smoke 3 fulfillment → script a prod → MERGE v2 → tag
- └─ [ ] POST-MERGE: harness completo + triage mantener/rediseñar/
-        eliminar + cola Q1-Q15/M1-M7 por el pipeline + skill GPS (Q14)
+ ├─ [ ] S4+ — MERGE TRACK. DoD del jefe (2026-06-11, verbatim):
+ │       Events V2 perfeccionado + lógica del app correcta (cálculos
+ │       qty despachadas/entregadas/parciales; estados de solicitud/
+ │       movilización correctos en TODO edge case; 4 fulfillment types
+ │       funcionales como MVP — INTERNOS falta del todo [diseñar+
+ │       construir], pickup, externo; GPS; backlog recibe lo que debe
+ │       en el momento adecuado). Vía: script BD consolidado (gates =
+ │       SQL pack) → Cambio 6.6 → MVP internos → GPS vs API nueva →
+ │       Q15/J6 → smoke matrix por fulfillment → prod → MERGE v2 → tag
+ └─ [ ] POST-MERGE (con harness robusto): refinar/refactorizar/features
+        nuevos — triage + cola Q1-Q15/M1-M7 + skill GPS (Q14) +
+        reportes F3 (el Excel de Charris vive AQUÍ, no en el merge)
 ```
 
 ## Contexto mínimo
