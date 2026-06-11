@@ -1,96 +1,34 @@
-# Rule: Supabase Read-Only
+# Rule: Acceso de Claude Code a Supabase (modelo 2026-06-11)
 
-Claude Code tiene acceso de **solo lectura** a Supabase via MCP.
+> **DEPRECADO el three-actor model** (Code read-only / Chat aplica SQL / James decide)
+> por directiva de James 2026-06-11. Chat queda FUERA del workflow de BD.
+> El flujo `[bd-pending]` → Chat-aplica está MUERTO.
+> Este archivo conserva su nombre histórico hasta el rewrite de CLAUDE.md
+> en la fase harness (que lo renombrará); el contenido vigente es este.
 
-## SÍ puedes
-- `SELECT` para verificar schema, columnas, datos
-- Validar que cambios de código coinciden con BD real
-- Confirmar triggers y funciones antes de depender de ellos
+## El modelo vigente
 
-## NO puedes
-- `INSERT`, `UPDATE`, `DELETE` de datos
-- `CREATE TABLE`, `ALTER TABLE`, `DROP` — cualquier DDL
-- Ejecutar migraciones
+| Operación | Permitido | Condición |
+|---|---|---|
+| **Lectura** (SELECT, pg_catalog, advisors, logs, tipos) | ✅ Cualquier schema, staging y prod | Sin restricción — anunciar en chat cuándo se consulta prod |
+| **Escritura/DDL** (INSERT/UPDATE/DELETE/CREATE/ALTER/DROP) | ✅ SOLO schema `public` | **SIEMPRE con confirmación previa de James** — explicar QUÉ y POR QUÉ antes de ejecutar |
+| Escritura a CUALQUIER otro schema (`hr.*`, `core.*`, `payroll.*`, `requests.*`, `auth.*`, `storage.*`, `backup.*`...) | ❌ NUNCA | Son territorio de HumanOS / plataforma de datos / sistema |
+| Operaciones destructivas de proyecto (pause/restore/reset/merge branch, delete branch, create project) | ❌ deny-list en settings.json | Revisar en paquete H1 |
 
-## SÍ puedes regenerar tipos
-Cuando sepas que hubo cambios de schema (ver entries `[bd]` recientes en `Docs/CHANGELOG.md`):
-```bash
-npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/types/database.ts
-```
+## Enforcement (interino → harness)
 
-## Si necesitas un cambio de BD — convención `[bd-pending]` → `[bd]`
+1. **Hoy:** permission prompts de Claude Code (cada `execute_sql`/`apply_migration` pide aprobación interactiva de James = la "confirmación previa") + esta regla + disciplina.
+2. **Fase harness (próximo):** hook PreToolUse que inspecciona el SQL y BLOQUEA writes fuera de `public.*` y operaciones sin WHERE en tablas sensibles (modelo HumanOS invertido — allí protegen `public.*` DE HumanOS; aquí es lo único escribible) + reglas en el CLAUDE.md nuevo.
 
-El proyecto NO usa archivos de migración (no `supabase/migrations/`).
-Cambios de schema se registran en `Docs/CHANGELOG.md` y James los ejecuta
-manualmente en Supabase SQL Editor.
+## Convenciones de escritura
 
-1. **Agrega entry `[bd-pending]` en `Docs/CHANGELOG.md`** (bajo la fecha de hoy):
-   ```
-   ## YYYY-MM-DD
+- **Staging primero** (`vonwkciosksqspyljzfy`), prod (`bzeoszympkkicwlfdtcn`) solo cambios ya validados en staging.
+- Todo cambio de schema nace como **archivo de migración versionado** (`supabase/migrations/`) — el CHANGELOG lo referencia, no lo embebe (reforma en curso).
+- Cada DDL lleva: rollback + queries de verificación + entry en CHANGELOG (formato corto).
+- Tipos: regenerar `database.ts` tras cambios de schema (contra staging).
 
-   ### [bd-pending] {título corto del cambio}
-   - Descripción del cambio
-   - SQL:
-     ```sql
-     ALTER TABLE ... ;
-     ```
-   - Razón: {por qué es necesario}
-   - Aplicar en: staging primero, luego prod
-   - Rollback: {SQL inverso}
-   ```
-2. **James ejecuta el SQL manualmente** en Supabase SQL Editor —
-   primero en staging (`vonwkciosksqspyljzfy`), luego en prod
-   (`bzeoszympkkicwlfdtcn`).
-3. **Una vez aplicado, el marker `[bd-pending]` cambia a `[bd]`**
-   en el mismo entry (James lo hace, o Code en sesión siguiente).
-4. **Si hubo cambios de schema aplicados, regenerar tipos** con el
-   comando de la sección anterior.
-5. Verifica leyendo Supabase via MCP y continúa.
+## Lo que NO cambia
 
-## Lectura eficiente
-- Queries puntuales: `SELECT column_name FROM information_schema.columns WHERE table_name = 'X'`
-- No hacer SELECTs masivos. Solo verificar estructura.
-- Cost codes: `cost_codes` filtrar por `project_id` + `extra_id`. Categorías via `cost_code_categories`.
-
-## Enforcement técnico (2026-04-13)
-
-### Arquitectura real (verificada via `/mcp` y `list_projects`)
-
-Existe **un solo vector** de acceso a Supabase desde Claude Code: el plugin built-in `plugin:supabase:supabase` del marketplace oficial. Este plugin expone sus tools bajo el namespace `mcp__claude_ai_Supabase__*` (naming confuso — el prefix `claude_ai_` sugiere una integración web pero en realidad es el plugin).
-
-El `.mcp.json` del proyecto **no se usa** — Claude Code no lo lee en este setup. Intentos previos de declarar servidores locales ahí fueron código muerto.
-
-### Branches de Supabase
-
-El proyecto Supabase de MovimientOS usa el feature de **database branching**. Bajo el proyecto principal `bzeoszympkkicwlfdtcn` hay dos branches:
-
-- **main** (`is_default: true`, no persistente) — producción
-- **staging** (`is_default: false`, persistente, `project_ref: vonwkciosksqspyljzfy`) — donde corren los tests E2E
-
-Ambas branches se acceden con el **mismo plugin**, pasando el `project_id` correspondiente como parámetro. No hay servidores separados.
-
-**Convención de uso:** Staging (`vonwkciosksqspyljzfy`) es el default para queries exploratorias y auditoría. Producción (`bzeoszympkkicwlfdtcn`) solo cuando se compara drift y Claude Code anuncia explícitamente en el chat: "voy a consultar prod para comparar X".
-
-### Deny-list en `.claude/settings.json` (11 entries)
-
-Claude Code bloquea las 11 tools mutantes del namespace `mcp__claude_ai_Supabase__*`:
-
-`apply_migration`, `create_branch`, `create_project`, `delete_branch`, `deploy_edge_function`, `execute_sql`, `merge_branch`, `pause_project`, `rebase_branch`, `reset_branch`, `restore_project`.
-
-**Enforcement verificado end-to-end:** estas tools desaparecen completamente del index de deferred tools — Claude Code no las expone ni permite cargar su schema. Intentar invocarlas retorna `InputValidationError` inmediatamente sin llegar al servidor. El deny por nombre de tool aplica a **todas las branches automáticamente** porque el bloqueo es a nivel de tool-name, no por project_id.
-
-`execute_sql` está en deny porque en este plugin corre con credenciales privilegiadas — un `DROP TABLE` arbitrario pasaría si no se bloqueara. Para SQL read-only ad-hoc, Claude Code no tiene alternativa — Claude Chat ejecuta las queries vía su propia integración Supabase con confirmación humana.
-
-### Tools permitidas (lectura)
-
-`list_tables`, `list_migrations`, `list_extensions`, `list_branches`, `list_edge_functions`, `list_projects`, `list_organizations`, `get_project`, `get_project_url`, `get_organization`, `get_edge_function`, `get_publishable_keys`, `get_logs`, `get_advisors`, `get_cost`, `generate_typescript_types`, `search_docs`, `confirm_cost`.
-
-Útiles para auditar schema / migraciones / logs / advisories sin tocar nada.
-
-### Regla documental (este archivo)
-
-Es la capa más blanda. Sirve para recordarme la política cuando razono sobre un task, no solo cuando ejecuto una tool. El deny-list técnico es el backstop real — pero esta regla evita que yo intente invocar tools denegadas pensando que están permitidas.
-
-### Si Supabase añade tools mutantes nuevas
-
-Hay que actualizar `.claude/settings.json` manualmente. No hay backstop del lado del plugin (no existe `--read-only` flag para este namespace) — solo el deny-list y mi disciplina.
+- Lectura eficiente: queries puntuales, no SELECTs masivos de data.
+- Prod se anuncia explícitamente en el chat antes de consultarse.
+- Tools de lectura del MCP (list_tables, get_advisors, etc.) siguen siendo la vía preferida para schema; `execute_sql` para lo que ellas no cubren (pg_policies, function bodies, data diagnostics).
