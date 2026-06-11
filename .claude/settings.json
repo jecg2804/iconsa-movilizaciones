@@ -1,13 +1,7 @@
 {
   "permissions": {
+    "comment": "Supabase: SIN deny por tool-name (2026-06-11, directiva James). El control es el harness — permission prompt interactivo (= GO de James) hoy; hook PreToolUse que inspecciona SQL y bloquea writes fuera de public.* en la fase harness. Code lee todo, escribe SOLO public.*. Git deny permanece.",
     "deny": [
-      "mcp__claude_ai_Supabase__create_project",
-      "mcp__claude_ai_Supabase__delete_branch",
-      "mcp__claude_ai_Supabase__merge_branch",
-      "mcp__claude_ai_Supabase__pause_project",
-      "mcp__claude_ai_Supabase__rebase_branch",
-      "mcp__claude_ai_Supabase__reset_branch",
-      "mcp__claude_ai_Supabase__restore_project",
       "Bash(git push origin main*)",
       "Bash(git push origin main:*)",
       "Bash(git push:* origin main:*)",

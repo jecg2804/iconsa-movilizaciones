@@ -35,9 +35,9 @@ Para fixes triviales (1 archivo, obvio): decir "skip brainstorming" explícitame
 
 SIEMPRE antes de tocar BD: verificar schema via MCP.
 
-- Tools permitidas (lectura): `list_tables`, `generate_typescript_types`, `get_logs`, `get_advisors`, `search_docs`, etc. Lista completa en `supabase-readonly.md`.
-- Tools mutantes (`execute_sql`, `apply_migration`, `deploy_edge_function`…) bloqueadas por deny-list en `.claude/settings.json`.
-- Default project_id: **staging** (`vonwkciosksqspyljzfy`). Prod (`bzeoszympkkicwlfdtcn`) solo para drift comparison y anunciado explícitamente en chat.
+- Lectura: todo schema, staging y prod, sin restricción (anunciar prod en chat). Tools: `list_tables`, `generate_typescript_types`, `get_logs`, `get_advisors`, `search_docs`, `execute_sql` para lo que ellas no cubren.
+- Escritura/DDL (`execute_sql`, `apply_migration`, `deploy_edge_function`): permitida SOLO a `public.*`, con GO previo de James + plan comunicado. Modelo completo en `.claude/rules/supabase-access.md` (three-actor model deprecado 2026-06-11).
+- Default project_id: **staging** (`vonwkciosksqspyljzfy`). Prod (`bzeoszympkkicwlfdtcn`) anunciado explícitamente en chat.
 
 Si necesitas un cambio de BD → STOP → `[bd-pending]` en `Docs/CHANGELOG.md` con el SQL exacto → James ejecuta manualmente en Supabase SQL Editor → `[bd-pending]` pasa a `[bd]`.
 

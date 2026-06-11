@@ -2,9 +2,13 @@
 
 > **DEPRECADO el three-actor model** (Code read-only / Chat aplica SQL / James decide)
 > por directiva de James 2026-06-11. Chat queda FUERA del workflow de BD.
-> El flujo `[bd-pending]` → Chat-aplica está MUERTO.
-> Este archivo conserva su nombre histórico hasta el rewrite de CLAUDE.md
-> en la fase harness (que lo renombrará); el contenido vigente es este.
+> El flujo `[bd-pending]` → Chat-aplica está MUERTO. Code tiene read/write.
+> (Renombrado de `supabase-readonly.md` el 2026-06-11 — el rol ya no es solo lectura.)
+>
+> **INTERINO:** el diseño completo del harness (hooks, routers, skills, MCPs,
+> Codex/agents, doc system) se decide en el paquete H1 y puede refinar estos
+> boundaries. Control real hoy: permission prompt (= GO de James antes de
+> cada write) + planificar-y-comunicar antes de ejecutar.
 
 ## El modelo vigente
 
@@ -26,6 +30,16 @@
 - Todo cambio de schema nace como **archivo de migración versionado** (`supabase/migrations/`) — el CHANGELOG lo referencia, no lo embebe (reforma en curso).
 - Cada DDL lleva: rollback + queries de verificación + entry en CHANGELOG (formato corto).
 - Tipos: regenerar `database.ts` tras cambios de schema (contra staging).
+
+## Principio de validación (regla dura, James 2026-06-11)
+
+**NUNCA confiar en documentos ni snippets como verdad** — ni los del repo
+(CLAUDE.md, CHANGELOG, auditorías, discovery), ni carpetas de prueba
+(`spectrum-tests/`), ni reconstrucciones. SIEMPRE validar contra la FUENTE:
+la BD viva (Supabase MCP), el código, y la API/SDX/ODBC cuando aplique.
+Los docs son pistas con fecha; la fuente es la BD/código/sistema externo.
+Esta sesión ya cazó 3 mentiras documentales por validar contra la fuente
+(stats fabricados, "Events V2 en prod", bias del doc system).
 
 ## Lo que NO cambia
 

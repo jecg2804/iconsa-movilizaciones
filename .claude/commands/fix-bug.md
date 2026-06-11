@@ -26,6 +26,6 @@ Bug reproducible, scope acotado (1-2 archivos). Root cause probable es obvio o s
 ## Reglas
 
 - Si el mismo patrón de bug afecta otros puntos del app, mencionarlo en el commit y en BACKLOG.
-- Si el fix requiere cambio de BD → entry `[bd-pending]` en CHANGELOG + PARAR (ver `.claude/rules/supabase-readonly.md`).
+- Si el fix requiere cambio de BD → Code lo aplica a `public.*` con GO previo de James + migración versionada (ver `.claude/rules/supabase-access.md`). El flujo `[bd-pending]`→Chat está deprecado.
 - Si descubrís bugs adicionales durante el fix, **no los arregles en el mismo commit** — documentá en BACKLOG y resolve después.
 - El fix no puede introducir regresión en `npm run build`.
