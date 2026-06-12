@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
@@ -8,9 +8,20 @@ import {
   notifySolicitudEnviada,
   notifySolicitudEditada,
   notifySolicitudCancelada,
+  notifySolicitudUrgenteNueva,
 } from '@/lib/notifications/actions'
 
 // --- Tipos exportados ---
+
+/**
+ * Información de fulfillment activa para una línea (Cambio 5).
+ * Una línea puede tener 0-N fulfillments activos en paralelo (Trip + Pickup + External).
+ * Discriminated union por type — el campo discriminador permite render conditional.
+ */
+export type FulfillmentInfo =
+  | { type: 'trip'; id: string; trip_id: string | null; status: string; quantity_assigned: number; qty_delivered: number }
+  | { type: 'pickup'; id: string; pickup_id: string; status: string; quantity_assigned: number; qty_delivered: number }
+  | { type: 'external'; id: string; external_id: string; status: string; provider_name: string; invoice_amount: number; quantity_assigned: number; qty_delivered: number }
 
 export interface SolicitudWithRelations {
   id: string
@@ -27,10 +38,14 @@ export interface SolicitudWithRelations {
   priority: string | null
   notes: string | null
   attachments: unknown
+  cost_code_id: string | null
+  cost_category_id: string | null
   created_at: string | null
   updated_at: string | null
   project: { id: string; code: string; name: string } | null
   requester: { id: string; name: string } | null
+  cost_code: { id: string; phase_code: string; phase_description: string | null; full_code: string | null } | null
+  cost_category: { id: string; code: string; description: string | null } | null
   lines: LineWithRelations[]
 }
 
@@ -49,8 +64,6 @@ export interface LineWithRelations {
   quantity: number
   unit_id: string | null
   unit_text: string | null
-  cost_code_id: string | null
-  cost_category_id: string | null
   category: string | null
   material_category: string | null
   po_reference: string | null
@@ -58,14 +71,15 @@ export interface LineWithRelations {
   status: string
   qty_scheduled: number | null
   qty_delivered: number | null
+  designated_receiver_id: string | null
+  designated_receiver_name: string | null
   created_at: string
   updated_at: string
   equipment: { id: string; spectrum_code: string | null; description: string } | null
   from_location: { id: string; name: string } | null
   to_location: { id: string; name: string } | null
   unit: { id: string; code: string; description: string | null } | null
-  cost_code: { id: string; phase_code: string; phase_description: string | null; full_code: string | null } | null
-  cost_category: { id: string; code: string; description: string | null } | null
+  fulfillments: FulfillmentInfo[]
 }
 
 export interface SolicitudInput {
@@ -75,6 +89,8 @@ export interface SolicitudInput {
   date_required: string
   notes?: string | null
   attachments?: unknown[] | null
+  cost_code_id?: string | null
+  cost_category_id?: string | null
 }
 
 export interface LineInput {
@@ -90,12 +106,12 @@ export interface LineInput {
   quantity: number
   unit_id: string | null
   unit_text: string | null
-  cost_code_id: string | null
-  cost_category_id: string | null
   category: string | null
   material_category: string | null
   po_reference: string | null
   notes: string | null
+  designated_receiver_id?: string | null
+  designated_receiver_name?: string | null
 }
 
 export interface SolicitudesFilter {
@@ -104,8 +120,23 @@ export interface SolicitudesFilter {
   priorities: string[]
   dateFrom: string | null
   dateTo: string | null
+  /**
+   * J4-A: día seleccionado por click en el calendario. Filtra SOLO la tabla
+   * (no el calendario, para que se puedan ver los otros días). Es ortogonal
+   * a dateFrom/dateTo — si ambos están seteados, la tabla muestra la
+   * intersección.
+   */
+  singleDay: string | null
   search: string
   requesterId: string | null
+  /**
+   * J4-B: sort server-side. Columna de BD por la que ordenar (ej. 'date_required',
+   * 'request_id', 'status'). Si es null, usa el default por fecha requerida asc.
+   */
+  sortColumn: string | null
+  sortDirection: 'asc' | 'desc'
+  page: number
+  pageSize: number
 }
 
 // --- Helpers privados ---
@@ -116,59 +147,13 @@ const DEFAULT_FILTER: SolicitudesFilter = {
   priorities: [],
   dateFrom: null,
   dateTo: null,
+  singleDay: null,
   search: '',
   requesterId: null,
-}
-
-const SEQUENCE_CONFLICT_ERROR =
-  'there is no unique or exclusion constraint matching the ON CONFLICT specification'
-
-function isSequenceConflictError(message: string | undefined): boolean {
-  if (!message) return false
-  return message.toLowerCase().includes(SEQUENCE_CONFLICT_ERROR)
-}
-
-/**
- * Fallback para generar request_id desde cliente si el trigger falla por ON CONFLICT.
- * Mantiene formato {project_code}-SM-{###} por proyecto.
- */
-async function generateRequestIdFallback(
-  supabase: SupabaseClient<Database>,
-  projectId: string,
-): Promise<string | null> {
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('code')
-    .eq('id', projectId)
-    .single()
-
-  if (projectError || !project?.code) {
-    return null
-  }
-
-  const { data: existingRows } = await supabase
-    .from('sm_requests')
-    .select('request_id')
-    .eq('project_id', projectId)
-    .not('request_id', 'is', null)
-
-  let maxSequence = 0
-  for (const row of existingRows ?? []) {
-    const requestId = row.request_id
-    if (!requestId) continue
-
-    const match = requestId.match(/-SM-(\d+)$/)
-    if (!match) continue
-
-    const parsed = Number(match[1])
-    if (!Number.isNaN(parsed)) {
-      maxSequence = Math.max(maxSequence, parsed)
-    }
-  }
-
-  const nextSequence = maxSequence + 1
-  const suffix = String(nextSequence).padStart(3, '0')
-  return `${project.code}-SM-${suffix}`
+  sortColumn: null,
+  sortDirection: 'asc',
+  page: 0,
+  pageSize: 20,
 }
 
 /**
@@ -218,7 +203,8 @@ async function createSuggestions(
   }
 
   if (suggestions.length > 0) {
-    await supabase.from('suggestions').insert(suggestions)
+    const { error: sugErr } = await supabase.from('suggestions').insert(suggestions)
+    if (sugErr) console.error('[Solicitudes] Error al guardar sugerencias:', sugErr.message)
   }
 }
 
@@ -245,12 +231,12 @@ function lineInputToRow(
     quantity: line.quantity,
     unit_id: line.unit_id,
     unit_text: line.unit_text,
-    cost_code_id: line.cost_code_id,
-    cost_category_id: line.cost_category_id,
     category: line.category,
     material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
+    designated_receiver_id: line.designated_receiver_id ?? null,
+    designated_receiver_name: line.designated_receiver_name ?? null,
   }
 }
 
@@ -267,10 +253,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   })
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [totalCount, setTotalCount] = useState(0)
 
   // Estado de mutaciones
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const busyRef = useRef(false)
 
   // --- Actualizar filtros parcialmente ---
   const setFilters = useCallback((updates: Partial<SolicitudesFilter>) => {
@@ -283,15 +271,20 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
     setListError(null)
 
     try {
+      // J4-B: sort server-side. Default: date_required asc si no hay sort explícito.
+      const sortCol = filters.sortColumn ?? 'date_required'
+      const sortAsc = filters.sortDirection !== 'desc'
       let query = supabase
         .from('sm_requests')
         .select(`
           *,
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
+          cost_code:cost_codes!sm_requests_cost_code_id_fkey(id, phase_code, phase_description, full_code),
+          cost_category:cost_categories!sm_requests_cost_category_id_fkey(id, code, description),
           lines:sm_request_lines(id, status, line_type, description, quantity, notes, from_text, to_text, unit_text, from_location:locations!sm_request_lines_from_location_id_fkey(name), to_location:locations!sm_request_lines_to_location_id_fkey(name), unit:units(code))
-        `)
-        .order('date_required', { ascending: true })
+        `, { count: 'exact' })
+        .order(sortCol, { ascending: sortAsc })
 
       // Aplicar filtros dinamicamente
       if (filters.projectId) {
@@ -307,6 +300,11 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       if (filters.dateTo) {
         query = query.lte('date_required', filters.dateTo)
       }
+      // J4-A: filtro de día único (click en calendario). Solo aplica a la
+      // tabla — la query del calendario NO incluye este filtro.
+      if (filters.singleDay) {
+        query = query.eq('date_required', filters.singleDay)
+      }
       if (filters.search) {
         query = query.ilike('request_id', `%${filters.search}%`)
       }
@@ -314,7 +312,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         query = query.eq('requester_id', filters.requesterId)
       }
 
-      const { data, error } = await query
+      // Paginación server-side
+      const from = filters.page * filters.pageSize
+      const to = from + filters.pageSize - 1
+      query = query.range(from, to)
+
+      const { data, error, count } = await query
 
       if (error) {
         setListError(error.message)
@@ -326,6 +329,10 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         // Supabase devuelve el join como objeto o array segun cardinalidad
         const project = Array.isArray(row.project) ? row.project[0] : row.project
         const requester = Array.isArray(row.requester) ? row.requester[0] : row.requester
+        const rawCostCode = (row as Record<string, unknown>).cost_code as SolicitudWithRelations['cost_code'] | SolicitudWithRelations['cost_code'][] | null
+        const rawCostCategory = (row as Record<string, unknown>).cost_category as SolicitudWithRelations['cost_category'] | SolicitudWithRelations['cost_category'][] | null
+        const costCode = Array.isArray(rawCostCode) ? rawCostCode[0] ?? null : rawCostCode
+        const costCategory = Array.isArray(rawCostCategory) ? rawCostCategory[0] ?? null : rawCostCategory
         const lines = Array.isArray(row.lines) ? row.lines : []
 
         return {
@@ -343,15 +350,20 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           priority: row.priority,
           notes: row.notes,
           attachments: row.attachments,
+          cost_code_id: ((row as Record<string, unknown>).cost_code_id as string | null) ?? null,
+          cost_category_id: ((row as Record<string, unknown>).cost_category_id as string | null) ?? null,
           created_at: row.created_at,
           updated_at: row.updated_at,
           project: project as SolicitudWithRelations['project'],
           requester: requester as SolicitudWithRelations['requester'],
+          cost_code: costCode,
+          cost_category: costCategory,
           // Para la lista, las lineas solo traen id y status (sin relaciones completas)
           lines: lines as unknown as LineWithRelations[],
         }
       })
 
+      setTotalCount(count ?? 0)
       setSolicitudes(mapped)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cargar solicitudes'
@@ -375,14 +387,26 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           *,
           project:projects!sm_requests_project_id_fkey(id, code, name),
           requester:people!sm_requests_requester_id_fkey(id, name),
+          cost_code:cost_codes!sm_requests_cost_code_id_fkey(id, phase_code, phase_description, full_code),
+          cost_category:cost_categories!sm_requests_cost_category_id_fkey(id, code, description),
           lines:sm_request_lines(
             *,
             equipment:equipment!sm_request_lines_equipment_id_fkey(id, spectrum_code, description),
             from_location:locations!sm_request_lines_from_location_id_fkey(id, name),
             to_location:locations!sm_request_lines_to_location_id_fkey(id, name),
             unit:units!sm_request_lines_unit_id_fkey(id, code, description),
-            cost_code:cost_codes!sm_request_lines_cost_code_id_fkey(id, phase_code, phase_description, full_code),
-            cost_category:cost_categories!sm_request_lines_cost_category_id_fkey(id, code, description)
+            trip_assignments:trip_line_assignments(
+              id, quantity_assigned, qty_delivered,
+              trip:trip_id(id, trip_id, status)
+            ),
+            pickup_lines:pickup_order_lines(
+              id, quantity_assigned, qty_delivered,
+              order:pickup_order_id(id, pickup_id, status)
+            ),
+            external_lines:external_order_lines(
+              id, quantity_assigned, qty_delivered,
+              order:external_order_id(id, external_id, status, provider_name, invoice_amount)
+            )
           )
         `)
         .eq('id', id)
@@ -401,15 +425,64 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         (a, b) => (a as { line_number: number }).line_number - (b as { line_number: number }).line_number,
       )
 
-      // Mapear lineas con sus relaciones
+      // Mapear lineas con sus relaciones (cost_code/category ahora son del header — Cambio 2)
       const lines: LineWithRelations[] = sortedLines.map((rawLine) => {
         const line = rawLine as Record<string, unknown>
         const eq = line.equipment as LineWithRelations['equipment']
         const fromLoc = line.from_location as LineWithRelations['from_location']
         const toLoc = line.to_location as LineWithRelations['to_location']
         const unit = line.unit as LineWithRelations['unit']
-        const costCode = line.cost_code as LineWithRelations['cost_code']
-        const costCategory = line.cost_category as LineWithRelations['cost_category']
+
+        // Mapear fulfillments (3 tablas pivote) a discriminated union.
+        // Filtro: solo orders/trips activos (status !== 'Cancelado').
+        const tripAssignments = (line.trip_assignments as Array<Record<string, unknown>>) ?? []
+        const pickupLines = (line.pickup_lines as Array<Record<string, unknown>>) ?? []
+        const externalLines = (line.external_lines as Array<Record<string, unknown>>) ?? []
+
+        const fulfillments: FulfillmentInfo[] = []
+
+        for (const ta of tripAssignments) {
+          const trip = (Array.isArray(ta.trip) ? ta.trip[0] : ta.trip) as { id: string; trip_id: string | null; status: string } | null
+          if (!trip || trip.status === 'Cancelado') continue
+          fulfillments.push({
+            type: 'trip',
+            id: trip.id,
+            trip_id: trip.trip_id,
+            status: trip.status,
+            quantity_assigned: ta.quantity_assigned as number,
+            qty_delivered: (ta.qty_delivered as number) ?? 0,
+          })
+        }
+
+        for (const pl of pickupLines) {
+          const order = (Array.isArray(pl.order) ? pl.order[0] : pl.order) as { id: string; pickup_id: string; status: string } | null
+          if (!order || order.status === 'Cancelado') continue
+          fulfillments.push({
+            type: 'pickup',
+            id: order.id,
+            pickup_id: order.pickup_id,
+            status: order.status,
+            quantity_assigned: pl.quantity_assigned as number,
+            qty_delivered: (pl.qty_delivered as number) ?? 0,
+          })
+        }
+
+        for (const el of externalLines) {
+          const order = (Array.isArray(el.order) ? el.order[0] : el.order) as {
+            id: string; external_id: string; status: string; provider_name: string; invoice_amount: number
+          } | null
+          if (!order || order.status === 'Cancelado') continue
+          fulfillments.push({
+            type: 'external',
+            id: order.id,
+            external_id: order.external_id,
+            status: order.status,
+            provider_name: order.provider_name,
+            invoice_amount: order.invoice_amount,
+            quantity_assigned: el.quantity_assigned as number,
+            qty_delivered: (el.qty_delivered as number) ?? 0,
+          })
+        }
 
         return {
           id: line.id as string,
@@ -426,12 +499,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           quantity: line.quantity as number,
           unit_id: (line.unit_id as string | null) ?? null,
           unit_text: (line.unit_text as string | null) ?? null,
-          cost_code_id: (line.cost_code_id as string | null) ?? null,
-          cost_category_id: (line.cost_category_id as string | null) ?? null,
           category: (line.category as string | null) ?? null,
           material_category: (line.material_category as string | null) ?? null,
           po_reference: (line.po_reference as string | null) ?? null,
           notes: (line.notes as string | null) ?? null,
+          designated_receiver_id: (line.designated_receiver_id as string | null) ?? null,
+          designated_receiver_name: (line.designated_receiver_name as string | null) ?? null,
           status: line.status as string,
           qty_scheduled: (line.qty_scheduled as number | null) ?? null,
           qty_delivered: (line.qty_delivered as number | null) ?? null,
@@ -441,10 +514,14 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           from_location: fromLoc ? (Array.isArray(fromLoc) ? fromLoc[0] : fromLoc) : null,
           to_location: toLoc ? (Array.isArray(toLoc) ? toLoc[0] : toLoc) : null,
           unit: unit ? (Array.isArray(unit) ? unit[0] : unit) : null,
-          cost_code: costCode ? (Array.isArray(costCode) ? costCode[0] : costCode) : null,
-          cost_category: costCategory ? (Array.isArray(costCategory) ? costCategory[0] : costCategory) : null,
+          fulfillments,
         }
       })
+
+      const rawCostCode = (data as Record<string, unknown>).cost_code as SolicitudWithRelations['cost_code'] | SolicitudWithRelations['cost_code'][] | null
+      const rawCostCategory = (data as Record<string, unknown>).cost_category as SolicitudWithRelations['cost_category'] | SolicitudWithRelations['cost_category'][] | null
+      const costCode = Array.isArray(rawCostCode) ? rawCostCode[0] ?? null : rawCostCode
+      const costCategory = Array.isArray(rawCostCategory) ? rawCostCategory[0] ?? null : rawCostCategory
 
       return {
         id: data.id,
@@ -461,10 +538,14 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         priority: data.priority,
         notes: data.notes,
         attachments: data.attachments,
+        cost_code_id: ((data as Record<string, unknown>).cost_code_id as string | null) ?? null,
+        cost_category_id: ((data as Record<string, unknown>).cost_category_id as string | null) ?? null,
         created_at: data.created_at,
         updated_at: data.updated_at,
         project: project as SolicitudWithRelations['project'],
         requester: requester as SolicitudWithRelations['requester'],
+        cost_code: costCode,
+        cost_category: costCategory,
         lines,
       }
     },
@@ -480,6 +561,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       status: 'Borrador' | 'Enviada',
       personId?: string,
     ): Promise<{ id: string; requestId: string } | null> => {
+      if (busyRef.current) return null
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -491,35 +574,24 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           date_required: header.date_required,
           notes: header.notes ?? null,
           attachments: JSON.parse(JSON.stringify(header.attachments ?? [])),
-          status,
+          cost_code_id: header.cost_code_id ?? null,
+          cost_category_id: header.cost_category_id ?? null,
           created_by: personId ?? null,
         }
 
-        // 1. Insertar el header
-        let { data: insertedRequest, error: headerError } = await supabase
+        // 1. Insertar el header SIEMPRE como Borrador.
+        //    El trigger BD `enforce_line_add_delete_only_in_borrador` (Fase
+        //    B.1 Bloque 2.A) bloquea INSERT/DELETE de líneas mientras el
+        //    parent no esté en Borrador. Por eso el flow es: crear header
+        //    en Borrador → insertar líneas → promover a Enviada si aplica.
+        //    Antes del trigger, el código insertaba con status='Enviada'
+        //    directo y funcionaba por accidente; el trigger expuso que el
+        //    orden correcto es el que usa la UI de edición.
+        const { data: insertedRequest, error: headerError } = await supabase
           .from('sm_requests')
-          .insert(headerPayload)
+          .insert({ ...headerPayload, status: 'Borrador' })
           .select('id, request_id')
           .single()
-
-        // Fallback: si falla trigger por ON CONFLICT, reintentar enviando request_id manual.
-        if ((headerError || !insertedRequest) && isSequenceConflictError(headerError?.message)) {
-          const fallbackRequestId = await generateRequestIdFallback(supabase, header.project_id)
-
-          if (fallbackRequestId) {
-            const retry = await supabase
-              .from('sm_requests')
-              .insert({
-                ...headerPayload,
-                request_id: fallbackRequestId,
-              })
-              .select('id, request_id')
-              .single()
-
-            insertedRequest = retry.data
-            headerError = retry.error
-          }
-        }
 
         if (headerError || !insertedRequest) {
           setSaveError(headerError?.message ?? 'Error al crear la solicitud')
@@ -528,7 +600,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
 
         const newId = insertedRequest.id
 
-        // 2. Insertar lineas
+        // 2. Insertar lineas (parent en Borrador, trigger acepta)
         if (lines.length > 0) {
           const lineRows = lines.map((line, index) =>
             lineInputToRow(line, newId, index + 1),
@@ -547,7 +619,23 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         // 3. Crear sugerencias para valores de fallback
         await createSuggestions(supabase, lines, header.requester_id)
 
-        // 4. Re-fetch para obtener el request_id auto-generado por trigger
+        // 4. Promover a Enviada si el usuario eligió enviar directamente.
+        //    Ahora que las líneas están insertadas, el cambio de status pasa
+        //    los triggers (cascade_request_status no aplica a Borrador→Enviada,
+        //    y lifecycle_timestamps captura date_submitted=now() en el UPDATE).
+        if (status === 'Enviada') {
+          const { error: promoteError } = await supabase
+            .from('sm_requests')
+            .update({ status: 'Enviada' })
+            .eq('id', newId)
+
+          if (promoteError) {
+            setSaveError(`Líneas guardadas pero error al enviar: ${promoteError.message}`)
+            return null
+          }
+        }
+
+        // 5. Re-fetch para obtener el request_id auto-generado por trigger
         const { data: refreshed } = await supabase
           .from('sm_requests')
           .select('request_id')
@@ -557,6 +645,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         // Notificar si se envió directamente (status = Enviada)
         if (status === 'Enviada') {
           notifySolicitudEnviada(newId).catch(console.error)
+          notifySolicitudUrgenteNueva(newId).catch(console.error)
         }
 
         return {
@@ -568,6 +657,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         setSaveError(message)
         return null
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -583,6 +673,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
       deletedLineIds: string[],
       personId?: string,
     ): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
@@ -595,6 +687,8 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         if (header.date_required !== undefined) headerUpdate.date_required = header.date_required
         if (header.notes !== undefined) headerUpdate.notes = header.notes
         if (header.attachments !== undefined) headerUpdate.attachments = header.attachments
+        if (header.cost_code_id !== undefined) headerUpdate.cost_code_id = header.cost_code_id
+        if (header.cost_category_id !== undefined) headerUpdate.cost_category_id = header.cost_category_id
         if (personId) headerUpdate.updated_by = personId
 
         if (Object.keys(headerUpdate).length > 0) {
@@ -655,12 +749,12 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
                 quantity: line.quantity,
                 unit_id: line.unit_id,
                 unit_text: line.unit_text,
-                cost_code_id: line.cost_code_id,
-                cost_category_id: line.cost_category_id,
                 category: line.category,
                 material_category: line.material_category,
                 po_reference: line.po_reference,
                 notes: line.notes,
+                            designated_receiver_id: line.designated_receiver_id ?? null,
+                designated_receiver_name: line.designated_receiver_name ?? null,
               }
             if (personId) lineUpdate.updated_by = personId
 
@@ -707,6 +801,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -714,13 +809,19 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   )
 
   // --- Cancelar solicitud ---
+  // Cambio 5 T10: cancela pickup_orders + external_orders relacionados con lógica G:
+  //   - Si TODAS las líneas del order son de la solicitud → cancel order entero
+  //   - Si solo ALGUNAS → DELETE de order_lines selectivo (auto_cancel_empty trigger
+  //     maneja último caso si quedan 0 líneas)
   const cancelSolicitud = useCallback(
     async (id: string, personId?: string): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
       try {
-        // 1. Obtener las lineas de la solicitud
+        // 1. Obtener líneas de la solicitud
         const { data: lines, error: fetchError } = await supabase
           .from('sm_request_lines')
           .select('id, status')
@@ -731,7 +832,89 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           return false
         }
 
-        // 2. Para lineas Programadas: eliminar asignaciones de viaje
+        const lineIds = (lines ?? []).map((l) => l.id)
+
+        // 2. Cancel pickup_orders relacionados con lógica G
+        // SELECT pickup_orders activos que tienen AT LEAST 1 línea de esta solicitud.
+        const { data: pickupOrdersData } = await supabase
+          .from('pickup_orders')
+          .select(`
+            id, pickup_id,
+            lines:pickup_order_lines!inner(id, request_line_id)
+          `)
+          .eq('status', 'Aprobado')
+          .in('lines.request_line_id', lineIds.length > 0 ? lineIds : ['__none__'])
+
+        for (const order of pickupOrdersData ?? []) {
+          // Fetch ALL lines del order (no solo las JOINed)
+          const { data: allOrderLines } = await supabase
+            .from('pickup_order_lines')
+            .select('id, request_line_id')
+            .eq('pickup_order_id', order.id)
+
+          const allOrderLinesArr = allOrderLines ?? []
+          const linesFromThisRequest = allOrderLinesArr.filter((ol) => lineIds.includes(ol.request_line_id))
+
+          if (linesFromThisRequest.length === allOrderLinesArr.length) {
+            // TODAS las líneas son de la solicitud → cancel order entero
+            await supabase
+              .from('pickup_orders')
+              .update({
+                status: 'Cancelado',
+                cancelled_at: new Date().toISOString(),
+                cancelled_by: personId ?? null,
+              })
+              .eq('id', order.id)
+          } else if (linesFromThisRequest.length > 0) {
+            // Solo ALGUNAS son de la solicitud → DELETE selectivo
+            // (auto_cancel_empty trigger maneja si quedan 0 líneas)
+            const lineIdsToRemove = linesFromThisRequest.map((ol) => ol.id)
+            await supabase
+              .from('pickup_order_lines')
+              .delete()
+              .in('id', lineIdsToRemove)
+          }
+        }
+
+        // 3. Cancel external_orders relacionados (paralelo)
+        const { data: externalOrdersData } = await supabase
+          .from('external_orders')
+          .select(`
+            id, external_id,
+            lines:external_order_lines!inner(id, request_line_id)
+          `)
+          .eq('status', 'Aprobado')
+          .in('lines.request_line_id', lineIds.length > 0 ? lineIds : ['__none__'])
+
+        for (const order of externalOrdersData ?? []) {
+          const { data: allOrderLines } = await supabase
+            .from('external_order_lines')
+            .select('id, request_line_id')
+            .eq('external_order_id', order.id)
+
+          const allOrderLinesArr = allOrderLines ?? []
+          const linesFromThisRequest = allOrderLinesArr.filter((ol) => lineIds.includes(ol.request_line_id))
+
+          if (linesFromThisRequest.length === allOrderLinesArr.length) {
+            await supabase
+              .from('external_orders')
+              .update({
+                status: 'Cancelado',
+                cancelled_at: new Date().toISOString(),
+                cancelled_by: personId ?? null,
+              })
+              .eq('id', order.id)
+          } else if (linesFromThisRequest.length > 0) {
+            const lineIdsToRemove = linesFromThisRequest.map((ol) => ol.id)
+            await supabase
+              .from('external_order_lines')
+              .delete()
+              .in('id', lineIdsToRemove)
+          }
+        }
+
+        // 4. Eliminar trip_line_assignments para líneas Programadas
+        // (el trigger BD recalcula sm_request_lines.qty_scheduled automáticamente)
         const programmedLines = (lines ?? []).filter((l) => l.status === 'Programada')
         for (const line of programmedLines) {
           await supabase
@@ -740,9 +923,9 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
             .eq('request_line_id', line.id)
         }
 
-        // 3. Actualizar todas las lineas Pendiente y Programada a Cancelada
+        // 5. UPDATE líneas Pendiente/Programada/Parcial a 'Cancelada'
         const lineIdsToCancel = (lines ?? [])
-          .filter((l) => l.status === 'Pendiente' || l.status === 'Programada')
+          .filter((l) => l.status === 'Pendiente' || l.status === 'Programada' || l.status === 'Parcial')
           .map((l) => l.id)
 
         if (lineIdsToCancel.length > 0) {
@@ -757,7 +940,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           }
         }
 
-        // 4. Actualizar el status del header a Cancelada
+        // 6. UPDATE sm_requests.status='Cancelada'
         const { error: cancelError } = await supabase
           .from('sm_requests')
           .update({ status: 'Cancelada' })
@@ -768,7 +951,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
           return false
         }
 
-        // Notificar cancelación
+        // Notificar
         notifySolicitudCancelada(id, personId).catch(console.error)
 
         return true
@@ -777,6 +960,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -786,6 +970,7 @@ export function useSolicitudes(initialFilter?: Partial<SolicitudesFilter>) {
   return {
     // Lista
     solicitudes,
+    totalCount,
     filters,
     setFilters,
     listLoading,

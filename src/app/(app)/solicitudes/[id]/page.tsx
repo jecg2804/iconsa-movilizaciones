@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useEquipment } from '@/hooks/useEquipment'
 import { useLocations } from '@/hooks/useLocations'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import {
   useSolicitudes,
   type SolicitudInput,
@@ -18,7 +19,7 @@ import {
 import { canEditSolicitud } from '@/lib/utils/roles'
 import { formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
 import { checkDuplicateLines } from '@/lib/utils/duplicates'
-import { notifySolicitudEnviada } from '@/lib/notifications/actions'
+import { notifySolicitudEnviada, notifySolicitudUrgenteNueva } from '@/lib/notifications/actions'
 import type { DuplicateMatch } from '@/components/ui/DuplicateWarning'
 import type { SelectOption } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
@@ -26,6 +27,15 @@ import { Button } from '@/components/ui/Button'
 import { SolicitudForm, type FormMode } from '@/components/solicitudes/SolicitudForm'
 import { LineEditor } from '@/components/solicitudes/LineEditor'
 import { LineRow } from '@/components/solicitudes/LineRow'
+import type { AssociatedTrip, TripLineInfo, TripEventInfo } from '@/components/solicitudes/types'
+import ActiveTripPanel from '@/components/solicitudes/ActiveTripPanel'
+import { usePickupOrders } from '@/hooks/usePickupOrders'
+import { useExternalOrders } from '@/hooks/useExternalOrders'
+import { PickupOrderCard, type PickupOrderWithLines } from '@/components/programacion/PickupOrderCard'
+import { ExternalOrderCard, type ExternalOrderWithLines } from '@/components/programacion/ExternalOrderCard'
+import { ConfirmPickupOrderDeliveryModal } from '@/components/programacion/ConfirmPickupOrderDeliveryModal'
+import { ConfirmExternalOrderDeliveryModal } from '@/components/programacion/ConfirmExternalOrderDeliveryModal'
+import type { Attachment } from '@/lib/supabase/storage'
 
 // --- Helpers ---
 
@@ -44,12 +54,12 @@ function lineToInput(line: LineWithRelations): LineInput {
     quantity: line.quantity,
     unit_id: line.unit_id,
     unit_text: line.unit_text,
-    cost_code_id: line.cost_code_id,
-    cost_category_id: line.cost_category_id,
     category: line.category,
     material_category: line.material_category,
     po_reference: line.po_reference,
     notes: line.notes,
+    designated_receiver_id: line.designated_receiver_id ?? null,
+    designated_receiver_name: line.designated_receiver_name ?? null,
   }
 }
 
@@ -74,6 +84,7 @@ export default function SolicitudDetailPage() {
   const id = params.id as string
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const guard = useSubmitGuard()
 
   // Auth y datos maestros
   const { person, role, userProjectIds, loading: authLoading } = useAuth()
@@ -102,39 +113,30 @@ export default function SolicitudDetailPage() {
   const [sendError, setSendError] = useState<string | null>(null)
 
   // Viajes asociados a esta solicitud
-  interface TripLineInfo {
-    description: string
-    line_type: string
-    quantity_assigned: number
-    qty_delivered: number
-  }
-  interface TripEventInfo {
-    event_type: string
-    event_timestamp: string
-    received_by_name: string | null
-    notes: string | null
-  }
-  interface AssociatedTrip {
-    id: string
-    trip_id: string | null
-    scheduled_date: string
-    status: string
-    confirmation_code: string | null
-    driver: { name: string } | null
-    vehicle: { description: string; spectrum_code: string | null } | null
-    trailer: { description: string; spectrum_code: string | null } | null
-    att_permit: boolean
-    escort: boolean
-    lines: TripLineInfo[]
-    events: TripEventInfo[]
-  }
   const [associatedTrips, setAssociatedTrips] = useState<AssociatedTrip[]>([])
 
-  // Datos auxiliares (people, units, costCodes) — se cargan inline
+  // Datos auxiliares (people, units) — se cargan inline.
+  // costCodes ahora se cargan dentro del SolicitudForm via useCostCodeCascade (Cambio 2).
   const [people, setPeople] = useState<SelectOption[]>([])
   const [approvers, setApprovers] = useState<SelectOption[]>([])
   const [units, setUnits] = useState<SelectOption[]>([])
-  const [costCodes, setCostCodes] = useState<SelectOption[]>([])
+
+  // --- Cambio 5 T8: pickup_orders + external_orders related a esta solicitud ---
+  const pickupOrders = usePickupOrders()
+  const externalOrders = useExternalOrders()
+
+  const [relatedPickupOrders, setRelatedPickupOrders] = useState<PickupOrderWithLines[]>([])
+  const [relatedExternalOrders, setRelatedExternalOrders] = useState<ExternalOrderWithLines[]>([])
+  const [pmProjectIds, setPmProjectIds] = useState<Set<string>>(new Set())
+
+  const [confirmPickupOrder, setConfirmPickupOrder] = useState<PickupOrderWithLines | null>(null)
+  const [confirmExternalOrder, setConfirmExternalOrder] = useState<ExternalOrderWithLines | null>(null)
+  const [cancelPickupModal, setCancelPickupModal] = useState<{ order: PickupOrderWithLines; deliveredCount: number; deliveredQty: number } | null>(null)
+  const [cancelPickupReason, setCancelPickupReason] = useState('')
+  const [cancelExternalModal, setCancelExternalModal] = useState<{ order: ExternalOrderWithLines; deliveredCount: number; deliveredQty: number } | null>(null)
+  const [cancelExternalReason, setCancelExternalReason] = useState('')
+
+  const [receiverOptions, setReceiverOptions] = useState<{ value: string; label: string }[]>([])
 
   // --- Cargar solicitud ---
   useEffect(() => {
@@ -176,7 +178,7 @@ export default function SolicitudDetailPage() {
           trip_id,
           quantity_assigned,
           qty_delivered,
-          sm_request_lines!inner(description, line_type),
+          sm_request_lines!inner(description, line_type, status),
           trips!inner(
             id,
             trip_id,
@@ -186,7 +188,7 @@ export default function SolicitudDetailPage() {
             att_permit,
             escort,
             driver:driver_id(name),
-            vehicle:vehicle_id(description, spectrum_code),
+            vehicle:vehicle_id(description, spectrum_code, gps_vehicle_id),
             trailer:trailer_id(description, spectrum_code),
             trip_events(event_type, event_timestamp, received_by_name, notes)
           )
@@ -209,6 +211,7 @@ export default function SolicitudDetailPage() {
           ? {
               description: (lineRaw as Record<string, unknown>).description as string,
               line_type: (lineRaw as Record<string, unknown>).line_type as string,
+              status: (lineRaw as Record<string, unknown>).status as string,
               quantity_assigned: row.quantity_assigned as number,
               qty_delivered: (row.qty_delivered as number) ?? 0,
             }
@@ -235,7 +238,7 @@ export default function SolicitudDetailPage() {
           status: t.status as string,
           confirmation_code: (t.confirmation_code as string | null) ?? null,
           driver: driver as { name: string } | null,
-          vehicle: vehicle as { description: string; spectrum_code: string | null } | null,
+          vehicle: vehicle as { description: string; spectrum_code: string | null; gps_vehicle_id: string | null } | null,
           trailer: trailer as { description: string; spectrum_code: string | null } | null,
           att_permit: (t.att_permit as boolean) ?? false,
           escort: (t.escort as boolean) ?? false,
@@ -279,29 +282,242 @@ export default function SolicitudDetailPage() {
     fetchUnits()
   }, [supabase])
 
-  // --- Cargar cost codes filtrados por proyecto ---
+  // (Carga de cost_codes movida al hook useCostCodeCascade dentro de SolicitudForm — Cambio 2)
+
+  // --- Cambio 5 T8: PM project_ids fetch (sólo si role === 'pm') ---
+  // Versión (b) SIMPLIFICACIÓN PRACTICAL: single fetch + JS-side filter.
+  // Versión (a) inline N-queries con `.eq` sobre nested joins NO funciona en
+  // Supabase JS client (filtering on nested joins via .eq/.in no soportado).
   useEffect(() => {
-    async function fetchCostCodes() {
-      if (!header.project_id) {
-        setCostCodes([])
-        return
-      }
-      const { data } = await supabase
-        .from('cost_codes')
-        .select('id, phase_code, phase_description, full_code')
-        .eq('project_id', header.project_id)
-        .order('phase_code')
-      setCostCodes(
-        (data ?? []).map((cc) => ({
-          value: cc.id,
-          label: cc.full_code
-            ? `${cc.full_code} — ${cc.phase_description ?? ''}`
-            : `${cc.phase_code} — ${cc.phase_description ?? ''}`,
-        })),
-      )
+    if (!person?.id || role !== 'pm') {
+      setPmProjectIds(new Set())
+      return
     }
-    fetchCostCodes()
-  }, [supabase, header.project_id])
+    const fetchPmProjects = async () => {
+      const { data } = await supabase
+        .from('person_projects')
+        .select('project_id')
+        .eq('person_id', person.id)
+        .eq('is_active', true)
+      setPmProjectIds(new Set((data ?? []).map((pp) => pp.project_id)))
+    }
+    void fetchPmProjects()
+  }, [person, role, supabase])
+
+  // Helper PM permission per order — JS-side filter (versión b).
+  // INNER JOIN behavior: cuando una línea tiene to_location_id=null (free-text),
+  // to_location es null. El check `if (!toLoc) return false` correctamente
+  // excluye esas líneas (E11). Si TODAS las líneas son free-text, PM no puede
+  // confirmar — solo admin/logistica.
+  // location_type === 'proyecto' es lowercase per Cambio 1 (E12).
+  // AT LEAST 1 match — `lines.some(...)` retorna true al primer match.
+  const checkPmCanConfirmOrder = useCallback(
+    (lines: PickupOrderWithLines['lines'] | ExternalOrderWithLines['lines']): boolean => {
+      if (role === 'admin' || role === 'logistica') return true
+      if (role !== 'pm') return false
+      return lines.some((ol) => {
+        const toLoc = ol.line?.to_location
+        if (!toLoc) return false  // free-text destination → no contribuye (E11)
+        if (toLoc.location_type !== 'proyecto') return false  // LOWERCASE per Cambio 1
+        return toLoc.project_id != null && pmProjectIds.has(toLoc.project_id)
+      })
+    },
+    [role, pmProjectIds],
+  )
+
+  // --- Cambio 5 T8: refetch de pickup_orders y external_orders related ---
+  // Filtramos por `lines.line.request_id` con !inner para que solo aparezcan
+  // orders que tienen AT LEAST 1 línea perteneciente a esta solicitud.
+  const refetchRelatedPickupOrders = useCallback(async () => {
+    if (!id) return
+    const { data } = await supabase
+      .from('pickup_orders')
+      .select(`
+        id, pickup_id, status, scheduled_date, approved_at, completed_at, cancelled_at,
+        received_by_id, received_by_name, notes, attachments,
+        approved_by_person:people!pickup_orders_approved_by_fkey(name),
+        completed_by_person:people!pickup_orders_completed_by_fkey(name),
+        cancelled_by_person:people!pickup_orders_cancelled_by_fkey(name),
+        lines:pickup_order_lines!inner(
+          id, request_line_id, quantity_assigned, qty_delivered,
+          line:request_line_id!inner(
+            description, line_type, quantity, request_id,
+            unit:unit_id(code), unit_text,
+            from_location:from_location_id(name), from_text,
+            to_location:to_location_id(id, name, project_id, location_type), to_text,
+            request:request_id!inner(id, request_id, project:project_id(code, name))
+          )
+        )
+      `)
+      .eq('lines.line.request_id', id)
+
+    const mapped: PickupOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      pickup_id: row.pickup_id as string,
+      status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+      scheduled_date: row.scheduled_date as string,
+      approved_at: row.approved_at as string,
+      approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+      completed_at: (row.completed_at as string | null) ?? null,
+      completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+      cancelled_at: (row.cancelled_at as string | null) ?? null,
+      cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+      received_by_id: (row.received_by_id as string | null) ?? null,
+      received_by_name: (row.received_by_name as string | null) ?? null,
+      notes: (row.notes as string | null) ?? null,
+      attachments: Array.isArray(row.attachments) ? (row.attachments as unknown as Attachment[]) : [],
+      lines: (Array.isArray(row.lines) ? row.lines : []) as PickupOrderWithLines['lines'],
+    }))
+    setRelatedPickupOrders(mapped)
+  }, [supabase, id])
+
+  const refetchRelatedExternalOrders = useCallback(async () => {
+    if (!id) return
+    const { data } = await supabase
+      .from('external_orders')
+      .select(`
+        id, external_id, status, scheduled_date, provider_name, invoice_amount, invoice_attachments,
+        approved_at, completed_at, cancelled_at,
+        received_by_id, received_by_name, notes,
+        approved_by_person:people!external_orders_approved_by_fkey(name),
+        completed_by_person:people!external_orders_completed_by_fkey(name),
+        cancelled_by_person:people!external_orders_cancelled_by_fkey(name),
+        lines:external_order_lines!inner(
+          id, request_line_id, quantity_assigned, qty_delivered,
+          line:request_line_id!inner(
+            description, line_type, quantity, request_id,
+            unit:unit_id(code), unit_text,
+            from_location:from_location_id(name), from_text,
+            to_location:to_location_id(id, name, project_id, location_type), to_text,
+            request:request_id!inner(id, request_id, project:project_id(code, name))
+          )
+        )
+      `)
+      .eq('lines.line.request_id', id)
+
+    const mapped: ExternalOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      external_id: row.external_id as string,
+      status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+      scheduled_date: row.scheduled_date as string,
+      provider_name: row.provider_name as string,
+      invoice_amount: row.invoice_amount as number,
+      invoice_attachments: Array.isArray(row.invoice_attachments) ? (row.invoice_attachments as unknown as Attachment[]) : [],
+      approved_at: row.approved_at as string,
+      approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+      completed_at: (row.completed_at as string | null) ?? null,
+      completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+      cancelled_at: (row.cancelled_at as string | null) ?? null,
+      cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+      received_by_id: (row.received_by_id as string | null) ?? null,
+      received_by_name: (row.received_by_name as string | null) ?? null,
+      notes: (row.notes as string | null) ?? null,
+      lines: (Array.isArray(row.lines) ? row.lines : []) as ExternalOrderWithLines['lines'],
+    }))
+    setRelatedExternalOrders(mapped)
+  }, [supabase, id])
+
+  useEffect(() => {
+    void refetchRelatedPickupOrders()
+    void refetchRelatedExternalOrders()
+  }, [refetchRelatedPickupOrders, refetchRelatedExternalOrders])
+
+  // Receivers para modales de confirm delivery
+  useEffect(() => {
+    supabase
+      .from('people')
+      .select('id, name')
+      .eq('status', 'Activo')
+      .order('name')
+      .then(({ data }) => setReceiverOptions((data ?? []).map((p) => ({ value: p.id, label: p.name }))))
+  }, [supabase])
+
+  // --- Handlers Cambio 5 T8 ---
+  const handleConfirmPickupDelivery = useCallback(async (data: {
+    receivedById: string | null
+    receivedByName: string
+    notes: string
+    additionalAttachments: Attachment[]
+  }) => {
+    if (!confirmPickupOrder || !person?.id) return
+    const result = await pickupOrders.completePickupOrder(
+      confirmPickupOrder.id, person.id, data.receivedById, data.receivedByName, data.notes, data.additionalAttachments,
+    )
+    if (result.ok) {
+      setConfirmPickupOrder(null)
+      void refetchRelatedPickupOrders()
+    }
+  }, [confirmPickupOrder, person, pickupOrders, refetchRelatedPickupOrders])
+
+  const handleConfirmExternalDelivery = useCallback(async (data: {
+    receivedById: string | null
+    receivedByName: string
+    notes: string
+    additionalAttachments: Attachment[]
+  }) => {
+    if (!confirmExternalOrder || !person?.id) return
+    const result = await externalOrders.completeExternalOrder(
+      confirmExternalOrder.id, person.id, data.receivedById, data.receivedByName, data.notes, data.additionalAttachments,
+    )
+    if (result.ok) {
+      setConfirmExternalOrder(null)
+      void refetchRelatedExternalOrders()
+    }
+  }, [confirmExternalOrder, person, externalOrders, refetchRelatedExternalOrders])
+
+  const handleOpenCancelPickup = useCallback(async (order: PickupOrderWithLines) => {
+    const { data } = await supabase
+      .from('pickup_order_lines')
+      .select('id, qty_delivered')
+      .eq('pickup_order_id', order.id)
+    const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+    setCancelPickupReason('')
+    setCancelPickupModal({
+      order,
+      deliveredCount: deliveredLines.length,
+      deliveredQty: deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0),
+    })
+  }, [supabase])
+
+  const handleOpenCancelExternal = useCallback(async (order: ExternalOrderWithLines) => {
+    const { data } = await supabase
+      .from('external_order_lines')
+      .select('id, qty_delivered')
+      .eq('external_order_id', order.id)
+    const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+    setCancelExternalReason('')
+    setCancelExternalModal({
+      order,
+      deliveredCount: deliveredLines.length,
+      deliveredQty: deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0),
+    })
+  }, [supabase])
+
+  const confirmCancelPickup = useCallback(async () => {
+    if (!cancelPickupModal || !person?.id) return
+    const result = await pickupOrders.cancelPickupOrder(
+      cancelPickupModal.order.id,
+      person.id,
+      cancelPickupReason.trim() || null,
+    )
+    if (result.ok) {
+      setCancelPickupModal(null)
+      void refetchRelatedPickupOrders()
+    }
+  }, [cancelPickupModal, person, pickupOrders, cancelPickupReason, refetchRelatedPickupOrders])
+
+  const confirmCancelExternal = useCallback(async () => {
+    if (!cancelExternalModal || !person?.id) return
+    const result = await externalOrders.cancelExternalOrder(
+      cancelExternalModal.order.id,
+      person.id,
+      cancelExternalReason.trim() || null,
+    )
+    if (result.ok) {
+      setCancelExternalModal(null)
+      void refetchRelatedExternalOrders()
+    }
+  }, [cancelExternalModal, person, externalOrders, cancelExternalReason, refetchRelatedExternalOrders])
 
   // --- Modo del formulario ---
   const mode = useMemo<FormMode>(() => {
@@ -337,6 +553,7 @@ export default function SolicitudDetailPage() {
 
   // --- Gestion de lineas ---
   const canAddLines = mode === 'edit' && solicitud?.status === 'Borrador'
+  const canDeleteLines = canAddLines
 
   const handleAddLine = useCallback((line: LineInput) => {
     setLines((prev) => [...prev, line])
@@ -356,6 +573,7 @@ export default function SolicitudDetailPage() {
   }, [editingLineIndex])
 
   const handleDeleteLine = useCallback((index: number) => {
+    if (!canDeleteLines) return
     const line = lines[index]
     // Si es linea programada, mostrar confirmacion
     const originalLine = solicitud?.lines.find((l) => l.id === line.id)
@@ -380,6 +598,18 @@ export default function SolicitudDetailPage() {
     setIsDirty(true)
   }, [])
 
+  // J8b: duplicar línea — copia la existente como nueva (id=null para que
+  // el save la inserte). Solo permitido en Borrador (regla #2 CLAUDE.md).
+  const handleDuplicateLine = useCallback((index: number) => {
+    if (!canAddLines) return
+    setLines((prev) => {
+      const original = prev[index]
+      if (!original) return prev
+      return [...prev, { ...original, id: undefined }]
+    })
+    setIsDirty(true)
+  }, [canAddLines])
+
   // --- Verificacion de duplicados (solo en Borrador) ---
   const handleCheckDuplicates = useCallback(
     async (line: LineInput): Promise<DuplicateMatch[]> => {
@@ -403,7 +633,7 @@ export default function SolicitudDetailPage() {
   )
 
   // --- Guardar cambios ---
-  const handleSave = useCallback(async () => {
+  const handleSave = guard(async () => {
     if (!solicitud) return
     const success = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
     if (success) {
@@ -415,18 +645,21 @@ export default function SolicitudDetailPage() {
         setIsDirty(false)
       }
     }
-  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id, person?.id])
+  })
 
   // --- Enviar solicitud (Borrador → Enviada) ---
-  const handleSend = useCallback(async () => {
+  const handleSend = guard(async () => {
     if (!solicitud) return
     setSendError(null)
 
-    // Validaciones
+    // Validaciones (Borrador → Enviada). Cambio 2: cost_code/category requeridos al enviar.
+    // Edits a solicitudes ya Enviadas/Completadas/Canceladas NO pasan por aquí, preserva históricas con NULL.
     if (!header.project_id) { setSendError('Seleccione un proyecto'); return }
     if (!header.requester_id) { setSendError('Seleccione el solicitante'); return }
     if (!header.date_required) { setSendError('Ingrese la fecha requerida'); return }
     if (lines.length === 0) { setSendError('Agregue al menos una linea a la solicitud'); return }
+    if (!header.cost_code_id) { setSendError('Seleccione el código de costo (Fase)'); return }
+    if (!header.cost_category_id) { setSendError('Seleccione la categoría de costo'); return }
 
     // Primero guardar los cambios pendientes
     const saveSuccess = await updateSolicitud(solicitud.id, header, lines, deletedLineIds, person?.id)
@@ -445,6 +678,7 @@ export default function SolicitudDetailPage() {
 
     // Notificar a Charris
     notifySolicitudEnviada(solicitud.id).catch(console.error)
+    notifySolicitudUrgenteNueva(solicitud.id).catch(console.error)
 
     // Refrescar datos
     const updated = await fetchSolicitud(id)
@@ -454,10 +688,10 @@ export default function SolicitudDetailPage() {
       setDeletedLineIds([])
       setIsDirty(false)
     }
-  }, [solicitud, header, lines, deletedLineIds, updateSolicitud, fetchSolicitud, id, supabase])
+  })
 
   // --- Cancelar solicitud ---
-  const handleCancel = useCallback(async () => {
+  const handleCancel = guard(async () => {
     if (!solicitud) return
     const success = await cancelSolicitud(solicitud.id, person?.id)
     if (success) {
@@ -468,7 +702,7 @@ export default function SolicitudDetailPage() {
         setShowCancelConfirm(false)
       }
     }
-  }, [solicitud, cancelSolicitud, fetchSolicitud, id, person?.id])
+  })
 
   // --- Resolver nombres para LineRow ---
   const getLineDisplayNames = useCallback(
@@ -478,11 +712,6 @@ export default function SolicitudDetailPage() {
         fromDisplay: originalLine?.from_location?.name ?? line.from_text ?? '',
         toDisplay: originalLine?.to_location?.name ?? line.to_text ?? '',
         unitDisplay: originalLine?.unit?.code ?? line.unit_text ?? '',
-        costCodeDisplay: (() => {
-          const phase = originalLine?.cost_code?.full_code ?? originalLine?.cost_code?.phase_code ?? ''
-          const cat = originalLine?.cost_category?.code ?? ''
-          return cat ? `${phase}-${cat}` : phase
-        })(),
       }
     },
     [solicitud],
@@ -542,6 +771,90 @@ export default function SolicitudDetailPage() {
         </div>
       )}
 
+      {/* Paneles operativos de trips activos — uno por cada trip En Ruta
+          con al menos una línea En Transito o Parcial. Ordenados por Salida
+          descendente (más reciente primero). Reemplaza el antiguo banner
+          "Material en camino" — todo el contexto operativo (código, mapa,
+          botón Confirmar Recepción) vive ahora dentro del panel. */}
+      {associatedTrips
+        .filter(
+          (t) =>
+            t.status === 'En Ruta' &&
+            t.lines.some(
+              (l) => l.status === 'En Transito' || l.status === 'Parcial',
+            ),
+        )
+        .sort((a, b) => {
+          const aSalida =
+            a.events.find((e) => e.event_type === 'Salida')?.event_timestamp ??
+            ''
+          const bSalida =
+            b.events.find((e) => e.event_type === 'Salida')?.event_timestamp ??
+            ''
+          return bSalida.localeCompare(aSalida)
+        })
+        .map((t) => <ActiveTripPanel key={t.id} trip={t} role={role} />)}
+
+      {/* Cambio 5 T8: Pickup Orders related a la solicitud */}
+      {relatedPickupOrders.length > 0 && (
+        <section className="mb-6 rounded-xl border border-amber-200 bg-amber-50/30">
+          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Pickup Orders</h2>
+            <span className="rounded-full bg-amber-200 text-amber-900 px-2 py-0.5 text-xs font-medium">
+              {relatedPickupOrders.length}
+            </span>
+          </div>
+          <div className="px-4 pb-4 space-y-2">
+            {relatedPickupOrders.map((order) => {
+              const isAdmin = role === 'admin' || role === 'logistica'
+              const canConfirm = checkPmCanConfirmOrder(order.lines)
+              const canCancel = isAdmin && order.status === 'Aprobado'
+              return (
+                <PickupOrderCard
+                  key={order.id}
+                  order={order}
+                  canConfirmDelivery={canConfirm && order.status === 'Aprobado'}
+                  canCancelOrder={canCancel}
+                  onConfirmDelivery={() => setConfirmPickupOrder(order)}
+                  onCancelOrder={() => handleOpenCancelPickup(order)}
+                  showLinesInitially={true}
+                />
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Cambio 5 T8: Viajes Externos related a la solicitud */}
+      {relatedExternalOrders.length > 0 && (
+        <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/30">
+          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Viajes Externos</h2>
+            <span className="rounded-full bg-blue-200 text-blue-900 px-2 py-0.5 text-xs font-medium">
+              {relatedExternalOrders.length}
+            </span>
+          </div>
+          <div className="px-4 pb-4 space-y-2">
+            {relatedExternalOrders.map((order) => {
+              const isAdmin = role === 'admin' || role === 'logistica'
+              const canConfirm = checkPmCanConfirmOrder(order.lines)
+              const canCancel = isAdmin && order.status === 'Aprobado'
+              return (
+                <ExternalOrderCard
+                  key={order.id}
+                  order={order}
+                  canConfirmDelivery={canConfirm && order.status === 'Aprobado'}
+                  canCancelOrder={canCancel}
+                  onConfirmDelivery={() => setConfirmExternalOrder(order)}
+                  onCancelOrder={() => handleOpenCancelExternal(order)}
+                  showLinesInitially={true}
+                />
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Header del formulario */}
       <div className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
         <SolicitudForm
@@ -559,6 +872,8 @@ export default function SolicitudDetailPage() {
             dateSubmitted: solicitud.date_submitted ?? undefined,
             dateCompleted: solicitud.date_completed ?? undefined,
             dateCancelled: solicitud.date_cancelled ?? undefined,
+            costCodeId: solicitud.cost_code_id ?? null,
+            costCategoryId: solicitud.cost_category_id ?? null,
           }}
           projects={projectOptions}
           people={people}
@@ -612,17 +927,18 @@ export default function SolicitudDetailPage() {
                   line={{ ...line, status: lineStatus }}
                   lineNumber={index + 1}
                   editable={mode === 'edit'}
-                  canDelete={mode === 'edit'}
+                  canDelete={canDeleteLines}
                   isScheduled={isScheduled}
                   onEdit={() => {
                     setShowLineEditor(false)
                     setEditingLineIndex(index)
                   }}
                   onDelete={() => handleDeleteLine(index)}
+                  onDuplicate={canAddLines ? () => handleDuplicateLine(index) : undefined}
                   fromDisplay={names.fromDisplay}
                   toDisplay={names.toDisplay}
                   unitDisplay={names.unitDisplay}
-                  costCodeDisplay={names.costCodeDisplay}
+                  fulfillments={originalLine?.fulfillments ?? []}
                 />
               )
             })}
@@ -636,7 +952,6 @@ export default function SolicitudDetailPage() {
               equipment={equipmentOptions}
               locations={locationOptions}
               units={units}
-              costCodes={costCodes}
               projectId={header.project_id}
               isEditing={false}
               onSave={handleAddLine}
@@ -653,7 +968,6 @@ export default function SolicitudDetailPage() {
               equipment={equipmentOptions}
               locations={locationOptions}
               units={units}
-              costCodes={costCodes}
               projectId={header.project_id}
               initialData={lines[editingLineIndex]}
               isEditing
@@ -664,11 +978,11 @@ export default function SolicitudDetailPage() {
         )}
       </div>
 
-      {/* Viajes Programados — visible cuando solicitud no está en Borrador */}
+      {/* Movilizaciones Programadas — visible cuando solicitud no está en Borrador */}
       {solicitud.status !== 'Borrador' && associatedTrips.length > 0 && (
         <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">
           <h2 className="mb-3 text-base font-semibold text-gray-900">
-            Viajes Programados ({associatedTrips.length})
+            Movilizaciones Programadas ({associatedTrips.length})
           </h2>
           <div className="space-y-3">
             {associatedTrips.map((t) => (
@@ -713,7 +1027,7 @@ export default function SolicitudDetailPage() {
                   )}
                   {t.att_permit && (
                     <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
-                      ATT
+                      ATTT
                     </span>
                   )}
                   {t.escort && (
@@ -730,7 +1044,7 @@ export default function SolicitudDetailPage() {
                         <span className="text-xs">
                           {line.line_type === 'Equipo' ? '🔧' : '📦'}
                         </span>
-                        <span className="truncate">{line.description}</span>
+                        <span title={line.description}>{line.description}</span>
                         <span className="shrink-0 text-xs text-iconsa-gray">
                           ×{formatQty(line.quantity_assigned)}
                         </span>
@@ -887,6 +1201,139 @@ export default function SolicitudDetailPage() {
                 onClick={() => performDeleteLine(deleteLineIndex)}
               >
                 Eliminar linea
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cambio 5 T8: Modales pickup/external orders */}
+      {confirmPickupOrder && (
+        <ConfirmPickupOrderDeliveryModal
+          order={confirmPickupOrder}
+          receiverOptions={receiverOptions}
+          onConfirm={handleConfirmPickupDelivery}
+          onClose={() => setConfirmPickupOrder(null)}
+          loading={pickupOrders.loading}
+          error={pickupOrders.error}
+        />
+      )}
+
+      {confirmExternalOrder && (
+        <ConfirmExternalOrderDeliveryModal
+          order={confirmExternalOrder}
+          receiverOptions={receiverOptions}
+          onConfirm={handleConfirmExternalDelivery}
+          onClose={() => setConfirmExternalOrder(null)}
+          loading={externalOrders.loading}
+          error={externalOrders.error}
+        />
+      )}
+
+      {cancelPickupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              ¿Cancelar pickup {cancelPickupModal.order.pickup_id}?
+            </h3>
+            {cancelPickupModal.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este pickup tiene <strong>{cancelPickupModal.deliveredCount} línea{cancelPickupModal.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelPickupModal.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">Las líneas volverán al backlog. ¿Confirmar?</p>
+            )}
+            <div className="mt-4">
+              <label htmlFor="solic-cancel-pickup-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelPickupModal.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="solic-cancel-pickup-reason"
+                value={cancelPickupReason}
+                onChange={(e) => setCancelPickupReason(e.target.value)}
+                placeholder={cancelPickupModal.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={pickupOrders.loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelPickupModal.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelPickupReason.trim().length}/10 caracteres mínimos
+                </p>
+              )}
+            </div>
+            {pickupOrders.error && (
+              <p className="mt-2 text-sm text-red-600">{pickupOrders.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setCancelPickupModal(null)} disabled={pickupOrders.loading}>
+                Volver
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={confirmCancelPickup}
+                loading={pickupOrders.loading}
+                disabled={cancelPickupModal.deliveredCount > 0 && cancelPickupReason.trim().length < 10}
+              >
+                Sí, cancelar pickup
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelExternalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              ¿Cancelar viaje externo {cancelExternalModal.order.external_id}?
+            </h3>
+            {cancelExternalModal.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este viaje externo tiene <strong>{cancelExternalModal.deliveredCount} línea{cancelExternalModal.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelExternalModal.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La factura subida se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">Las líneas volverán al backlog. La factura subida se preserva. ¿Confirmar?</p>
+            )}
+            <div className="mt-4">
+              <label htmlFor="solic-cancel-external-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelExternalModal.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="solic-cancel-external-reason"
+                value={cancelExternalReason}
+                onChange={(e) => setCancelExternalReason(e.target.value)}
+                placeholder={cancelExternalModal.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={externalOrders.loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelExternalModal.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelExternalReason.trim().length}/10 caracteres mínimos
+                </p>
+              )}
+            </div>
+            {externalOrders.error && (
+              <p className="mt-2 text-sm text-red-600">{externalOrders.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setCancelExternalModal(null)} disabled={externalOrders.loading}>
+                Volver
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={confirmCancelExternal}
+                loading={externalOrders.loading}
+                disabled={cancelExternalModal.deliveredCount > 0 && cancelExternalReason.trim().length < 10}
+              >
+                Sí, cancelar viaje externo
               </Button>
             </div>
           </div>

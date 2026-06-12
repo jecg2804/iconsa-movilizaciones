@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/types/database'
 import {
   notifyLineasProgramadas,
   notifyViajeAsignadoConductor,
   notifyViajeCancelado,
 } from '@/lib/notifications/actions'
+import { todayStrInPanama } from '@/lib/utils/datetime'
 
 // --- Tipos exportados ---
 
@@ -27,7 +26,6 @@ export interface BacklogLine {
   quantity: number
   unit_id: string | null
   unit_text: string | null
-  cost_code_id: string | null
   category: string | null
   status: string
   notes: string | null
@@ -35,8 +33,8 @@ export interface BacklogLine {
   qty_delivered: number
   // Relaciones unidas
   equipment: { id: string; spectrum_code: string | null; description: string } | null
-  from_location: { id: string; name: string } | null
-  to_location: { id: string; name: string } | null
+  from_location: { id: string; name: string; location_type: string | null } | null
+  to_location: { id: string; name: string; location_type: string | null } | null
   unit: { id: string; code: string } | null
   // Info de la solicitud padre
   request: {
@@ -58,6 +56,7 @@ export interface TripAssignment {
   request_line_id: string
   quantity_assigned: number
   qty_delivered: number
+  qty_dispatched: number
   // Info de la línea asignada
   line: {
     id: string
@@ -67,18 +66,24 @@ export interface TripAssignment {
     quantity: number
     status: string
     notes: string | null
-    from_location: { id: string; name: string } | null
-    to_location: { id: string; name: string } | null
+    from_location: { id: string; name: string; location_type: string | null } | null
+    to_location: { id: string; name: string; location_type: string | null } | null
     unit: { id: string; code: string } | null
+    qty_scheduled: number
+    qty_delivered: number
     from_text: string | null
     to_text: string | null
     unit_text: string | null
+    designated_receiver_id: string | null
+    designated_receiver_name: string | null
+    po_reference?: string | null
     equipment: { id: string; spectrum_code: string | null; description: string } | null
     request: {
       id: string
       request_id: string | null
       project: { id: string; code: string; name: string } | null
       date_required: string | null
+      requester: { id: string; name: string } | null
     }
   } | null
 }
@@ -100,13 +105,12 @@ export interface TripWithRelations {
   actual_departure: string | null
   actual_arrival: string | null
   route_summary: string | null
-  is_external: boolean | null
   attachments: unknown[] | null
   created_at: string
   updated_at: string
   // Relaciones unidas
   driver: { id: string; name: string } | null
-  vehicle: { id: string; spectrum_code: string | null; description: string } | null
+  vehicle: { id: string; spectrum_code: string | null; description: string; gps_vehicle_id: string | null } | null
   trailer: { id: string; spectrum_code: string | null; description: string } | null
   rate: { id: string; code: string; description: string; rate: number } | null
   assignments: TripAssignment[]
@@ -123,7 +127,6 @@ export interface TripInput {
   att_permit: boolean
   escort: boolean
   notes: string | null
-  is_external: boolean
   attachments?: unknown[] | null
 }
 
@@ -132,11 +135,33 @@ export interface AssignmentInput {
   quantity_assigned: number
 }
 
+export interface ModifiedAssignment {
+  id: string                // trip_line_assignments.id
+  request_line_id: string
+  quantity_assigned: number // nuevo valor
+  original_quantity: number // valor original para calcular delta
+}
+
 export interface TripsFilter {
   status?: string | null
   dateFrom?: string | null
   dateTo?: string | null
+  /**
+   * J4-A: día seleccionado por click en el calendario. Filtra SOLO la tabla
+   * (no el calendario), ortogonal a dateFrom/dateTo.
+   */
+  singleDay?: string | null
   conductorId?: string | null
+  projectId?: string | null
+  search?: string | null
+  /**
+   * J4-B: sort server-side. Columna de BD para ordenar (ej. 'scheduled_date',
+   * 'trip_id', 'status'). Si es null, usa default scheduled_date desc.
+   */
+  sortColumn?: string | null
+  sortDirection?: 'asc' | 'desc'
+  page: number
+  pageSize: number
 }
 
 // --- Constantes privadas ---
@@ -153,7 +178,14 @@ const DEFAULT_FILTER: TripsFilter = {
   status: null,
   dateFrom: null,
   dateTo: null,
+  singleDay: null,
   conductorId: null,
+  projectId: null,
+  search: null,
+  sortColumn: null,
+  sortDirection: 'desc',
+  page: 0,
+  pageSize: 20,
 }
 
 // --- Helpers privados ---
@@ -184,8 +216,8 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     const rawLine = a.line as Record<string, unknown> | null
     let line: TripAssignment['line'] = null
     if (rawLine) {
-      const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
-      const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
+      const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string; location_type: string | null } | null)
+      const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string; location_type: string | null } | null)
       const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
       const unitRel = unwrapRelation(rawLine.unit as { id: string; code: string } | null)
       const equipRel = unwrapRelation(rawLine.equipment as { id: string; spectrum_code: string | null; description: string } | null)
@@ -197,12 +229,16 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
         quantity: (rawLine.quantity as number) ?? 0,
         status: (rawLine.status as string) ?? '',
         notes: (rawLine.notes as string | null) ?? null,
+        qty_scheduled: (rawLine.qty_scheduled as number) ?? 0,
+        qty_delivered: (rawLine.qty_delivered as number) ?? 0,
         from_location: fromLoc,
         to_location: toLoc,
         unit: unitRel,
         from_text: (rawLine.from_text as string | null) ?? null,
         to_text: (rawLine.to_text as string | null) ?? null,
         unit_text: (rawLine.unit_text as string | null) ?? null,
+        designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
+        designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
         equipment: equipRel,
         request: rawRequest
           ? {
@@ -210,8 +246,9 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
               request_id: (rawRequest['request_id'] as string | null) ?? null,
               date_required: (rawRequest['date_required'] as string | null) ?? null,
               project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+              requester: unwrapRelation(rawRequest['requester'] as { id: string; name: string } | null),
             }
-          : { id: '', request_id: null, date_required: null, project: null },
+          : { id: '', request_id: null, date_required: null, project: null, requester: null },
       }
     }
     return {
@@ -220,6 +257,7 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
       request_line_id: a.request_line_id as string,
       quantity_assigned: a.quantity_assigned as number,
       qty_delivered: (a.qty_delivered as number) ?? 0,
+      qty_dispatched: (a.qty_dispatched as number) ?? 0,
       line,
     }
   })
@@ -241,7 +279,6 @@ function mapTripRow(row: Record<string, unknown>): TripWithRelations {
     actual_departure: (row.actual_departure as string | null) ?? null,
     actual_arrival: (row.actual_arrival as string | null) ?? null,
     route_summary: (row.route_summary as string | null) ?? null,
-    is_external: (row.is_external as boolean | null) ?? null,
     attachments: (row.attachments as unknown[] | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
@@ -261,8 +298,8 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
   let line: TripAssignment['line'] = null
 
   if (rawLine) {
-    const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string } | null)
-    const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string } | null)
+    const fromLoc = unwrapRelation(rawLine.from_location as { id: string; name: string; location_type: string | null } | null)
+    const toLoc = unwrapRelation(rawLine.to_location as { id: string; name: string; location_type: string | null } | null)
     const unit = unwrapRelation(rawLine.unit as { id: string; code: string } | null)
     const equipment = unwrapRelation(rawLine.equipment as { id: string; spectrum_code: string | null; description: string } | null)
     const rawRequest = unwrapRelation(rawLine.request as Record<string, unknown> | null) as Record<string, unknown> | null
@@ -275,12 +312,17 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
       quantity: rawLine.quantity as number,
       status: rawLine.status as string,
       notes: (rawLine.notes as string | null) ?? null,
+      qty_scheduled: (rawLine.qty_scheduled as number) ?? 0,
+      qty_delivered: (rawLine.qty_delivered as number) ?? 0,
       from_location: fromLoc,
       to_location: toLoc,
       unit,
       from_text: (rawLine.from_text as string | null) ?? null,
       to_text: (rawLine.to_text as string | null) ?? null,
       unit_text: (rawLine.unit_text as string | null) ?? null,
+      designated_receiver_id: (rawLine.designated_receiver_id as string | null) ?? null,
+      designated_receiver_name: (rawLine.designated_receiver_name as string | null) ?? null,
+      po_reference: (rawLine.po_reference as string | null) ?? null,
       equipment,
       request: rawRequest
         ? {
@@ -288,8 +330,9 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
             request_id: (rawRequest['request_id'] as string | null) ?? null,
             date_required: (rawRequest['date_required'] as string | null) ?? null,
             project: unwrapRelation(rawRequest['project'] as { id: string; code: string; name: string } | null),
+            requester: unwrapRelation(rawRequest['requester'] as { id: string; name: string } | null),
           }
-        : { id: '', request_id: null, date_required: null, project: null },
+        : { id: '', request_id: null, date_required: null, project: null, requester: null },
     }
   }
 
@@ -299,47 +342,9 @@ function mapAssignmentWithLine(a: Record<string, unknown>): TripAssignment {
     request_line_id: a.request_line_id as string,
     quantity_assigned: a.quantity_assigned as number,
     qty_delivered: (a.qty_delivered as number) ?? 0,
+    qty_dispatched: (a.qty_dispatched as number) ?? 0,
     line,
   }
-}
-
-// --- Función auxiliar para actualizar líneas al cancelar asignaciones ---
-
-/**
- * Libera una línea de una asignación de viaje:
- * - Resta la cantidad asignada de qty_scheduled
- * - Si qty_scheduled llega a 0, revierte el estado a 'Pendiente'
- */
-async function releaseLineFromAssignment(
-  supabase: SupabaseClient<Database>,
-  requestLineId: string,
-  quantityAssigned: number,
-): Promise<boolean> {
-  // Obtener el estado actual y qty_scheduled de la línea
-  const { data: line, error: fetchError } = await supabase
-    .from('sm_request_lines')
-    .select('id, status, qty_scheduled, qty_delivered')
-    .eq('id', requestLineId)
-    .single()
-
-  if (fetchError || !line) return false
-
-  const newQtyScheduled = Math.max(0, (line.qty_scheduled ?? 0) - quantityAssigned)
-  // Si no queda cantidad programada, determinar estado según entregas previas
-  let newStatus = line.status
-  if (newQtyScheduled <= 0) {
-    newStatus = (line.qty_delivered ?? 0) > 0 ? 'Parcial' : 'Pendiente'
-  }
-
-  const { error: updateError } = await supabase
-    .from('sm_request_lines')
-    .update({
-      qty_scheduled: newQtyScheduled,
-      status: newStatus,
-    })
-    .eq('id', requestLineId)
-
-  return !updateError
 }
 
 // --- Hook principal ---
@@ -355,6 +360,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
   const [trips, setTrips] = useState<TripWithRelations[]>([])
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [tripsTotalCount, setTripsTotalCount] = useState(0)
 
   // Filtros para la lista de viajes
   const [filters, setFiltersState] = useState<TripsFilter>({
@@ -365,6 +371,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
   // Estado de mutaciones
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const busyRef = useRef(false)
 
   // --- Actualizar filtros parcialmente ---
   const setFilters = useCallback((updates: Partial<TripsFilter>) => {
@@ -394,15 +401,14 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           quantity,
           unit_id,
           unit_text,
-          cost_code_id,
           category,
           notes,
           status,
           qty_scheduled,
           qty_delivered,
           equipment:equipment_id(id, spectrum_code, description),
-          from_location:from_location_id(id, name),
-          to_location:to_location_id(id, name),
+          from_location:from_location_id(id, name, location_type),
+          to_location:to_location_id(id, name, location_type),
           unit:unit_id(id, code),
           request:request_id!inner(
             id,
@@ -416,7 +422,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             requester:requester_id(id, name)
           )
         `)
-        .in('status', ['Pendiente', 'Parcial', 'Programada'])
+        .in('status', ['Pendiente', 'Parcial', 'Programada', 'En Transito'])
         // Excluir solicitudes que no deben aparecer en el backlog
         .not('request.status', 'in', '("Cancelada","Completada","Borrador")')
 
@@ -463,7 +469,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           quantity: row.quantity as number,
           unit_id: (row.unit_id as string | null) ?? null,
           unit_text: (row.unit_text as string | null) ?? null,
-          cost_code_id: (row.cost_code_id as string | null) ?? null,
           category: (row.category as string | null) ?? null,
           notes: (row.notes as string | null) ?? null,
           status: row.status as string,
@@ -507,6 +512,36 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
     setListError(null)
 
     try {
+      // J4 — project filter requiere 2-step porque trips.project_id no existe
+      // directamente (el proyecto vive en assignments → line → request → project).
+      // Paso 1: resolver trip_ids que tienen assignments cuya línea padre pertenece
+      // al proyecto filtrado.
+      let projectTripIds: string[] | null = null
+      if (filters.projectId) {
+        const { data: linkData, error: linkError } = await supabase
+          .from('trip_line_assignments')
+          .select('trip_id, line:request_line_id!inner(request:request_id!inner(project_id))')
+          .eq('line.request.project_id', filters.projectId)
+        if (linkError) {
+          setListError(linkError.message)
+          return
+        }
+        const ids = new Set<string>()
+        for (const row of linkData ?? []) {
+          const tripId = (row as { trip_id: string | null }).trip_id
+          if (tripId) ids.add(tripId)
+        }
+        projectTripIds = Array.from(ids)
+        if (projectTripIds.length === 0) {
+          setTrips([])
+          setTripsTotalCount(0)
+          return
+        }
+      }
+
+      // J4-B: sort server-side. Default: scheduled_date desc si no hay sort explícito.
+      const sortCol = filters.sortColumn ?? 'scheduled_date'
+      const sortAsc = filters.sortDirection === 'asc'
       let query = supabase
         .from('trips')
         .select(`
@@ -521,6 +556,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             request_line_id,
             quantity_assigned,
             qty_delivered,
+            qty_dispatched,
             line:request_line_id(
               id,
               line_number,
@@ -529,8 +565,12 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               quantity,
               status,
               notes,
-              from_location:from_location_id(id, name),
-              to_location:to_location_id(id, name),
+              qty_scheduled,
+              qty_delivered,
+              designated_receiver_id,
+              designated_receiver_name,
+              from_location:from_location_id(id, name, location_type),
+              to_location:to_location_id(id, name, location_type),
               from_text,
               to_text,
               unit_text,
@@ -540,14 +580,18 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
                 id,
                 request_id,
                 date_required,
-                project:project_id(id, code, name)
+                project:project_id(id, code, name),
+                requester:requester_id(id, name)
               )
             )
           )
-        `)
-        .order('scheduled_date', { ascending: false })
+        `, { count: 'exact' })
+        .order(sortCol, { ascending: sortAsc })
 
       // Aplicar filtros dinámicamente
+      if (projectTripIds) {
+        query = query.in('id', projectTripIds)
+      }
       if (filters.status) {
         query = query.eq('status', filters.status)
       }
@@ -557,11 +601,24 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       if (filters.dateTo) {
         query = query.lte('scheduled_date', filters.dateTo)
       }
+      // J4-A: filtro de día único (click en calendario). Solo aplica a la
+      // tabla — la query del calendario NO incluye este filtro.
+      if (filters.singleDay) {
+        query = query.eq('scheduled_date', filters.singleDay)
+      }
       if (filters.conductorId) {
         query = query.eq('driver_id', filters.conductorId)
       }
+      if (filters.search) {
+        query = query.ilike('trip_id', `%${filters.search}%`)
+      }
 
-      const { data, error } = await query
+      // Paginación server-side
+      const from = filters.page * filters.pageSize
+      const to = from + filters.pageSize - 1
+      query = query.range(from, to)
+
+      const { data, error, count } = await query
 
       if (error) {
         setListError(error.message)
@@ -572,6 +629,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         mapTripRow(row as unknown as Record<string, unknown>),
       )
 
+      setTripsTotalCount(count ?? 0)
       setTrips(mapped)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al cargar viajes'
@@ -598,7 +656,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         .select(`
           *,
           driver:driver_id(id, name),
-          vehicle:vehicle_id(id, spectrum_code, description),
+          vehicle:vehicle_id(id, spectrum_code, description, gps_vehicle_id),
           trailer:trailer_id(id, spectrum_code, description),
           rate:rate_id(id, code, description, rate),
           assignments:trip_line_assignments(
@@ -607,6 +665,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             request_line_id,
             quantity_assigned,
             qty_delivered,
+            qty_dispatched,
             line:request_line_id(
               id,
               line_number,
@@ -615,18 +674,24 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
               quantity,
               status,
               notes,
+              qty_scheduled,
+              qty_delivered,
+              designated_receiver_id,
+              designated_receiver_name,
+              po_reference,
               from_text,
               to_text,
               unit_text,
-              from_location:from_location_id(id, name),
-              to_location:to_location_id(id, name),
+              from_location:from_location_id(id, name, location_type),
+              to_location:to_location_id(id, name, location_type),
               unit:unit_id(id, code),
               equipment:equipment_id(id, spectrum_code, description),
               request:request_id(
                 id,
                 request_id,
                 date_required,
-                project:project_id(id, code, name)
+                project:project_id(id, code, name),
+                requester:requester_id(id, name)
               )
             )
           )
@@ -667,7 +732,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         actual_departure: (row.actual_departure as string | null) ?? null,
         actual_arrival: (row.actual_arrival as string | null) ?? null,
         route_summary: (row.route_summary as string | null) ?? null,
-        is_external: (row.is_external as boolean | null) ?? null,
         attachments: (row.attachments as unknown[] | null) ?? null,
         created_at: row.created_at as string,
         updated_at: row.updated_at as string,
@@ -688,13 +752,42 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       assignments: AssignmentInput[],
       personId?: string,
     ): Promise<{ id: string; tripId: string | null } | null> => {
+      if (busyRef.current) return null
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
+      // Guard server-side: scheduled_date no puede ser en el pasado.
+      // El input HTML min={today} ya lo bloquea en UI, pero un user puede
+      // bypassarlo editando el DOM.
+      if (input.scheduled_date < todayStrInPanama()) {
+        setSaveError('La fecha programada no puede ser en el pasado')
+        busyRef.current = false
+        setSaving(false)
+        return null
+      }
+
+      // Cambio 6: tarifa obligatoria (BD trips.rate_id NOT NULL).
+      // Defense-in-depth pre-INSERT — frontend valida primero pero la BD es
+      // la fuente de verdad. Sin este guard, TypeScript correctamente rechaza
+      // el insert porque Insert.rate_id ahora es required (no nullable).
+      if (!input.rate_id) {
+        setSaveError('La tarifa es obligatoria.')
+        busyRef.current = false
+        setSaving(false)
+        return null
+      }
+      if (input.cost == null || input.cost <= 0) {
+        setSaveError('El costo debe ser mayor a cero.')
+        busyRef.current = false
+        setSaving(false)
+        return null
+      }
+
       try {
-        // 1. Insertar el viaje. El trigger generate_trip_id() asigna trip_id.
-        //    confirmation_code se genera aquí (4 dígitos random).
-        const confirmationCode = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+        // 1. Insertar el viaje. Los triggers BD asignan trip_id y
+        //    confirmation_code (generate_confirmation_code). No generamos
+        //    el código en cliente para evitar doble-generación.
         const { data: insertedTrip, error: tripError } = await supabase
           .from('trips')
           .insert({
@@ -707,9 +800,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             cost: input.cost,
             att_permit: input.att_permit,
             escort: input.escort,
-            confirmation_code: confirmationCode,
             notes: input.notes,
-            is_external: input.is_external,
             attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             created_by: personId ?? null,
           })
@@ -736,39 +827,25 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             .insert(assignmentRows)
 
           if (assignError) {
-            setSaveError(`Viaje creado pero error al asignar líneas: ${assignError.message}`)
+            // Limpiar viaje huérfano para no dejar datos inconsistentes
+            await supabase.from('trips').delete().eq('id', newTripId)
+            setSaveError(`Error al asignar líneas: ${assignError.message}`)
             return null
           }
 
-          // 3. Actualizar el estado de cada línea asignada a 'Programada'
-          //    y sumar la cantidad programada acumulada
-          for (const a of assignments) {
-            const { data: currentLine } = await supabase
-              .from('sm_request_lines')
-              .select('qty_scheduled')
-              .eq('id', a.request_line_id)
-              .single()
-
-            const newQtyScheduled = (currentLine?.qty_scheduled ?? 0) + a.quantity_assigned
-
-            await supabase
-              .from('sm_request_lines')
-              .update({
-                status: 'Programada',
-                qty_scheduled: newQtyScheduled,
-              })
-              .eq('id', a.request_line_id)
-          }
+          // El trigger BD recalc_qty_for_line se dispara automáticamente
+          // al insertar trip_line_assignments y reconcilia qty_scheduled
+          // y status='Programada' en sm_request_lines.
         }
 
-        // 4. Re-fetch para obtener el trip_id auto-generado por el trigger
+        // Re-fetch para obtener el trip_id auto-generado por el trigger
         const { data: refreshed } = await supabase
           .from('trips')
           .select('trip_id')
           .eq('id', newTripId)
           .single()
 
-        // 5. Notificaciones: líneas programadas a PMs + viaje asignado a conductor
+        // Notificaciones: líneas programadas a PMs + viaje asignado a conductor
         const { data: lineRequests } = await supabase
           .from('sm_request_lines')
           .select('request_id')
@@ -789,6 +866,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         setSaveError(message)
         return null
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -803,9 +881,26 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
       addAssignments: AssignmentInput[],
       removeAssignmentIds: string[],
       personId?: string,
+      modifiedAssignments?: ModifiedAssignment[],
     ): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
+
+      // Cambio 6: tarifa obligatoria (BD trips.rate_id NOT NULL).
+      if (!input.rate_id) {
+        setSaveError('La tarifa es obligatoria.')
+        busyRef.current = false
+        setSaving(false)
+        return false
+      }
+      if (input.cost == null || input.cost <= 0) {
+        setSaveError('El costo debe ser mayor a cero.')
+        busyRef.current = false
+        setSaving(false)
+        return false
+      }
 
       try {
         // 1. Actualizar los campos del viaje
@@ -822,7 +917,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             att_permit: input.att_permit,
             escort: input.escort,
             notes: input.notes,
-            is_external: input.is_external,
             attachments: JSON.parse(JSON.stringify(input.attachments ?? [])),
             updated_by: personId ?? null,
           })
@@ -833,32 +927,33 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
           return false
         }
 
-        // 2. Eliminar asignaciones removidas y liberar las líneas de vuelta al backlog
-        for (const assignmentId of removeAssignmentIds) {
-          // Obtener la asignación para saber cuánto restar de qty_scheduled
-          const { data: assignment, error: fetchAssignError } = await supabase
-            .from('trip_line_assignments')
-            .select('request_line_id, quantity_assigned')
-            .eq('id', assignmentId)
-            .single()
-
-          if (fetchAssignError || !assignment) continue
-
-          // Eliminar la asignación del viaje
-          await supabase
+        // 2. Eliminar asignaciones removidas. El trigger BD recalc_qty_for_line
+        //    se dispara en DELETE y reconcilia qty_scheduled + status de la línea.
+        if (removeAssignmentIds.length > 0) {
+          const { error: deleteError } = await supabase
             .from('trip_line_assignments')
             .delete()
-            .eq('id', assignmentId)
+            .in('id', removeAssignmentIds)
 
-          // Liberar la línea: restar qty_scheduled, volver a Pendiente si llega a 0
-          await releaseLineFromAssignment(
-            supabase,
-            assignment.request_line_id,
-            assignment.quantity_assigned,
-          )
+          if (deleteError) {
+            setSaveError(`Error al eliminar asignaciones: ${deleteError.message}`)
+            return false
+          }
         }
 
-        // 3. Agregar nuevas asignaciones y marcar las líneas como Programadas
+        // 3. Actualizar cantidades de asignaciones existentes modificadas.
+        //    El trigger BD se dispara en UPDATE y reconcilia qty_scheduled.
+        if (modifiedAssignments && modifiedAssignments.length > 0) {
+          for (const mod of modifiedAssignments) {
+            await supabase
+              .from('trip_line_assignments')
+              .update({ quantity_assigned: mod.quantity_assigned })
+              .eq('id', mod.id)
+          }
+        }
+
+        // 4. Agregar nuevas asignaciones. El trigger BD se dispara en INSERT
+        //    y reconcilia qty_scheduled + status='Programada' de la línea.
         if (addAssignments.length > 0) {
           const newRows = addAssignments.map((a) => ({
             trip_id: id,
@@ -874,25 +969,6 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
             setSaveError(`Error al agregar asignaciones: ${insertError.message}`)
             return false
           }
-
-          // Actualizar estado y cantidad programada de las líneas recién asignadas
-          for (const a of addAssignments) {
-            const { data: currentLine } = await supabase
-              .from('sm_request_lines')
-              .select('qty_scheduled')
-              .eq('id', a.request_line_id)
-              .single()
-
-            const newQtyScheduled = (currentLine?.qty_scheduled ?? 0) + a.quantity_assigned
-
-            await supabase
-              .from('sm_request_lines')
-              .update({
-                status: 'Programada',
-                qty_scheduled: newQtyScheduled,
-              })
-              .eq('id', a.request_line_id)
-          }
         }
 
         return true
@@ -901,6 +977,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -909,52 +986,33 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
 
   // --- Cancelar viaje ---
   const cancelTrip = useCallback(
-    async (id: string): Promise<boolean> => {
+    async (id: string, cancellationReason: string | null): Promise<boolean> => {
+      if (busyRef.current) return false
+      busyRef.current = true
       setSaving(true)
       setSaveError(null)
 
       try {
-        // 1. Obtener todas las asignaciones del viaje para liberar las líneas
-        const { data: assignments, error: fetchError } = await supabase
-          .from('trip_line_assignments')
-          .select('id, request_line_id, quantity_assigned')
-          .eq('trip_id', id)
-
-        if (fetchError) {
-          setSaveError(fetchError.message)
-          return false
-        }
-
-        // 2. Liberar cada línea asignada de vuelta al backlog.
-        //    El trigger cascade_request_status() actualizará automáticamente
-        //    el estado de las solicitudes padre cuando las líneas vuelvan a Pendiente.
-        for (const assignment of assignments ?? []) {
-          await releaseLineFromAssignment(
-            supabase,
-            assignment.request_line_id,
-            assignment.quantity_assigned,
-          )
-        }
-
-        // 3. Eliminar todas las asignaciones del viaje
-        const { error: deleteAssignError } = await supabase
-          .from('trip_line_assignments')
-          .delete()
-          .eq('trip_id', id)
-
-        if (deleteAssignError) {
-          setSaveError(deleteAssignError.message)
-          return false
-        }
-
-        // 4. Marcar el viaje como Cancelado
+        // Cambio 6 Bug #1 fix: NO MORE DELETE assignments.
+        // Trigger trg_recalc_from_trip_status_change (existe desde Cambio 5)
+        // recalcula líneas automáticamente al cambio de status. Trigger Bug #2
+        // fix asegura que líneas sin assignments activos no quedan zombie
+        // 'En Transito'. Assignments preservados para histórico operacional.
         const { error: cancelError } = await supabase
           .from('trips')
-          .update({ status: 'Cancelado' })
+          .update({
+            status: 'Cancelado',
+            cancellation_reason: cancellationReason?.trim() || null,
+          })
           .eq('id', id)
 
         if (cancelError) {
-          setSaveError(cancelError.message)
+          // Trigger BD enforce_cancellation_reason_trips puede rechazar
+          // si qty_delivered>0 y razón inválida (≥10 chars).
+          const friendly = cancelError.message.includes('cancellation_reason requerido')
+            ? 'Debes proveer una razón (≥10 caracteres) para cancelar este viaje porque tiene entregas registradas.'
+            : cancelError.message
+          setSaveError(friendly)
           return false
         }
 
@@ -967,6 +1025,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
         setSaveError(message)
         return false
       } finally {
+        busyRef.current = false
         setSaving(false)
       }
     },
@@ -981,6 +1040,7 @@ export function useTrips(initialFilter?: Partial<TripsFilter>) {
 
     // Lista de viajes
     trips,
+    tripsTotalCount,
     listLoading,
     listError,
     refetchTrips,

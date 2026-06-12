@@ -1,3 +1,8 @@
+---
+name: supabase-queries
+description: Patrones de queries Supabase. Filtros equipos, personas, cost codes cascada. Usar para cualquier query.
+---
+
 # Skill: Queries de Supabase
 
 Patrones estándar para queries en este proyecto.

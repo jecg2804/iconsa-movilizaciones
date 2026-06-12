@@ -1,0 +1,86 @@
+#!/usr/bin/env sh
+# Bloquea push directo a main y cualquier force push.
+# También gatea el push con el build status: si el background build de
+# post-commit dejó "fail", bloquea. Si no terminó todavía o no hay status,
+# corre build sincrónico como fallback.
+
+protected_branch='main'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # 1. Bloquear push a main
+  if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+    echo "❌ Push directo a $protected_branch bloqueado."
+    echo "   Para promover a main usa el skill /release desde jaime/dev."
+    exit 1
+  fi
+
+  # 2. Detectar force push
+  zero='0000000000000000000000000000000000000000'
+  if [ "$remote_sha" != "$zero" ]; then
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+      echo "❌ Force push detectado hacia $remote_ref."
+      echo "   Investigá qué commits vas a perder antes de reintentar."
+      exit 1
+    fi
+  fi
+done
+
+# 3. Build gate — consultar status del background build lanzado por post-commit.
+# Si el post-commit background build sigue corriendo, esperarlo (poll) hasta
+# 120s antes de caer en el fallback sincrónico, para evitar colisión con el
+# lock de Next en .next/lock.
+
+HEAD=$(git rev-parse HEAD)
+STATUS_FILE=".build-status"
+
+check_status() {
+  [ -f "$STATUS_FILE" ] || return 1
+  STATUS_LINE=$(cat "$STATUS_FILE")
+  STATUS=$(echo "$STATUS_LINE" | awk '{print $1}')
+  STATUS_SHA=$(echo "$STATUS_LINE" | awk '{print $2}')
+  [ "$STATUS_SHA" = "$HEAD" ] || return 1
+  return 0
+}
+
+# Poll hasta 120s (24 x 5s) esperando al background build
+waited=0
+max_wait=120
+interval=5
+while [ $waited -lt $max_wait ]; do
+  if check_status; then
+    break
+  fi
+  if [ $waited -eq 0 ]; then
+    echo "⏳ Esperando background build (post-commit)..."
+  fi
+  sleep $interval
+  waited=$((waited + interval))
+done
+
+if check_status; then
+  if [ "$STATUS" = "ok" ]; then
+    echo "✅ Background build OK ($HEAD)"
+    exit 0
+  elif [ "$STATUS" = "fail" ]; then
+    echo "❌ Background build FAILED en HEAD. Ver /tmp/movimientos-build.log"
+    tail -20 /tmp/movimientos-build.log 2>/dev/null
+    echo ""
+    echo "   Arreglá el build antes de pushear."
+    exit 1
+  fi
+fi
+
+# Timeout — esto es raro (build normal ~30s). Correr sincrónico como fallback.
+echo "⚠️  Background build no terminó en ${max_wait}s — corriendo sincrónico."
+# Asegurarse de que no haya lock pendiente antes de lanzar
+if [ -f ".next/lock" ]; then
+  echo "   Lock .next/lock presente — esperar unos segundos más..."
+  sleep 10
+fi
+if ! npm run build > /tmp/movimientos-build.log 2>&1; then
+  echo "❌ Build falló. Ver /tmp/movimientos-build.log"
+  tail -20 /tmp/movimientos-build.log
+  exit 1
+fi
+echo "✅ Build OK"
+exit 0

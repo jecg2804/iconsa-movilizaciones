@@ -1,4 +1,9 @@
-# Skill: Página de Eventos / Mis Viajes (Fase 4)
+---
+name: events-page
+description: Patrón para Mis Viajes / Eventos. Secuencia Salida→Entrega→Retorno, código confirmación, cascada.
+---
+
+# Skill: Página de Eventos / Mis Viajes
 
 Fase 4 implementa la pantalla de ejecución donde conductores, Charris, y almacenistas
 registran eventos de viajes en tiempo real.
@@ -9,7 +14,11 @@ src/hooks/useMyTrips.ts                    — Viajes activos del usuario
 src/hooks/useTripEvents.ts                 — CRUD de eventos por viaje
 src/components/viajes/TripCard.tsx          — Card de viaje con info + barra progreso
 src/components/viajes/EventTimeline.tsx     — Timeline visual de eventos
-src/components/viajes/EventForm.tsx         — Formulario para registrar evento
+src/components/viajes/DeliveryModal.tsx      — Modal de entrega (per-line qty, observaciones, código)
+src/components/viajes/DispatchModal.tsx     — Modal de despacho (conductor, vehículo, qty por línea)
+src/components/viajes/PickupModal.tsx       — Modal de retiro (self-pickup, receptor auto)
+src/components/viajes/PreparationModal.tsx  — Modal de preparación (material listo)
+src/components/viajes/RevertModal.tsx       — Modal de reversión (razón requerida)
 src/components/viajes/CodeConfirmation.tsx  — Input del código de 4 dígitos
 src/app/(app)/mis-viajes/page.tsx           — Lista de viajes activos
 src/app/(app)/mis-viajes/[id]/page.tsx      — Detalle + registro de eventos
@@ -17,7 +26,7 @@ src/app/(app)/mis-viajes/[id]/page.tsx      — Detalle + registro de eventos
 
 ## Secuencia de eventos (Feature Spec 5.3.2)
 ```
-1. SALIDA (obligatorio) → Viaje: En Ruta, Líneas: En Tránsito
+1. SALIDA (obligatorio) → Viaje: En Ruta, Líneas: En Transito
 2. LLEGADA (opcional) → Informativo, actualiza timeline
 3. ENTREGA (obligatorio) → Código MUST be correct + receptor dropdown. Líneas: Entregada
 4. RETORNO (opcional) → Viaje: Completado. Calcula duración.

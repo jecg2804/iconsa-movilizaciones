@@ -1,8 +1,9 @@
 'use server'
 
 import { createServiceClient } from '@/lib/supabase/service'
-import { sendNotification } from './send'
+import { sendNotification, getReceiveAllUsers } from './send'
 import * as templates from './templates'
+import { dayOfWeekInPanama, todayStrInPanama, parseDateStrInPanama, dateStrInPanama, daysBetweenInPanama } from '@/lib/utils/datetime'
 
 // =============================================================================
 // HELPERS — resolución de destinatarios (usa service client, bypassa RLS)
@@ -20,7 +21,8 @@ async function getPeopleByRole(role: string): Promise<Recipient[]> {
     .eq('status', 'Activo')
     .eq('notifications_enabled', true)
   if (error) console.error('[Notify] getPeopleByRole error:', error.message)
-  console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`, data?.map(p => `${p.name} <${p.email}>`))
+  if (process.env.NODE_ENV !== 'production') console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`, data?.map(p => `${p.name} <${p.email}>`))
+  else console.log(`[Notify] getPeopleByRole("${role}"): ${data?.length ?? 0} found`)
   return data ?? []
 }
 
@@ -49,7 +51,8 @@ async function getProjectPMs(projectId: string, excludePersonId?: string): Promi
   if (pErr) console.error('[Notify] getProjectPMs people error:', pErr.message)
 
   const recipients = (people ?? []).filter(p => !excludePersonId || p.id !== excludePersonId)
-  console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`, recipients.map(r => `${r.name} <${r.email}>`))
+  if (process.env.NODE_ENV !== 'production') console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`, recipients.map(r => `${r.name} <${r.email}>`))
+  else console.log(`[Notify] getProjectPMs(${projectId}): ${recipients.length} PMs found`)
   return recipients
 }
 
@@ -125,7 +128,8 @@ async function getTripDriver(tripId: string): Promise<Recipient[]> {
   if (pErr) console.error('[Notify] getTripDriver people error:', pErr.message)
   if (!person) return []
   if (!person.notifications_enabled) {
-    console.log(`[Notify] Driver ${person.name} has notifications disabled, skipping`)
+    if (process.env.NODE_ENV !== 'production') console.log(`[Notify] Driver ${person.name} has notifications disabled, skipping`)
+    else console.log('[Notify] Driver has notifications disabled, skipping')
     return []
   }
   return [{ id: person.id, email: person.email, name: person.name }]
@@ -220,6 +224,10 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
     const supabase = createServiceClient()
     const req = await getRequestWithProject(requestId)
     if (!req) { console.warn('[Notify] solicitud_enviada: request not found'); return }
+    if (!['Enviada', 'En Proceso'].includes(req.status)) {
+      console.log('[Notify] solicitud_enviada: skipped, status =', req.status)
+      return
+    }
 
     const { data: lines } = await supabase
       .from('sm_request_lines')
@@ -229,7 +237,8 @@ export async function notifySolicitudEnviada(requestId: string): Promise<void> {
     const requesterName = await getPersonName(req.requester_id)
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudEnviada({
       requestId: req.request_id ?? '',
@@ -266,7 +275,8 @@ export async function notifySolicitudEditada(requestId: string, personId: string
     const editorName = await getPersonName(personId)
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudEditada({
       requestId: req.request_id ?? '',
@@ -295,11 +305,16 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
     console.log('[Notify] solicitud_cancelada called', { requestId, personId })
     const req = await getRequestWithProject(requestId)
     if (!req) { console.warn('[Notify] solicitud_cancelada: request not found'); return }
+    if (req.status !== 'Cancelada') {
+      console.log('[Notify] solicitud_cancelada: skipped, status =', req.status)
+      return
+    }
 
     const cancellerName = personId ? await getPersonName(personId) : 'Sistema'
     const charris = await getPeopleByRole('logistica')
     const pms = await getProjectPMs(req.project_id, personId)
-    const recipients = dedup(charris, pms)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.solicitudCancelada({
       requestId: req.request_id ?? '',
@@ -321,7 +336,7 @@ export async function notifySolicitudCancelada(requestId: string, personId?: str
 }
 
 // =============================================================================
-// 4. SOLICITUD COMPLETADA → ALL project PMs (no Charris)
+// 4. SOLICITUD COMPLETADA → ALL project PMs
 // =============================================================================
 export async function notifySolicitudCompletada(requestId: string): Promise<void> {
   try {
@@ -329,7 +344,9 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
     const req = await getRequestWithProject(requestId)
     if (!req || req.status !== 'Completada') { console.log('[Notify] solicitud_completada: skipped, status =', req?.status); return }
 
-    const recipients = await getProjectPMs(req.project_id)
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.solicitudCompletada({
       requestId: req.request_id ?? '',
@@ -350,7 +367,7 @@ export async function notifySolicitudCompletada(requestId: string): Promise<void
 }
 
 // =============================================================================
-// 5. LÍNEAS PROGRAMADAS → ALL project PMs (no Charris)
+// 5. LÍNEAS PROGRAMADAS → ALL project PMs
 // =============================================================================
 export async function notifyLineasProgramadas(tripId: string, requestId: string): Promise<void> {
   try {
@@ -359,11 +376,15 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, scheduled_date, confirmation_code, vehicle_id')
+      .select('id, trip_id, scheduled_date, confirmation_code, vehicle_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] lineas_programadas: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] lineas_programadas: skipped, trip cancelled')
+      return
+    }
 
     let vehicleDesc = 'No asignado'
     if (trip.vehicle_id) {
@@ -383,7 +404,9 @@ export async function notifyLineasProgramadas(tripId: string, requestId: string)
 
     if (!req) { console.warn('[Notify] lineas_programadas: request not found'); return }
 
-    const recipients = await getProjectPMs(req.project_id)
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.lineasProgramadas({
       requestId: req.request_id ?? '',
@@ -417,14 +440,20 @@ export async function notifyViajeCancelado(tripId: string): Promise<void> {
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_cancelado: trip not found'); return }
+    if (trip.status !== 'Cancelado') {
+      console.log('[Notify] viaje_cancelado: skipped, status =', trip.status)
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeCancelado({
       tripId: trip.trip_id ?? '',
@@ -457,14 +486,20 @@ export async function notifyViajeReprogramado(
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_reprogramado: trip not found'); return }
+    if (trip.status === 'Cancelado' || trip.status === 'Completado') {
+      console.log('[Notify] viaje_reprogramado: skipped, status =', trip.status)
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
 
     const template = templates.viajeReprogramado({
       tripId: trip.trip_id ?? '',
@@ -487,7 +522,54 @@ export async function notifyViajeReprogramado(
 }
 
 // =============================================================================
-// 8. VIAJE ASIGNADO A CONDUCTOR — ONLY the conductor
+// 7b. VIAJE EDITADO → ALL PMs of ALL affected projects
+// =============================================================================
+export async function notifyViajeEditado(
+  tripId: string,
+  changes: string[],
+): Promise<void> {
+  try {
+    console.log('[Notify] viaje_editado called', { tripId, changes })
+    const supabase = createServiceClient()
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id, scheduled_date, status')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] viaje_editado: trip not found'); return }
+    if (trip.status === 'Cancelado' || trip.status === 'Completado') {
+      console.log('[Notify] viaje_editado: skipped, status =', trip.status)
+      return
+    }
+
+    const requestIds = await getTripRequestIds(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
+
+    const template = templates.viajeEditado({
+      tripId: trip.trip_id ?? '',
+      scheduledDate: trip.scheduled_date,
+      changes,
+      requestIds: requestIds.join(', ') || '—',
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'viaje_editado',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] viaje_editado FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 8. VIAJE ASIGNADO A CONDUCTOR → ONLY conductor
 // =============================================================================
 export async function notifyViajeAsignadoConductor(tripId: string): Promise<void> {
   try {
@@ -495,11 +577,15 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, scheduled_date, vehicle_id')
+      .select('id, trip_id, scheduled_date, vehicle_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] viaje_asignado_conductor: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] viaje_asignado_conductor: skipped, trip cancelled')
+      return
+    }
 
     let vehicleDesc = 'No asignado'
     if (trip.vehicle_id) {
@@ -516,7 +602,9 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
       .select('id')
       .eq('trip_id', tripId)
 
-    const recipients = await getTripDriver(tripId)
+    const driver = await getTripDriver(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(driver, receiveAll)
 
     const template = templates.viajeAsignadoConductor({
       tripId: trip.trip_id ?? '',
@@ -539,19 +627,23 @@ export async function notifyViajeAsignadoConductor(tripId: string): Promise<void
 }
 
 // =============================================================================
-// 9. ENTREGA CONFIRMADA → ALL PMs of the request's project
+// 9. ENTREGA CONFIRMADA → Charris + ALL PMs of the request's project
 // =============================================================================
-export async function notifyEntregaConfirmada(requestLineId: string): Promise<void> {
+export async function notifyEntregaConfirmada(requestLineId: string, receivedByName?: string): Promise<void> {
   try {
     console.log('[Notify] entrega_confirmada called', { requestLineId })
     const supabase = createServiceClient()
     const { data: line } = await supabase
       .from('sm_request_lines')
-      .select('id, description, quantity, qty_delivered, request_id')
+      .select('id, description, quantity, qty_delivered, request_id, status')
       .eq('id', requestLineId)
       .single()
 
     if (!line) { console.warn('[Notify] entrega_confirmada: line not found'); return }
+    if (line.status === 'Cancelada') {
+      console.log('[Notify] entrega_confirmada: skipped, line cancelled')
+      return
+    }
 
     const { data: req } = await supabase
       .from('sm_requests')
@@ -568,7 +660,10 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
       .single()
 
     const isPartial = (line.qty_delivered ?? 0) < line.quantity
-    const recipients = await getProjectPMs(req.project_id)
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getProjectPMs(req.project_id)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const template = templates.entregaConfirmada({
       requestId: req.request_id ?? '',
@@ -576,7 +671,7 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
       description: line.description,
       qtyDelivered: line.qty_delivered ?? 0,
       qtyTotal: line.quantity,
-      receivedByName: '—',
+      receivedByName: receivedByName || '—',
       isPartial,
       referenceId: req.id,
     })
@@ -594,7 +689,7 @@ export async function notifyEntregaConfirmada(requestLineId: string): Promise<vo
 }
 
 // =============================================================================
-// 10. SALIDA REGISTRADA → ALL PMs of ALL affected projects
+// 10. SALIDA REGISTRADA → Charris + ALL PMs of ALL affected projects
 // =============================================================================
 export async function notifySalidaRegistrada(tripId: string): Promise<void> {
   try {
@@ -602,20 +697,47 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] salida_registrada: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] salida_registrada: skipped, trip cancelled')
+      return
+    }
 
     const { data: assignments } = await supabase
       .from('trip_line_assignments')
       .select('request_line_id')
       .eq('trip_id', tripId)
 
+    // Pairs of (requester_id, request.id) for every line in this trip.
+    // Used below to personalize each recipient's email link.
+    type RequestLink = { requester_id: string; request_id: string }
+    let requestLinks: RequestLink[] = []
+
     const destinations = new Set<string>()
     if (assignments?.length) {
       const lineIds = assignments.map(a => a.request_line_id)
+
+      // Cada PM recibe link a UNA de SUS solicitudes en este trip.
+      // Multi-PM-per-trip es estructural en ICONSA (solicitante, gerente,
+      // superintendente pueden ser distintos y estar en el mismo trip). Si un
+      // PM tiene varias solicitudes en el trip, cualquiera es válida — el
+      // primer match gana.
+      const { data: linesWithRequest } = await supabase
+        .from('sm_request_lines')
+        .select('request:request_id(id, requester_id)')
+        .in('id', lineIds)
+
+      requestLinks = (linesWithRequest ?? [])
+        .map(row => {
+          const req = (row as { request: { id: string; requester_id: string } | null }).request
+          return req ? { requester_id: req.requester_id, request_id: req.id } : null
+        })
+        .filter((x): x is RequestLink => x !== null)
+
       const { data: lines } = await supabase
         .from('sm_request_lines')
         .select('to_location_id, to_text')
@@ -636,26 +758,44 @@ export async function notifySalidaRegistrada(tripId: string): Promise<void> {
     }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getTripProjectPMs(tripId)
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const now = new Date()
-    const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
+    const departureTime = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })
 
-    const template = templates.salidaRegistrada({
-      tripId: trip.trip_id ?? '',
-      departureTime,
-      destination: [...destinations].join(', ') || '—',
-      requestIds: requestIds.join(', ') || '—',
-      referenceId: trip.id,
-    })
+    // Build per-recipient solicitudId map. Fallback chain:
+    //   1) first request in trip whose requester_id matches this recipient
+    //   2) first request_id seen in the trip (any solicitud → valid landing page)
+    //   3) trip.id (so the email link is never broken even with no requests)
+    const fallbackSolicitudId = requestLinks[0]?.request_id ?? trip.id
+    const recipientSolicitudIds = new Map<string, string>()
+    for (const recipient of recipients) {
+      const match = requestLinks.find(rl => rl.requester_id === recipient.id)
+      recipientSolicitudIds.set(recipient.id, match?.request_id ?? fallbackSolicitudId)
+    }
 
-    await sendNotification({
-      eventType: 'salida_registrada',
-      referenceType: 'trip',
-      referenceId: trip.id,
-      recipients,
-      ...template,
-    })
+    for (const recipient of recipients) {
+      const solicitudId = recipientSolicitudIds.get(recipient.id) ?? fallbackSolicitudId
+      const template = templates.salidaRegistrada({
+        tripId: trip.trip_id ?? '',
+        departureTime,
+        destination: [...destinations].join(', ') || '—',
+        requestIds: requestIds.join(', ') || '—',
+        referenceId: trip.id,
+        solicitudId,
+      })
+
+      await sendNotification({
+        eventType: 'salida_registrada',
+        referenceType: 'trip',
+        referenceId: trip.id,
+        recipients: [recipient],
+        ...template,
+      })
+    }
   } catch (err) {
     console.error('[Notify] salida_registrada FAILED:', err)
   }
@@ -670,13 +810,19 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
     const supabase = createServiceClient()
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id')
+      .select('id, trip_id, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] incidencia_ruta: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] incidencia_ruta: skipped, trip cancelled')
+      return
+    }
 
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, receiveAll)
 
     const template = templates.incidenciaRuta({
       tripId: trip.trip_id ?? '',
@@ -697,7 +843,7 @@ export async function notifyIncidenciaRuta(tripId: string, notes: string): Promi
 }
 
 // =============================================================================
-// 12. RETORNO REGISTRADO → ONLY Charris
+// 12. RETORNO REGISTRADO → Charris + PMs afectados
 // =============================================================================
 export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
   try {
@@ -706,14 +852,21 @@ export async function notifyRetornoRegistrado(tripId: string): Promise<void> {
 
     const { data: trip } = await supabase
       .from('trips')
-      .select('id, trip_id, actual_arrival')
+      .select('id, trip_id, actual_arrival, status')
       .eq('id', tripId)
       .single()
 
     if (!trip) { console.warn('[Notify] retorno_registrado: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] retorno_registrado: skipped, trip cancelled')
+      return
+    }
 
     const requestIds = await getTripRequestIds(tripId)
-    const recipients = await getPeopleByRole('logistica')
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
 
     const arrivalTime = trip.actual_arrival ?? new Date().toISOString()
 
@@ -755,7 +908,9 @@ export async function notifySugerenciaFallback(suggestionId: string): Promise<vo
       ? await getPersonName(sug.suggested_by)
       : 'Desconocido'
 
-    const recipients = await getPeopleByRole('admin')
+    const admins = await getPeopleByRole('admin')
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(admins, receiveAll)
 
     const template = templates.sugerenciaFallback({
       tableName: sug.table_name,
@@ -773,5 +928,291 @@ export async function notifySugerenciaFallback(suggestionId: string): Promise<vo
     })
   } catch (err) {
     console.error('[Notify] sugerencia_fallback FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 14. SOLICITUD URGENTE NUEVA → usuarios con solicitud_urgente_nueva
+// =============================================================================
+export async function notifySolicitudUrgenteNueva(requestId: string): Promise<void> {
+  try {
+    console.log('[Notify] solicitud_urgente_nueva called', { requestId })
+    const supabase = createServiceClient()
+    const req = await getRequestWithProject(requestId)
+    if (!req) { console.warn('[Notify] solicitud_urgente_nueva: request not found'); return }
+    if (!['Enviada', 'En Proceso'].includes(req.status)) {
+      console.log('[Notify] solicitud_urgente_nueva: skipped, status =', req.status)
+      return
+    }
+
+    // Calcular urgencia
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const target = new Date(req.date_required + 'T12:00:00')
+    target.setHours(0, 0, 0, 0)
+    const days = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (days > 3) {
+      console.log(`[Notify] solicitud_urgente_nueva: skipped, ${days} days until due (not urgent)`)
+      return
+    }
+
+    const { data: lines } = await supabase
+      .from('sm_request_lines')
+      .select('id')
+      .eq('request_id', requestId)
+
+    const requesterName = await getPersonName(req.requester_id)
+
+    // Destinatarios: pre-filtrar por solicitud_urgente_nueva o receive_all
+    const { data: urgentRecipients } = await supabase
+      .from('people')
+      .select('id, email, name, notification_preferences')
+      .eq('notifications_enabled', true)
+      .eq('status', 'Activo')
+      .not('email', 'is', null)
+
+    const allRecipients = (urgentRecipients ?? []).filter(p => {
+      const prefs = p.notification_preferences as Record<string, boolean> | null
+      if (!prefs || Object.keys(prefs).length === 0) return true
+      if (prefs.receive_all === true) return true
+      return prefs.solicitud_urgente_nueva === true
+    })
+
+    const template = templates.solicitudUrgenteNueva({
+      requestId: req.request_id ?? '',
+      projectName: req.projectName,
+      requesterName,
+      dateRequired: req.date_required,
+      lineCount: lines?.length ?? 0,
+      referenceId: req.id,
+    })
+
+    await sendNotification({
+      eventType: 'solicitud_urgente_nueva',
+      referenceType: 'sm_request',
+      referenceId: req.id,
+      recipients: allRecipients,
+      ...template,
+      data: { request_id: req.request_id },
+    })
+  } catch (err) {
+    console.error('[Notify] solicitud_urgente_nueva FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 15. ALERTA DIARIA URGENTES → cron diario 7AM Panamá
+// =============================================================================
+export async function notifyAlertaDiariaUrgentes(): Promise<void> {
+  try {
+    // No enviar los domingos (ICONSA no opera) — timezone Panamá explícito
+    // para evitar off-by-one si el cron corre en horario no-panamá (cron Vercel en UTC).
+    if (dayOfWeekInPanama() === 0) {
+      console.log('[Notify] alerta_diaria_urgentes skipped: domingo')
+      return
+    }
+
+    console.log('[Notify] alerta_diaria_urgentes called')
+    const supabase = createServiceClient()
+
+    // Calcular fecha límite: hoy + 3 días (en Panamá)
+    const todayStr = todayStrInPanama() // "YYYY-MM-DD"
+    const todayPanama = parseDateStrInPanama(todayStr)
+    const limitDate = new Date(todayPanama)
+    limitDate.setUTCDate(limitDate.getUTCDate() + 3)
+    const limitStr = dateStrInPanama(limitDate)
+
+    // Solicitudes activas con fecha requerida ≤ hoy + 3 días
+    const { data: requests, error: rErr } = await supabase
+      .from('sm_requests')
+      .select('id, request_id, project_id, requester_id, date_required')
+      .in('status', ['Enviada', 'En Proceso'])
+      .lte('date_required', limitStr)
+      .order('date_required')
+
+    if (rErr) console.error('[Notify] alerta_diaria_urgentes requests error:', rErr.message)
+    if (!requests?.length) {
+      console.log('[Notify] alerta_diaria_urgentes: no urgent requests found')
+      return
+    }
+
+    // Para cada request: contar líneas pendientes/parciales
+    const items: Array<{
+      requestId: string
+      projectName: string
+      requesterName: string
+      dateRequired: string
+      daysUntil: number
+      pendingLines: number
+    }> = []
+
+    for (const req of requests) {
+      const { count } = await supabase
+        .from('sm_request_lines')
+        .select('id', { count: 'exact', head: true })
+        .eq('request_id', req.id)
+        .in('status', ['Pendiente', 'Parcial'])
+
+      if (!count || count === 0) continue
+
+      const { data: project } = await supabase
+        .from('projects')
+        .select('name')
+        .eq('id', req.project_id)
+        .single()
+
+      const requesterName = await getPersonName(req.requester_id)
+
+      const days = daysBetweenInPanama(todayStr, req.date_required)
+
+      items.push({
+        requestId: req.request_id ?? req.id,
+        projectName: project?.name ?? '',
+        requesterName,
+        dateRequired: req.date_required,
+        daysUntil: days,
+        pendingLines: count,
+      })
+    }
+
+    if (items.length === 0) {
+      console.log('[Notify] alerta_diaria_urgentes: no requests with pending lines')
+      return
+    }
+
+    console.log(`[Notify] alerta_diaria_urgentes: ${items.length} urgent requests with pending lines`)
+
+    // Destinatarios: pre-filtrar por alerta_diaria_urgentes o receive_all
+    const { data: dailyRecipients } = await supabase
+      .from('people')
+      .select('id, email, name, notification_preferences')
+      .eq('notifications_enabled', true)
+      .eq('status', 'Activo')
+      .not('email', 'is', null)
+
+    const allRecipients = (dailyRecipients ?? []).filter(p => {
+      const prefs = p.notification_preferences as Record<string, boolean> | null
+      if (!prefs || Object.keys(prefs).length === 0) return true
+      if (prefs.receive_all === true) return true
+      return prefs.alerta_diaria_urgentes === true
+    })
+
+    const template = templates.alertaDiariaUrgentes({ items })
+
+    await sendNotification({
+      eventType: 'alerta_diaria_urgentes',
+      referenceType: 'sm_request',
+      referenceId: 'daily-alert',
+      recipients: allRecipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] alerta_diaria_urgentes FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 15. MATERIAL PREPARADO → PMs (pickup ready for collection)
+// =============================================================================
+export async function notifyMaterialPreparado(tripId: string): Promise<void> {
+  try {
+    console.log('[Notify] material_preparado called', { tripId })
+    const supabase = createServiceClient()
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id, status')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] material_preparado: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] material_preparado: skipped, trip cancelled')
+      return
+    }
+
+    const requestIds = await getTripRequestIds(tripId)
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(pms, receiveAll)
+
+    if (recipients.length === 0) { console.log('[Notify] material_preparado: no recipients'); return }
+
+    const template = templates.materialPreparado({
+      tripId: trip.trip_id ?? '',
+      requestIds,
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'material_preparado',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] material_preparado FAILED:', err)
+  }
+}
+
+// =============================================================================
+// 16. REVERSION REGISTRADA → Charris + PMs
+// =============================================================================
+export async function notifyReversionRegistrada(
+  tripId: string,
+  reason: string,
+  revertedEventType: string,
+  revertedByPersonId: string | null,
+): Promise<void> {
+  try {
+    console.log('[Notify] reversion_registrada called', { tripId, reason, revertedEventType })
+    const supabase = createServiceClient()
+    const { data: trip } = await supabase
+      .from('trips')
+      .select('id, trip_id, status')
+      .eq('id', tripId)
+      .single()
+
+    if (!trip) { console.warn('[Notify] reversion_registrada: trip not found'); return }
+    if (trip.status === 'Cancelado') {
+      console.log('[Notify] reversion_registrada: skipped, trip cancelled')
+      return
+    }
+
+    let revertedByName = ''
+    if (revertedByPersonId) {
+      const { data: revertPerson } = await supabase
+        .from('people')
+        .select('name')
+        .eq('id', revertedByPersonId)
+        .single()
+      revertedByName = revertPerson?.name ?? ''
+    }
+
+    const charris = await getPeopleByRole('logistica')
+    const pms = await getTripProjectPMs(tripId)
+    const receiveAll = await getReceiveAllUsers()
+    const recipients = dedup(charris, pms, receiveAll)
+
+    if (recipients.length === 0) { console.log('[Notify] reversion_registrada: no recipients'); return }
+
+    const template = templates.reversionRegistrada({
+      tripId: trip.trip_id ?? '',
+      eventType: revertedEventType,
+      reason,
+      revertedBy: revertedByName,
+      referenceId: trip.id,
+    })
+
+    await sendNotification({
+      eventType: 'reversion_registrada',
+      referenceType: 'trip',
+      referenceId: trip.id,
+      recipients,
+      ...template,
+    })
+  } catch (err) {
+    console.error('[Notify] reversion_registrada FAILED:', err)
   }
 }

@@ -86,7 +86,9 @@ export async function uploadFile(
     .from(BUCKET)
     .upload(path, file, { upsert: false, contentType: inferredType })
 
-  console.log('[Storage] upload response:', { path, uploadData, error })
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Storage] upload response:', { path, uploadData, error })
+  }
 
   if (error) {
     console.error('[Storage] upload error:', error)

@@ -75,6 +75,7 @@ export const EVENT_TYPES = [
   'Entrega',
   'Retorno',
   'Incidencia',
+  'Parada',
 ] as const
 export type EventType = (typeof EVENT_TYPES)[number]
 
@@ -91,6 +92,7 @@ export const ROLE_ROUTES: Record<AppRole, string[]> = {
     '/dashboard',
     '/solicitudes',
     '/programacion', // solo lectura
+    '/mis-viajes',   // solo lectura — ver viajes de sus solicitudes
   ],
   logistica: [
     '/dashboard',
@@ -99,7 +101,6 @@ export const ROLE_ROUTES: Record<AppRole, string[]> = {
     '/mis-viajes',
   ],
   campo: [
-    '/dashboard',
     '/mis-viajes',
   ],
   almacen: [

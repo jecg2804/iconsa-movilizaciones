@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Wrench, Package, ArrowRight, Paperclip } from 'lucide-react'
+import { Plus, Search, Wrench, Package, ArrowRight, Paperclip, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
 import { useSolicitudes, type SolicitudWithRelations } from '@/hooks/useSolicitudes'
 import { canCreateSolicitud } from '@/lib/utils/roles'
-import { formatDate, formatQty, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
+import { formatDate, formatQty, daysUntilDue, formatDaysUntilDue, daysUntilDueColor, formatCompletionDelta, getOperationalSummary } from '@/lib/utils/format'
 import { REQUEST_STATUSES } from '@/lib/utils/constants'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
@@ -18,15 +19,9 @@ import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
 
 export default function SolicitudesPage() {
   const router = useRouter()
-  const { role, userProjects, loading: authLoading } = useAuth()
+  const { role, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
-
-  // PM default filter
-  const [initialFilterApplied, setInitialFilterApplied] = useState(false)
-  const defaultProjectId = useMemo(() => {
-    if (role === 'pm' && userProjects.length > 0) return userProjects[0].id
-    return null
-  }, [role, userProjects])
+  const supabase = useMemo(() => createClient(), [])
 
   const {
     solicitudes,
@@ -34,30 +29,52 @@ export default function SolicitudesPage() {
     setFilters,
     listLoading,
     listError,
-  } = useSolicitudes(
-    defaultProjectId ? { projectId: defaultProjectId } : undefined,
-  )
+    totalCount,
+  } = useSolicitudes()
 
-  useEffect(() => {
-    if (!authLoading && !initialFilterApplied && role === 'pm' && defaultProjectId) {
-      setFilters({ projectId: defaultProjectId })
-      setInitialFilterApplied(true)
-    } else if (!authLoading && !initialFilterApplied) {
-      setInitialFilterApplied(true)
-    }
-  }, [authLoading, role, defaultProjectId, initialFilterApplied, setFilters])
+  // --- Control de expandir/colapsar (controlled state) ---
+  const [solExpandedKeys, setSolExpandedKeys] = useState<Set<string>>(new Set())
+  const [expandInitialized, setExpandInitialized] = useState(false)
 
   // Búsqueda local (debounced)
   const [searchInput, setSearchInput] = useState('')
   useEffect(() => {
     const timer = setTimeout(() => {
-      setFilters({ search: searchInput })
+      setFilters({ search: searchInput, page: 0 })
     }, 400)
     return () => clearTimeout(timer)
   }, [searchInput, setFilters])
 
-  // Fecha seleccionada en MiniCalendar (filtro client-side)
-  const [dateFilter, setDateFilter] = useState<string | null>(null)
+  // Fecha: filtros server-side via useSolicitudes.
+  // J4-A: el click en día del calendario usa `singleDay` (filtra SOLO la tabla,
+  // no el calendario — para que se vean los otros días). Los inputs Desde/Hasta
+  // usan `dateFrom`/`dateTo` (filtran calendario + tabla).
+  const calendarDate = filters.singleDay
+  const setCalendarDate = useCallback(
+    (date: string | null) => {
+      if (!date) {
+        setFilters({ singleDay: null, page: 0 })
+        return
+      }
+      // Toggle: si es el mismo día que ya está seleccionado, des-seleccionar.
+      if (filters.singleDay === date) {
+        setFilters({ singleDay: null, page: 0 })
+      } else {
+        setFilters({ singleDay: date, page: 0 })
+      }
+    },
+    [filters.singleDay, setFilters],
+  )
+
+  // Inicializar colapsado al cargar datos
+  useEffect(() => {
+    if (!expandInitialized && solicitudes.length > 0) {
+      setSolExpandedKeys(new Set()) // default collapsed
+      setExpandInitialized(true)
+    }
+  }, [expandInitialized, solicitudes])
+
+  const allSolExpanded = solExpandedKeys.size > 0
 
   // Opciones de proyectos
   const projectOptions: SelectOption[] = useMemo(
@@ -71,24 +88,66 @@ export default function SolicitudesPage() {
     [allProjects, filters.projectId],
   )
 
-  // Para la tabla: filtro por fecha calendario
-  const displayedSolicitudes = useMemo(() => {
-    if (!dateFilter) return solicitudes
-    return solicitudes.filter((s) => s.date_required === dateFilter)
-  }, [solicitudes, dateFilter])
+  // calendarItems — query SIN paginación pero CON los mismos filtros que la tabla.
+  // J4: calendario y tabla son una sola "vista de datos" con un set de filtros
+  // unificado. Cualquier filtro activo (proyecto, status, search, fecha,
+  // requester) aplica por igual al calendario y a la tabla.
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([])
 
-  // calendarItems para MiniCalendar
-  const calendarItems = useMemo<CalendarItem[]>(() => {
-    return solicitudes.map((s) => ({
-      id: s.id,
-      date: s.date_required,
-      label: s.request_id ?? '—',
-      status: s.status,
-      badgeVariant: 'status' as const,
-      subtitle: `${s.requester?.name ?? '—'} · ${s.lines?.length ?? 0} líneas${s.lines?.some((l: { notes?: string | null }) => l.notes) ? ' 📝' : ''}`,
-      href: `/solicitudes/${s.id}`,
-    }))
-  }, [solicitudes])
+  useEffect(() => {
+    const fetchCalendarData = async () => {
+      let query = supabase
+        .from('sm_requests')
+        .select('id, date_required, status, request_id, requester:people!requester_id(name), lines:sm_request_lines(id, notes)')
+        .order('date_required')
+
+      if (filters.projectId) {
+        query = query.eq('project_id', filters.projectId)
+      }
+      if (filters.statuses.length > 0) {
+        query = query.in('status', filters.statuses)
+      } else {
+        // Si no hay status seleccionados, al menos excluir Canceladas
+        query = query.not('status', 'in', '("Cancelada")')
+      }
+      if (filters.dateFrom) {
+        query = query.gte('date_required', filters.dateFrom)
+      }
+      if (filters.dateTo) {
+        query = query.lte('date_required', filters.dateTo)
+      }
+      if (filters.search) {
+        query = query.ilike('request_id', `%${filters.search}%`)
+      }
+      if (filters.requesterId) {
+        query = query.eq('requester_id', filters.requesterId)
+      }
+
+      const { data } = await query
+      setCalendarItems((data ?? []).map((s: Record<string, unknown>) => {
+        const requester = Array.isArray(s.requester) ? s.requester[0] : s.requester
+        const lines = Array.isArray(s.lines) ? s.lines : []
+        return {
+          id: s.id as string,
+          date: s.date_required as string,
+          label: (s.request_id as string) ?? '—',
+          status: s.status as string,
+          badgeVariant: 'status' as const,
+          subtitle: `${(requester as { name: string } | null)?.name ?? '—'} · ${lines.length} líneas`,
+          href: `/solicitudes/${s.id}`,
+        }
+      }))
+    }
+    fetchCalendarData()
+  }, [
+    supabase,
+    filters.projectId,
+    filters.statuses,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.search,
+    filters.requesterId,
+  ])
 
   // --- Chips de filtros activos ---
   const filterChips = useMemo<FilterChip[]>(() => {
@@ -97,7 +156,7 @@ export default function SolicitudesPage() {
       chips.push({
         key: 'project',
         label: projectName.code,
-        onRemove: () => setFilters({ projectId: null }),
+        onRemove: () => setFilters({ projectId: null, page: 0 }),
       })
     }
     if (filters.statuses.length > 0) {
@@ -106,54 +165,58 @@ export default function SolicitudesPage() {
           key: `status-${s}`,
           label: s,
           onRemove: () =>
-            setFilters({ statuses: filters.statuses.filter((x) => x !== s) }),
+            setFilters({ statuses: filters.statuses.filter((x) => x !== s), page: 0 }),
         })
       }
     }
-    if (dateFilter) {
-      const d = new Date(dateFilter + 'T00:00:00')
+    // J4-A: día único del click calendario usa `singleDay`; rango Desde/Hasta
+    // usa `dateFrom`/`dateTo`. Pueden coexistir — se muestran como chips
+    // separados.
+    if (filters.singleDay) {
+      const d = new Date(filters.singleDay + 'T00:00:00')
       chips.push({
         key: 'date',
         label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setDateFilter(null),
+        onRemove: () => setFilters({ singleDay: null, page: 0 }),
       })
     }
     if (filters.dateFrom) {
       chips.push({
         key: 'dateFrom',
         label: `Desde ${formatDate(filters.dateFrom)}`,
-        onRemove: () => setFilters({ dateFrom: null }),
+        onRemove: () => setFilters({ dateFrom: null, page: 0 }),
       })
     }
     if (filters.dateTo) {
       chips.push({
         key: 'dateTo',
         label: `Hasta ${formatDate(filters.dateTo)}`,
-        onRemove: () => setFilters({ dateTo: null }),
+        onRemove: () => setFilters({ dateTo: null, page: 0 }),
       })
     }
     if (filters.search) {
       chips.push({
         key: 'search',
         label: `"${filters.search}"`,
-        onRemove: () => { setFilters({ search: '' }); setSearchInput('') },
+        onRemove: () => { setFilters({ search: '', page: 0 }); setSearchInput('') },
       })
     }
     return chips
-  }, [filters, projectName, dateFilter, setFilters])
+  }, [filters, projectName, setFilters])
 
   const clearAllFilters = useCallback(() => {
     setFilters({
       projectId: null,
       statuses: [],
       priorities: [],
-      dateFrom: null,
-      dateTo: null,
       search: '',
       requesterId: null,
+      dateFrom: null,
+      dateTo: null,
+      singleDay: null,
+      page: 0,
     })
     setSearchInput('')
-    setDateFilter(null)
   }, [setFilters])
 
   // Toggle helpers
@@ -161,9 +224,9 @@ export default function SolicitudesPage() {
     (status: string) => {
       const current = filters.statuses
       if (current.includes(status)) {
-        setFilters({ statuses: current.filter((s) => s !== status) })
+        setFilters({ statuses: current.filter((s) => s !== status), page: 0 })
       } else {
-        setFilters({ statuses: [...current, status] })
+        setFilters({ statuses: [...current, status], page: 0 })
       }
     },
     [filters.statuses, setFilters],
@@ -183,6 +246,7 @@ export default function SolicitudesPage() {
         key: 'request_id',
         header: 'ID',
         sortable: true,
+        serverSortKey: 'request_id',
         className: 'w-[160px]',
         render: (row) => {
           const hasAttachments = Array.isArray(row.attachments) && row.attachments.length > 0
@@ -239,6 +303,7 @@ export default function SolicitudesPage() {
         key: 'date_required',
         header: 'Fecha Req.',
         sortable: true,
+        serverSortKey: 'date_required',
         className: 'w-[120px]',
         render: (row) => (
           <span className="text-sm text-gray-900">{formatDate(row.date_required)}</span>
@@ -249,6 +314,7 @@ export default function SolicitudesPage() {
         key: 'date_submitted',
         header: 'Fecha Enviada',
         sortable: true,
+        serverSortKey: 'date_submitted',
         className: 'w-[120px]',
         render: (row) => (
           <span className="text-sm text-gray-900">{row.date_submitted ? formatDate(row.date_submitted) : '—'}</span>
@@ -259,8 +325,20 @@ export default function SolicitudesPage() {
         key: 'status',
         header: 'Estado',
         sortable: true,
+        serverSortKey: 'status',
         className: 'w-[130px]',
-        render: (row) => <Badge label={row.status} variant="status" />,
+        render: (row) => (
+          <div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <Badge label={row.status} variant="status" />
+            </div>
+            {row.status === 'En Proceso' && row.lines?.length > 0 && (
+              <p className="text-xs text-iconsa-gray mt-0.5">
+                {getOperationalSummary(row.lines)}
+              </p>
+            )}
+          </div>
+        ),
         sortValue: (row) => row.status,
       },
       {
@@ -352,7 +430,21 @@ export default function SolicitudesPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-navy">Solicitudes de Movilización</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-navy">Solicitudes de Movilización</h1>
+          {solicitudes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSolExpandedKeys((prev) =>
+                prev.size > 0 ? new Set() : new Set(solicitudes.map((s) => s.id))
+              )}
+              className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              {allSolExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+              {allSolExpanded ? 'Colapsar' : 'Expandir'}
+            </button>
+          )}
+        </div>
         {canCreateSolicitud(role) && (
           <Button onClick={() => router.push('/solicitudes/nueva')} className="shrink-0">
             <Plus className="h-4 w-4" />
@@ -368,7 +460,7 @@ export default function SolicitudesPage() {
             placeholder="Proyecto"
             options={projectOptions}
             value={filters.projectId}
-            onChange={(val) => setFilters({ projectId: val })}
+            onChange={(val) => setFilters({ projectId: val, page: 0 })}
             disabled={projectsLoading}
           />
         </div>
@@ -388,7 +480,10 @@ export default function SolicitudesPage() {
             type="date"
             title="Fecha desde"
             value={filters.dateFrom ?? ''}
-            onChange={(e) => setFilters({ dateFrom: e.target.value || null })}
+            onChange={(e) => {
+              const from = e.target.value || null
+              setFilters({ dateFrom: from, page: 0 })
+            }}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
           <span className="text-xs font-medium text-iconsa-gray whitespace-nowrap">Hasta</span>
@@ -396,7 +491,10 @@ export default function SolicitudesPage() {
             type="date"
             title="Fecha hasta"
             value={filters.dateTo ?? ''}
-            onChange={(e) => setFilters({ dateTo: e.target.value || null })}
+            onChange={(e) => {
+              const to = e.target.value || null
+              setFilters({ dateTo: to, page: 0 })
+            }}
             className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           />
         </div>
@@ -426,8 +524,8 @@ export default function SolicitudesPage() {
       {/* MiniCalendar */}
       <MiniCalendar
         items={calendarItems}
-        selectedDate={dateFilter}
-        onSelectDate={setDateFilter}
+        selectedDate={calendarDate}
+        onSelectDate={setCalendarDate}
       />
 
       {/* Error */}
@@ -440,11 +538,24 @@ export default function SolicitudesPage() {
       {/* Tabla */}
       <DataTable<SolicitudWithRelations>
         columns={columns}
-        data={displayedSolicitudes}
+        data={solicitudes}
         keyExtractor={(row) => row.id}
         loading={isLoading}
         emptyMessage="No hay solicitudes que mostrar"
         mobileRender={mobileRender}
+        pagination="server"
+        pageSize={filters.pageSize}
+        totalCount={totalCount}
+        currentPage={filters.page}
+        onPageChange={(page) => setFilters({ page })}
+        onPageSizeChange={(size) => setFilters({ pageSize: size, page: 0 })}
+        expandedKeys={solExpandedKeys}
+        onExpandedKeysChange={setSolExpandedKeys}
+        externalSort={{
+          column: filters.sortColumn,
+          direction: filters.sortDirection,
+          onSortChange: (column, direction) => setFilters({ sortColumn: column, sortDirection: direction, page: 0 }),
+        }}
         expandRender={(row) => {
           const lines = row.lines ?? []
           if (lines.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas</p>
@@ -462,13 +573,13 @@ export default function SolicitudesPage() {
                     ) : (
                       <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
                     )}
-                    <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+                    <span className="min-w-0 font-medium text-gray-900" title={line.description}>
                       {line.description}
                     </span>
                     <span className="flex items-center gap-1 text-iconsa-gray">
-                      <span className="max-w-[100px] truncate">{fromName}</span>
+                      <span title={fromName}>{fromName}</span>
                       <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                      <span className="max-w-[100px] truncate">{toName}</span>
+                      <span title={toName}>{toName}</span>
                     </span>
                     <span className="shrink-0 text-gray-600">{formatQty(line.quantity)} {unitName}</span>
                     <Badge label={line.status} variant="line" />

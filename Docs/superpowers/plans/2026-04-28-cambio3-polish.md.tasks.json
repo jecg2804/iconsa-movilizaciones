@@ -1,0 +1,26 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-28-cambio3-polish.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Botones de acción pickup con texto en Surface 1 + 2",
+      "status": "pending",
+      "description": "**Goal:** Reemplazar emoji 🤝 por botones con texto puro (\"Aprobar pickup\", \"Convertir a pickup\") en BacklogTable (desktop + mobile) y AssignmentRow trip detail. Estilo pill amber compacto coherente con \"Registrar entrega\".\n\n**Files:**\n- Modify: src/components/programacion/BacklogTable.tsx (líneas 221-231 desktop + 320-329 mobile)\n- Modify: src/app/(app)/programacion/viaje/[id]/page.tsx (líneas 246-261 AssignmentRow)\n\n**Acceptance:**\n- BacklogTable desktop + mobile + AssignmentRow: botones con texto puro, sin emoji, sin íconos lucide\n- Estilo unificado: bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 rounded-lg\n- LineRow.tsx (badges decorativos) NO tocado\n- npm run build verde\n- grep `🤝` en src/components/programacion/ + src/app/(app)/programacion/viaje/ → 0 matches\n\n**Verify:** `npm run build && grep -rn \"🤝\" src/components/programacion/ \"src/app/(app)/programacion/viaje/\"`\n\n```json:metadata\n{\"files\": [\"src/components/programacion/BacklogTable.tsx\", \"src/app/(app)/programacion/viaje/[id]/page.tsx\"], \"verifyCommand\": \"npm run build && grep -rn '🤝' src/components/programacion/ 'src/app/(app)/programacion/viaje/'\", \"acceptanceCriteria\": [\"botones con texto puro sin emoji\", \"estilo pill amber compacto\", \"LineRow no tocado\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Reposicionar sección Pickups Pendientes + hide-when-empty",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Mover sección \"Pickups Pendientes de Retiro\" del final al top de /programacion (antes de \"Sin Programar\"). Hide entirely cuando vacía. Eliminar emoji 🤝 decorativo de cada item.\n\n**Files:**\n- Modify: src/app/(app)/programacion/page.tsx (mover bloque + ajustar conditional + eliminar emoji)\n\n**Acceptance:**\n- Sección aparece después del header, antes de \"Sin Programar\"\n- Cuando !pickupsLoading && pendingPickups.length === 0: sección oculta completamente\n- Loading state mantiene header con spinner (evita jump)\n- Sin emoji 🤝 en cada item\n- Solo visible para logistica/admin\n- npm run build verde\n\n**Verify:** `npm run build && grep -n '🤝' src/app/(app)/programacion/page.tsx`\n\n```json:metadata\n{\"files\": [\"src/app/(app)/programacion/page.tsx\"], \"verifyCommand\": \"npm run build && grep -n '🤝' 'src/app/(app)/programacion/page.tsx'\", \"acceptanceCriteria\": [\"sección reposicionada al top\", \"hide entirely cuando vacía\", \"emoji decorativo eliminado\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Hook revertPickupToBacklog + botón Devolver al backlog + modal",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Implementar reverso de pickup. Hook `revertPickupToBacklog(lineId)` con UPDATE atomic + WHERE clauses defensivas. Botón \"Devolver al backlog\" texto puro outline gris en cada item de pickup pendiente. Modal confirmación corto.\n\n**Files:**\n- Modify: src/hooks/usePickup.ts (agregar tipo + función)\n- Modify: src/app/(app)/programacion/page.tsx (estado modal + handler + botón + render modal)\n\n**Acceptance:**\n- usePickup.revertPickupToBacklog(lineId) exportado\n- UPDATE atomic con WHERE id AND status='Pickup Aprobado' AND pickup_completed_at IS NULL; si 0 rows → error claro\n- UPDATE setea exactamente: status='Pendiente', pickup_by_project=false, pickup_approved_at=null, pickup_approved_by=null\n- NO toca: pickup_completed_at/received_by_*, qty_scheduled, qty_delivered, trip_line_assignments, notes, attachments\n- Botón \"Devolver al backlog\" texto puro, outline gris (border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 text-xs font-semibold rounded-lg)\n- Posición: izquierda (secundario), \"Registrar entrega\" derecha (primary)\n- Modal título \"¿Devolver al backlog?\" + body explicativo + Cancelar/Devolver\n- Post-confirm: refetchPendingPickups + refetchBacklog\n- npm run build verde\n\n**Verify:** `npm run build && grep -n 'revertPickupToBacklog\\|Devolver al backlog' src/hooks/usePickup.ts 'src/app/(app)/programacion/page.tsx'`\n\n```json:metadata\n{\"files\": [\"src/hooks/usePickup.ts\", \"src/app/(app)/programacion/page.tsx\"], \"verifyCommand\": \"npm run build && grep -n 'revertPickupToBacklog' src/hooks/usePickup.ts\", \"acceptanceCriteria\": [\"hook implementado con WHERE defensive\", \"botón texto puro outline gris\", \"modal confirmación\", \"refetch dual post-confirm\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-28T00:00:00Z"
+}

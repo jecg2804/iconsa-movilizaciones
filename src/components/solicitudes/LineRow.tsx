@@ -1,9 +1,9 @@
 'use client'
 
-import { Wrench, Package, Pencil, Trash2, ArrowRight } from 'lucide-react'
+import { Wrench, Package, Pencil, Trash2, Copy, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { formatQty } from '@/lib/utils/format'
-import type { LineInput } from '@/hooks/useSolicitudes'
+import type { LineInput, FulfillmentInfo } from '@/hooks/useSolicitudes'
 
 interface LineRowProps {
   line: LineInput & { status?: string; po_reference?: string | null; material_category?: string | null; qty_delivered?: number | null; qty_scheduled?: number | null }
@@ -13,11 +13,14 @@ interface LineRowProps {
   isScheduled: boolean
   onEdit: () => void
   onDelete: () => void
+  /** Opcional — si se provee, muestra botón Duplicar (J8b). Solo tiene sentido cuando se pueden agregar líneas (ej. Borrador). */
+  onDuplicate?: () => void
   // Nombres resueltos por el componente padre
   fromDisplay?: string
   toDisplay?: string
   unitDisplay?: string
-  costCodeDisplay?: string
+  // Cambio 5 — fulfillments per línea (0-N items)
+  fulfillments?: FulfillmentInfo[]
 }
 
 /**
@@ -33,10 +36,11 @@ function LineRow({
   isScheduled,
   onEdit,
   onDelete,
+  onDuplicate,
   fromDisplay,
   toDisplay,
   unitDisplay,
-  costCodeDisplay,
+  fulfillments = [],
 }: LineRowProps) {
   const isEquipo = line.line_type === 'Equipo'
   const status = line.status ?? 'Pendiente'
@@ -45,7 +49,6 @@ function LineRow({
   const fromName = fromDisplay ?? line.from_text ?? '—'
   const toName = toDisplay ?? line.to_text ?? '—'
   const unitName = unitDisplay ?? line.unit_text ?? '—'
-  const costCode = costCodeDisplay ?? '—'
 
   return (
     <>
@@ -67,15 +70,15 @@ function LineRow({
           </span>
 
           {/* Descripcion */}
-          <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
+          <span className="min-w-0 font-medium text-gray-900" title={line.description}>
             {line.description}
           </span>
 
           {/* Ruta: desde → hasta */}
           <span className="flex min-w-0 items-center gap-1.5 text-iconsa-gray">
-            <span className="max-w-[120px] truncate" title={fromName}>{fromName}</span>
+            <span title={fromName}>{fromName}</span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <span className="max-w-[120px] truncate" title={toName}>{toName}</span>
+            <span title={toName}>{toName}</span>
           </span>
 
           {/* Cantidad + unidad + progreso entrega */}
@@ -88,10 +91,7 @@ function LineRow({
             )}
           </span>
 
-          {/* Codigo de costo */}
-          <span className="shrink-0 font-mono text-xs text-iconsa-gray" title={costCode}>
-            {costCode}
-          </span>
+          {/* Cost code eliminado de líneas — ahora vive en header (Cambio 2) */}
 
           {/* Campos opcionales */}
           {line.po_reference && (
@@ -105,13 +105,49 @@ function LineRow({
             </span>
           )}
 
-          {/* Badge de estado */}
-          <div className="ml-auto shrink-0">
+          {/* Badge de estado + badges per fulfillment activo (Cambio 5, 0-N) */}
+          <div className="ml-auto shrink-0 flex items-center gap-1.5 flex-wrap">
             <Badge variant="line" label={status} />
+            {fulfillments.map((f) => {
+              if (f.type === 'trip') {
+                return (
+                  <span
+                    key={f.id}
+                    className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium"
+                    title={`Trip ${f.trip_id ?? f.id.slice(0, 8)}, ${f.quantity_assigned} unidades${f.status !== 'Programado' ? ` (${f.status})` : ''}`}
+                  >
+                    EN VIAJE {f.trip_id ?? f.id.slice(0, 8)}
+                  </span>
+                )
+              }
+              if (f.type === 'pickup') {
+                return (
+                  <span
+                    key={f.id}
+                    className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-xs font-medium"
+                    title={`Pickup ${f.pickup_id}, ${f.quantity_assigned} unidades${f.status !== 'Aprobado' ? ` (${f.status})` : ''}`}
+                  >
+                    EN PICKUP {f.pickup_id}
+                  </span>
+                )
+              }
+              if (f.type === 'external') {
+                return (
+                  <span
+                    key={f.id}
+                    className="inline-flex items-center rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-xs font-medium"
+                    title={`Externo ${f.external_id}, B/. ${f.invoice_amount.toFixed(2)}, ${f.provider_name}, ${f.quantity_assigned} unidades${f.status !== 'Aprobado' ? ` (${f.status})` : ''}`}
+                  >
+                    EN EXTERNO {f.external_id}
+                  </span>
+                )
+              }
+              return null
+            })}
           </div>
 
           {/* Acciones */}
-          {(editable || canDelete) && (
+          {(editable || canDelete || onDuplicate) && (
             <div className="flex shrink-0 items-center gap-1">
               {editable && (
                 <button
@@ -121,6 +157,16 @@ function LineRow({
                   title="Editar linea"
                 >
                   <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  type="button"
+                  onClick={onDuplicate}
+                  className="rounded p-1.5 text-iconsa-gray hover:bg-gray-100 hover:text-iconsa-blue transition-colors"
+                  title="Duplicar linea"
+                >
+                  <Copy className="h-4 w-4" />
                 </button>
               )}
               {canDelete && (
@@ -155,18 +201,44 @@ function LineRow({
             ) : (
               <Package className="h-4 w-4 shrink-0 text-gold" />
             )}
-            <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+            <span className="min-w-0 text-sm font-medium text-gray-900" title={line.description}>
               {line.description}
             </span>
           </div>
-          <Badge variant="line" label={status} />
+          <div className="flex items-center gap-1 flex-wrap">
+            <Badge variant="line" label={status} />
+            {fulfillments.map((f) => {
+              if (f.type === 'trip') {
+                return (
+                  <span key={f.id} className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium" title={`Trip ${f.trip_id ?? f.id.slice(0, 8)}, ${f.quantity_assigned}`}>
+                    VIAJE
+                  </span>
+                )
+              }
+              if (f.type === 'pickup') {
+                return (
+                  <span key={f.id} className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-medium" title={`Pickup ${f.pickup_id}, ${f.quantity_assigned}`}>
+                    PICKUP
+                  </span>
+                )
+              }
+              if (f.type === 'external') {
+                return (
+                  <span key={f.id} className="inline-flex items-center rounded-full bg-violet-100 text-violet-700 px-1.5 py-0.5 text-[10px] font-medium" title={`Externo ${f.external_id}, B/. ${f.invoice_amount.toFixed(2)}, ${f.provider_name}, ${f.quantity_assigned}`}>
+                    EXTERNO
+                  </span>
+                )
+              }
+              return null
+            })}
+          </div>
         </div>
 
         {/* Segunda linea: ruta */}
         <div className="flex items-center gap-1.5 text-xs text-iconsa-gray">
-          <span className="max-w-[130px] truncate">{fromName}</span>
+          <span title={fromName}>{fromName}</span>
           <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-          <span className="max-w-[130px] truncate">{toName}</span>
+          <span title={toName}>{toName}</span>
         </div>
 
         {/* Campos opcionales */}
@@ -195,12 +267,9 @@ function LineRow({
                 </span>
               )}
             </span>
-            {costCode !== '—' && (
-              <span className="font-mono text-iconsa-gray">{costCode}</span>
-            )}
           </div>
 
-          {(editable || canDelete) && (
+          {(editable || canDelete || onDuplicate) && (
             <div className="flex items-center gap-1">
               {editable && (
                 <button
@@ -210,6 +279,16 @@ function LineRow({
                   title="Editar linea"
                 >
                   <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {onDuplicate && (
+                <button
+                  type="button"
+                  onClick={onDuplicate}
+                  className="rounded p-1.5 text-iconsa-gray hover:bg-gray-100 hover:text-iconsa-blue transition-colors"
+                  title="Duplicar linea"
+                >
+                  <Copy className="h-3.5 w-3.5" />
                 </button>
               )}
               {canDelete && (

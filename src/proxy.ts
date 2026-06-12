@@ -2,14 +2,27 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Evita caídas del middleware cuando faltan variables en Vercel.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (pathname !== '/login') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'config')
+      return NextResponse.redirect(url)
+    }
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -26,32 +39,86 @@ export async function proxy(request: NextRequest) {
           )
         },
       },
-    },
-  )
+    })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    // Rutas públicas (no requieren auth)
+    const publicRoutes = ['/login', '/forgot-password', '/auth/confirm', '/api/cron']
+    if (publicRoutes.some((route) => pathname.startsWith(route))) {
+      return supabaseResponse
+    }
 
-  const { pathname } = request.nextUrl
+    // IMPORTANTE: No usar getSession() — getUser() valida contra el servidor de Auth
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user && pathname !== '/login') {
+    // Sin sesión → login
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+
+    // Con sesión pero must_change_password → forzar cambio
+    if (user.user_metadata?.must_change_password === true && pathname !== '/change-password') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/change-password'
+      return NextResponse.redirect(url)
+    }
+
+    // Consultar rol del usuario para enforcement de RBAC
+    // (Seguridad: conductores solo pueden acceder a /mis-viajes)
+    const { data: personData } = await supabase
+      .from('people')
+      .select('app_role')
+      .eq('auth_id', user.id)
+      .single()
+
+    const role = personData?.app_role as string | null
+
+    // Rol campo: solo puede acceder a /mis-viajes y /change-password
+    if (role === 'campo') {
+      const isAllowedForCampo =
+        pathname.startsWith('/mis-viajes') ||
+        pathname === '/change-password'
+
+      if (!isAllowedForCampo) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/mis-viajes'
+        return NextResponse.redirect(url)
+      }
+    }
+
+    // Si hay sesión y está en /login o raíz, redirigir al home del rol
+    if (pathname === '/login' || pathname === '/') {
+      const url = request.nextUrl.clone()
+      url.pathname = role === 'campo' ? '/mis-viajes' : '/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    return supabaseResponse
+  } catch {
+    // Evita MIDDLEWARE_INVOCATION_FAILED por errores runtime en Edge.
+    if (pathname === '/login') {
+      return NextResponse.next({ request })
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    url.searchParams.set('error', 'auth')
     return NextResponse.redirect(url)
   }
-
-  if (user && (pathname === '/login' || pathname === '/')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
-  return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    /*
+     * Aplica a todas las rutas excepto:
+     * - _next/static (archivos estáticos)
+     * - _next/image (optimización de imágenes)
+     * - favicon.ico, sitemap.xml, robots.txt
+     * - Archivos con extensión (imágenes, etc.)
+     * - api/cron (cron jobs autenticados por Bearer token, no por session)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

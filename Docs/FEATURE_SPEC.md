@@ -50,12 +50,9 @@ Una aplicación web que digitaliza el procedimiento IC-LOG-PO-06 (Movilizaciones
 
 | Capa | Tecnología | Hosting |
 |------|-----------|---------|
-| Frontend | Next.js (App Router) + TypeScript + Tailwind CSS | Vercel |
-| Backend | NestJS (pendiente) | Railway / Fly.io |
-| Base de datos | Supabase PostgreSQL + Auth + RLS | Supabase (us-west-2) |
-| Reporting | Metabase (pendiente) | — |
-| ETL/AI | Python (pendiente) | — |
-| Inspecciones campo | KoboToolbox (pendiente) | — |
+| Frontend | Next.js 16 (App Router) + TypeScript + Tailwind CSS | Vercel |
+| Base de datos | Supabase PostgreSQL + Auth + RLS + Storage (44 tablas) | Supabase (us-west-2) |
+| Notificaciones | Resend (server actions, 12 templates) | Vercel |
 | Dominio | rein-eisenwerk.com | — |
 
 ---
@@ -122,13 +119,13 @@ El procedimiento de movilizaciones de ICONSA define el flujo formal:
 
 ### 3.2 — Post-MVP (planificado)
 
-- Notificaciones email y WhatsApp
-- NestJS backend para automaciones
-- Metabase para reportes de gestión
+- Inspecciones de equipo (IC-EQ-F-01-02, 42 items, tablas ya creadas)
+- Reportes auto-generados (facturación mensual, informe Valderrama semanal)
+- Dashboards por rol (Tremor/Recharts en Next.js)
+- Work orders de mantenimiento
+- Fuel tracking
 - Importación de datos históricos 2024-2025
-- Paginación en todas las listas
 - PWA offline para uso en campo
-- KoboToolbox para inspecciones
 
 ### 3.3 — Fuera de alcance
 
@@ -206,9 +203,9 @@ MovimientOS es una aplicación web propia. Todos los empleados de ICONSA pueden 
 - Solicitante
 - Líneas (conteo)
 - Fecha requerida
-- Días (días hasta fecha requerida; para completadas/canceladas muestra delta vs fecha requerida)
-- Prioridad (badge con color, calculada client-side via `calculatePriority()`)
+- Fecha enviada (solo si aplica)
 - Estado (badge con color)
+- Días (días hasta fecha requerida; para completadas/canceladas muestra delta vs fecha requerida, con color)
 
 **Filtros:**
 - Proyecto (dropdown)
@@ -494,13 +491,13 @@ Al agregar una línea en Borrador, el sistema busca líneas pendientes/programad
 
 ## 6. Modelo de Datos
 
-### 6.1 — Resumen (20 tablas)
+### 6.1 — Resumen (44 tablas)
 
-**Tablas transaccionales (5):** sm_requests, sm_request_lines, trips, trip_line_assignments, trip_events
-**Tablas maestras (10):** projects, equipment, people, locations, cost_codes, cost_categories, cost_code_categories, mobilization_rates, person_projects, units
-**Tablas de soporte (5):** audit_log, sequences, project_extras, suggestions, user_app_roles
+**Tablas operativas (22):** sm_requests, sm_request_lines, trips, trip_line_assignments, trip_events, equipment, people, projects, project_extras, locations, units, mobilization_rates, cost_codes, cost_categories, cost_code_categories, sequences, suggestions, notification_log, audit_log, feedback, person_projects, user_app_roles
 
-El schema completo con columnas, tipos, defaults y constraints está en `Docs/SPEC.md`.
+**Tablas nuevas — expansión Mar 2026 (22):** equipment_categories, equipment_assemblies, equipment_assembly_members, inspection_templates, inspection_template_sections, inspection_template_items, equipment_inspections, inspection_responses, inspection_photos, work_orders, work_order_parts, fuel_logs, meter_readings, operator_qualifications, rental_agreements, purchase_orders, purchase_order_lines, mobilization_campaigns, warehouse_items, warehouse_transactions, vendors, equipment_status_log
+
+Para schema completo con columnas, tipos, y constraints: usar **Supabase MCP** (todas las tablas tienen COMMENT ON TABLE/COLUMN). Para funciones, triggers, cascada, y decisiones técnicas: ver `.claude/skills/technical-decisions/SKILL.md`.
 
 ### 6.2 — Relaciones clave
 
@@ -760,7 +757,7 @@ ELSE → 'Enviada'
 
 ## 9. Notificaciones y Automatizaciones
 
-### 9.1 — Notificaciones (pendiente — NestJS backend)
+### 9.1 — Notificaciones (implementado — Resend server actions)
 
 | Evento | Destinatario | Contenido |
 |--------|-------------|-----------|
@@ -770,7 +767,7 @@ ELSE → 'Enviada'
 | Viaje en ruta | PM del proyecto | "Viaje {ID} en ruta hacia {destino}." |
 | Entrega confirmada | PM del proyecto | "Entrega confirmada: {descripción} en {destino}." |
 
-**Canal MVP:** Email via NestJS. **Futuro:** WhatsApp.
+**Canal:** Email via Resend (server actions, 12 templates, fire-and-forget). **Futuro:** WhatsApp.
 
 ### 9.2 — Automatizaciones activas (triggers BD)
 
@@ -832,10 +829,10 @@ ELSE → 'Enviada'
 
 ### 11.2 — Pendiente
 
-Ver `Docs/ROADMAP.md` para el roadmap priorizado completo.
+Ver `Docs/MASTER_BACKLOG.md` para el roadmap priorizado completo.
 
 **Pre-producción:** RLS real, notificaciones, paginación, person_projects, /solicitudes/[id] completo.
-**Post-lanzamiento:** NestJS backend, Metabase, datos históricos, Python ETL/AI, KoboToolbox.
+**Post-lanzamiento:** Inspecciones, reportes auto-generados, dashboards por rol, work orders, fuel tracking, datos históricos.
 
 ---
 

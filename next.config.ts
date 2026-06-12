@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: "jecg2804",
+  project: "movimientos",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  tunnelRoute: "/monitoring",
+  silent: !process.env.CI,
+});

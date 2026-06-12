@@ -7,6 +7,7 @@ import {
   ctaButton,
   alertBanner,
   confirmationCodeBox,
+  escapeHtml,
 } from './layout'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://rein-eisenwerk.com'
@@ -51,9 +52,9 @@ export function solicitudEnviada(data: {
 <p>Se ha recibido una nueva solicitud que requiere programación.</p>
 ${urgentBanner}
 ${dataTable(
-  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
-  dataRow('Proyecto', data.projectName) +
-  dataRow('Solicitante', data.requesterName) +
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Proyecto', escapeHtml(data.projectName)) +
+  dataRow('Solicitante', escapeHtml(data.requesterName)) +
   dataRow('Fecha requerida', formatDate(data.dateRequired)) +
   dataRow('Líneas', `${data.lineCount} ítem${data.lineCount !== 1 ? 's' : ''}`)
 )}
@@ -77,9 +78,9 @@ export function solicitudEditada(data: {
   const body = `
 <p>La solicitud ha sido modificada. Revise los cambios.</p>
 ${dataTable(
-  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
-  dataRow('Proyecto', data.projectName) +
-  dataRow('Modificada por', data.editedBy)
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Proyecto', escapeHtml(data.projectName)) +
+  dataRow('Modificada por', escapeHtml(data.editedBy))
 )}
 ${ctaButton('Ver Cambios →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
 
@@ -101,9 +102,9 @@ export function solicitudCancelada(data: {
   const body = `
 ${alertBanner('La solicitud ha sido cancelada.', 'warning')}
 ${dataTable(
-  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
-  dataRow('Proyecto', data.projectName) +
-  dataRow('Cancelada por', data.cancelledBy)
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Proyecto', escapeHtml(data.projectName)) +
+  dataRow('Cancelada por', escapeHtml(data.cancelledBy))
 )}
 ${ctaButton('Ver Solicitud →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
 
@@ -124,8 +125,8 @@ export function solicitudCompletada(data: {
   const body = `
 ${alertBanner('Tu solicitud ha sido completada exitosamente.', 'success')}
 ${dataTable(
-  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
-  dataRow('Proyecto', data.projectName)
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Proyecto', escapeHtml(data.projectName))
 )}
 ${ctaButton('Ver Detalles →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
 
@@ -150,12 +151,12 @@ export function lineasProgramadas(data: {
   const body = `
 <p>Tu solicitud ha sido programada para movilización.</p>
 ${dataTable(
-  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
   dataRow('Fecha programada', formatDate(data.scheduledDate)) +
-  dataRow('Equipo de movilización', data.vehicleDescription)
+  dataRow('Equipo de movilización', escapeHtml(data.vehicleDescription))
 )}
-${confirmationCodeBox(data.confirmationCode)}
+${confirmationCodeBox(escapeHtml(data.confirmationCode))}
 ${ctaButton('Ver Detalles →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
 
   return {
@@ -175,8 +176,8 @@ export function viajeCancelado(data: {
   const body = `
 ${alertBanner('El viaje ha sido cancelado. Las líneas fueron devueltas al backlog.', 'warning')}
 ${dataTable(
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
-  dataRow('Solicitudes afectadas', data.requestIds)
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
+  dataRow('Solicitudes afectadas', escapeHtml(data.requestIds))
 )}
 ${ctaButton('Ver Backlog →', `${APP_URL}/programacion`)}`
 
@@ -199,16 +200,43 @@ export function viajeReprogramado(data: {
   const body = `
 ${alertBanner('El viaje ha sido reprogramado.', 'info')}
 ${dataTable(
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
   dataRow('Fecha anterior', formatDate(data.previousDate)) +
   dataRow('Nueva fecha', formatDate(data.newDate)) +
-  dataRow('Solicitudes afectadas', data.requestIds)
+  dataRow('Solicitudes afectadas', escapeHtml(data.requestIds))
 )}
 ${ctaButton('Ver Viaje →', `${APP_URL}/programacion/viaje/${data.referenceId}`)}`
 
   return {
     subject: `Viaje ${data.tripId} Reprogramado — ${formatDate(data.newDate)}`,
     html: emailLayout('Viaje Reprogramado', body),
+  }
+}
+
+// =============================================================================
+// 7b. VIAJE EDITADO → PM(s) afectados (reemplaza viajeReprogramado para ediciones)
+// =============================================================================
+export function viajeEditado(data: {
+  tripId: string
+  scheduledDate: string
+  changes: string[]
+  requestIds: string
+  referenceId: string
+}): TemplateResult {
+  const changeList = data.changes.map(c => `• ${escapeHtml(c)}`).join('<br/>')
+  const body = `
+${alertBanner('El viaje ha sido modificado. Revise los cambios.', 'info')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
+  dataRow('Fecha programada', formatDate(data.scheduledDate)) +
+  dataRow('Cambios realizados', changeList) +
+  dataRow('Solicitudes afectadas', escapeHtml(data.requestIds))
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/programacion/viaje/${data.referenceId}`)}`
+
+  return {
+    subject: `Viaje ${data.tripId} Modificado`,
+    html: emailLayout('Viaje Modificado', body),
   }
 }
 
@@ -225,9 +253,9 @@ export function viajeAsignadoConductor(data: {
   const body = `
 <p>Se te ha asignado un viaje de movilización.</p>
 ${dataTable(
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
   dataRow('Fecha', formatDate(data.scheduledDate)) +
-  dataRow('Vehículo', data.vehicleDescription) +
+  dataRow('Vehículo', escapeHtml(data.vehicleDescription)) +
   dataRow('Paradas/entregas', String(data.stopCount))
 )}
 ${ctaButton('Ver Mi Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
@@ -258,11 +286,11 @@ export function entregaConfirmada(data: {
   const body = `
 ${banner}
 ${dataTable(
-  dataRow('Solicitud', `<strong style="font-family:monospace;">${data.requestId}</strong>`) +
-  dataRow('Proyecto', data.projectName) +
-  dataRow('Ítem', data.description) +
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Proyecto', escapeHtml(data.projectName)) +
+  dataRow('Ítem', escapeHtml(data.description)) +
   dataRow('Cantidad entregada', `${data.qtyDelivered} / ${data.qtyTotal}`) +
-  dataRow('Recibido por', data.receivedByName)
+  dataRow('Recibido por', escapeHtml(data.receivedByName))
 )}
 ${ctaButton('Ver Solicitud →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
 
@@ -285,19 +313,20 @@ export function salidaRegistrada(data: {
   destination: string
   requestIds: string
   referenceId: string
+  solicitudId: string
 }): TemplateResult {
   const body = `
 ${alertBanner('El viaje salió de Chilibre.', 'info')}
 ${dataTable(
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
-  dataRow('Hora de salida', data.departureTime) +
-  dataRow('Destino', data.destination) +
-  dataRow('Solicitudes', data.requestIds)
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
+  dataRow('Hora de salida', escapeHtml(data.departureTime)) +
+  dataRow('Destino', escapeHtml(data.destination)) +
+  dataRow('Solicitudes', escapeHtml(data.requestIds))
 )}
-${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+${ctaButton('Ver ubicación en vivo →', `${APP_URL}/solicitudes/${data.solicitudId}`)}`
 
   return {
-    subject: `Viaje ${data.tripId} En Ruta → ${data.destination}`,
+    subject: `Viaje ${data.tripId} en ruta — ver ubicación en vivo → ${data.destination}`,
     html: emailLayout('Viaje En Ruta', body),
   }
 }
@@ -311,10 +340,10 @@ export function incidenciaRuta(data: {
   referenceId: string
 }): TemplateResult {
   const body = `
-${alertBanner(data.incidentNotes, 'danger')}
+${alertBanner(escapeHtml(data.incidentNotes), 'danger')}
 ${dataTable(
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
-  dataRow('Notas', data.incidentNotes)
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
+  dataRow('Notas', escapeHtml(data.incidentNotes))
 )}
 ${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
 
@@ -333,14 +362,14 @@ export function retornoRegistrado(data: {
   requestIds: string[]
   referenceId: string
 }): TemplateResult {
-  const arrivalFormatted = new Date(data.arrivalTime).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })
+  const arrivalFormatted = new Date(data.arrivalTime).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })
 
   const body = `
 ${alertBanner('El viaje completó su ruta y retornó a base.', 'success')}
 ${dataTable(
-  dataRow('Viaje', `<strong style="font-family:monospace;">${data.tripId}</strong>`) +
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
   dataRow('Hora de retorno', arrivalFormatted) +
-  dataRow('Solicitudes', data.requestIds.join(', ') || '—')
+  dataRow('Solicitudes', escapeHtml(data.requestIds.join(', ')) || '—')
 )}
 ${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
 
@@ -362,14 +391,156 @@ export function sugerenciaFallback(data: {
   const body = `
 <p>Un usuario ha sugerido agregar un nuevo valor a una tabla maestra.</p>
 ${dataTable(
-  dataRow('Tabla', data.tableName) +
-  dataRow('Valor sugerido', `<strong>${data.suggestedValue}</strong>`) +
-  dataRow('Sugerido por', data.suggestedByName)
+  dataRow('Tabla', escapeHtml(data.tableName)) +
+  dataRow('Valor sugerido', `<strong>${escapeHtml(data.suggestedValue)}</strong>`) +
+  dataRow('Sugerido por', escapeHtml(data.suggestedByName))
 )}
 ${ctaButton('Revisar Sugerencias →', `${APP_URL}/admin/masters`)}`
 
   return {
     subject: `Sugerencia: "${data.suggestedValue}" para ${data.tableName}`,
     html: emailLayout('Nueva Sugerencia', body),
+  }
+}
+
+// =============================================================================
+// 14. SOLICITUD URGENTE NUEVA → usuarios con solicitud_urgente_nueva
+// =============================================================================
+export function solicitudUrgenteNueva(data: {
+  requestId: string
+  projectName: string
+  requesterName: string
+  dateRequired: string
+  lineCount: number
+  referenceId: string
+}): TemplateResult {
+  const days = daysUntil(data.dateRequired)
+  const absDays = Math.abs(days)
+
+  const bannerText = days < 0
+    ? `🔴 VENCIDA: Fecha requerida pasó hace ${absDays} día${absDays !== 1 ? 's' : ''}`
+    : `⚠️ URGENTE: Fecha requerida en ${days} día${days !== 1 ? 's' : ''}`
+
+  const body = `
+${alertBanner(bannerText, 'danger')}
+<p>Se ha enviado una solicitud con fecha requerida próxima o vencida. Requiere atención inmediata.</p>
+${dataTable(
+  dataRow('Solicitud', `<strong style="font-family:monospace;">${escapeHtml(data.requestId)}</strong>`) +
+  dataRow('Proyecto', escapeHtml(data.projectName)) +
+  dataRow('Solicitante', escapeHtml(data.requesterName)) +
+  dataRow('Fecha requerida', formatDate(data.dateRequired)) +
+  dataRow('Líneas', `${data.lineCount} ítem${data.lineCount !== 1 ? 's' : ''}`)
+)}
+${ctaButton('Ver Solicitud →', `${APP_URL}/solicitudes/${data.referenceId}`)}`
+
+  const subject = days < 0
+    ? `🔴 VENCIDA: Solicitud ${data.requestId} — ${data.projectName} (venció hace ${absDays} días)`
+    : `⚠️ URGENTE: Solicitud ${data.requestId} — ${data.projectName} (vence en ${days} días)`
+
+  return {
+    subject,
+    html: emailLayout('Solicitud Urgente', body),
+  }
+}
+
+// =============================================================================
+// 15. ALERTA DIARIA URGENTES → resumen de solicitudes urgentes sin programar
+// =============================================================================
+export function alertaDiariaUrgentes(data: {
+  items: Array<{
+    requestId: string
+    projectName: string
+    requesterName: string
+    dateRequired: string
+    daysUntil: number
+    pendingLines: number
+  }>
+}): TemplateResult {
+  const count = data.items.length
+
+  const tableRows = data.items.map(item => {
+    const rowColor = item.daysUntil < 0 ? '#fef2f2' : item.daysUntil <= 3 ? '#fffbeb' : '#ffffff'
+    const daysText = item.daysUntil < 0
+      ? `<span style="color:#C0392B;font-weight:bold;">Venció hace ${Math.abs(item.daysUntil)}d</span>`
+      : `<span style="color:#B45309;font-weight:bold;">${item.daysUntil}d</span>`
+
+    return `<tr style="background:${rowColor};">
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:13px;">${escapeHtml(item.requestId)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${escapeHtml(item.projectName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${escapeHtml(item.requesterName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;">${formatDate(item.dateRequired)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${daysText}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center;">${item.pendingLines}</td>
+    </tr>`
+  }).join('')
+
+  const body = `
+${alertBanner(`📋 ${count} solicitud${count !== 1 ? 'es' : ''} urgente${count !== 1 ? 's' : ''} sin programar completamente`, 'warning')}
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+  <thead>
+    <tr style="background:#1B3A5C;color:white;">
+      <th style="padding:8px 10px;text-align:left;">Solicitud</th>
+      <th style="padding:8px 10px;text-align:left;">Proyecto</th>
+      <th style="padding:8px 10px;text-align:left;">Solicitante</th>
+      <th style="padding:8px 10px;text-align:left;">Fecha Req.</th>
+      <th style="padding:8px 10px;text-align:center;">Días</th>
+      <th style="padding:8px 10px;text-align:center;">Pend.</th>
+    </tr>
+  </thead>
+  <tbody>${tableRows}</tbody>
+</table>
+${ctaButton('Ver Backlog →', `${APP_URL}/programacion`)}`
+
+  return {
+    subject: `📋 Alerta diaria: ${count} solicitud${count !== 1 ? 'es' : ''} urgente${count !== 1 ? 's' : ''} sin programar`,
+    html: emailLayout('Alerta Diaria — Solicitudes Urgentes', body),
+  }
+}
+
+// =============================================================================
+// 15. MATERIAL PREPARADO → PMs (pickup)
+// =============================================================================
+export function materialPreparado(data: {
+  tripId: string
+  requestIds: string[]
+  referenceId: string
+}): TemplateResult {
+  const body = `
+${alertBanner('El material está listo para retiro en Chilibre.', 'success')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
+  dataRow('Solicitudes', escapeHtml(data.requestIds.join(', ')) || '—')
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+
+  return {
+    subject: `Material listo para retiro — Viaje ${data.tripId}`,
+    html: emailLayout('Material Listo para Retiro', body),
+  }
+}
+
+// =============================================================================
+// 16. REVERSION REGISTRADA → Charris + PMs
+// =============================================================================
+export function reversionRegistrada(data: {
+  tripId: string
+  eventType: string
+  reason: string
+  revertedBy: string
+  referenceId: string
+}): TemplateResult {
+  const body = `
+${alertBanner(`Se revirtió el evento <strong>${escapeHtml(data.eventType)}</strong> del viaje <strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>.`, 'warning')}
+${dataTable(
+  dataRow('Viaje', `<strong style="font-family:monospace;">${escapeHtml(data.tripId)}</strong>`) +
+  dataRow('Evento revertido', escapeHtml(data.eventType)) +
+  dataRow('Razón', escapeHtml(data.reason)) +
+  dataRow('Revertido por', escapeHtml(data.revertedBy))
+)}
+${ctaButton('Ver Viaje →', `${APP_URL}/mis-viajes/${data.referenceId}`)}`
+
+  return {
+    subject: `Evento revertido — Viaje ${data.tripId}`,
+    html: emailLayout('Evento Revertido', body),
   }
 }

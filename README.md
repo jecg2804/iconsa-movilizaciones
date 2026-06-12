@@ -1,67 +1,55 @@
 # MovimientOS
 
-Sistema digital de gestión de movilizaciones para ICONSA (Ingeniería Continental S.A.), empresa de construcción pesada en Panamá. Digitaliza el procedimiento IC-LOG-PO-06 (Movilización de Equipos y Materiales).
+Sistema de operaciones para ICONSA (Ingeniería Continental S.A.), empresa de construcción pesada en Panamá. Digitaliza el procedimiento IC-LOG-PO-06 (Movilización de Equipos y Materiales).
+
+**Deployed:** [rein-eisenwerk.com](https://rein-eisenwerk.com)
 
 ## Stack
 
-- **Frontend:** Next.js (App Router) + TypeScript + Tailwind CSS → Vercel
-- **Backend:** NestJS (TypeScript) → Railway / Fly.io
-- **Base de datos:** Supabase (PostgreSQL + Auth + RLS + Storage + Realtime)
-- **Reporting:** Metabase
-- **Data/ETL/AI:** Python (scripts)
-- **Campo (futuro):** KoboToolbox (inspecciones offline)
+- **Frontend:** Next.js 16 (App Router) + TypeScript (target ES2022) + Tailwind CSS → Vercel
+- **Base de datos:** Supabase PostgreSQL + Auth + RLS + Storage (47 tablas, dos branches: prod + staging)
 
 ## Base de datos
 
-15 tablas en Supabase PostgreSQL. Ver `Docs/PROJECT_STATUS.md` para schema completo.
+47 tablas en Supabase PostgreSQL con RLS habilitada en todas. ~25 operativas (movilizaciones, solicitudes, eventos, cost codes, notifications) + ~22 para futuros módulos (inspecciones, work orders, fuel, warehouse, purchase orders, billing campaigns, custody transfers).
 
-**Maestras:** equipment (377), people (160), projects (4), locations (9), mobilization_rates (14), units (11), cost_codes (pendiente), person_projects, sequences, suggestions.
+Tabla `equipment` unificada (377 equipos/vehículos/remolques con auto-tag IC-####). Clasificación por `type_code`, filtrado en queries.
 
-**Transaccionales:** sm_requests, sm_request_lines, trips, trip_line_assignments, trip_events.
+## Features
 
-Decisión clave: tabla `equipment` unificada (equipos + vehículos). Clasificación por `type_code` (EQP, GRU, MAR, VHL, VHP, etc.), filtrado en queries.
-
-## MVP (5 features)
-
-1. **Autenticación** — Login con Supabase Auth, 5 roles (admin, pm, logistica, campo, almacen)
+1. **Autenticación** — Supabase Auth, 5 roles (admin, pm, logistica, campo, almacen)
 2. **Solicitudes** — Ingenieros crean solicitudes de movilización con líneas detalladas
-3. **Programación** — Charris ve backlog, crea viajes asignando conductor/vehículo/fecha
-4. **Ejecución** — Conductores registran eventos (salida, llegada, entrega con código 4 dígitos, retorno)
-5. **Dashboard** — KPIs globales: pendientes, programados, completados
+3. **Programación** — Backlog de líneas, calendario, viajes con qty management
+4. **Ejecución** — Eventos secuenciales (salida, llegada, entrega con código 4 dígitos, retorno), paradas intermedias, self-pickup, reversiones con audit trail
+5. **Dashboard** — KPIs operativos + widgets accionables (entregas pendientes en viajes cerrados)
+6. **Admin** — CRUD tablas maestras con paginación
+7. **Notificaciones** — 16 templates email via Resend, redact de PII en Sentry
+8. **Attachments** — Archivos en solicitudes, viajes, y eventos (MIME + size validation BD)
 
 ## Documentación
 
 | Archivo | Contenido |
 |---------|-----------|
-| `Docs/PROJECT_STATUS.md` | **Fuente de verdad.** Schema completo, estado de datos, decisiones, pendientes. |
-| `Docs/ICONSA_Feature_Specification_v2.md` | Spec formal completa (~45 páginas). Versión 2.1. |
-| `Docs/ICONSA_MVP_Sprint_Brief.md` | Contexto para desarrollo. Features, reglas de negocio, UI guidelines. |
-| `Docs/BUILD_PLAN.md` | Plan de construcción por fases con archivos y pasos específicos. |
-| `Docs/ICONSA_Guia_Operativa.md` | Cómo opera ICONSA hoy (proceso actual en papel). |
-| `Docs/supabase_schema_verified.sql` | Schema SQL verificado contra Supabase live. |
+| `CLAUDE.md` | Contexto del proyecto para Claude Code |
+| `Docs/CHANGELOG.md` | Cambios recientes (código + BD). Se actualiza con cada commit. |
+| `Docs/BACKLOG.md` | Qué falta por hacer — features tier-orderadas + architectural debt |
+| `Docs/FEATURE_SPEC.md` | Spec v4 — reglas de negocio, pantallas, validaciones (no auto-cargado, 39K chars) |
+| `Docs/reference/Vision Roadmap.md` | Estrategia: 13 SOPs de ICONSA que MovimientOS tocará |
+| `Docs/reference/Self-pickup.md` | Decisión arquitectónica sobre pickup flow |
+| `Docs/archive/` | Docs históricos: BUGS, SYNC_LOG, PROJECT_STATUS, BUILD_PLAN |
 
 ## Desarrollo
 
 ```bash
-npm install
-npm run dev    # http://localhost:3000
+npm install   # instala deps + corre `husky` para configurar hooks
+npm run dev   # http://localhost:3000
+npm run build # build manual (post-commit ya lo corre en background)
+npm test      # corre Playwright E2E (131 tests en 14 archivos)
 ```
 
-Variables de entorno en `.env.local`:
-```
-NEXT_PUBLIC_SUPABASE_URL=https://bzeoszympkkicwlfdtcn.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-```
+## Branching y releases
 
-## Branching
-
-- `main` — Versión estable. Docs y código aprobado.
-- `jaime/dev` — Branch de desarrollo de James.
-- `andy/dev` — Branch de desarrollo de Andy.
-
-## Workflow
-
-- **Claude.ai Chat** — Arquitectura, decisiones, documentación
-- **Claude Code (VS Code)** — Construcción, código, debugging
-- **James** — Director del proyecto, verificación, documentación
-- **Andy** — Co-developer, arquitectura backend
+- `main` — Versión estable. Deploy automático a Vercel en producción.
+- `jaime/dev` — Branch de desarrollo. Commits frecuentes, push directo.
+- **Protegido por Husky**: pre-commit bloquea commits en main local, pre-push bloquea push a main + force pushes, post-commit lanza build en background.
+- **Releases**: `/release` skill automatiza `jaime/dev → main` (valida Vercel READY, crea PR, squash merge, taggea `v{YYYY}.{MM}.{DD}-{N}`).

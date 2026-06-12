@@ -3,7 +3,13 @@
 import { Resend } from 'resend'
 import { createServiceClient } from '@/lib/supabase/service'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend
+}
 
 // TEST MODE: cuando está seteado, TODOS los emails van a esta dirección
 const TEST_EMAIL = process.env.NOTIFICATION_TEST_EMAIL
@@ -42,7 +48,29 @@ export async function sendNotification(params: {
 
   console.log(`[Notification] ${params.eventType}: sending to ${params.recipients.length} recipient(s)`)
 
-  for (const recipient of params.recipients) {
+  // Filtrar recipients por notification_preferences
+  const recipientIds = params.recipients.map(r => r.id)
+  const { data: prefsData } = await supabase
+    .from('people')
+    .select('id, notification_preferences')
+    .in('id', recipientIds)
+
+  const prefsMap = new Map(
+    (prefsData ?? []).map(p => [p.id, p.notification_preferences as Record<string, boolean> | null])
+  )
+
+  const eligibleRecipients = params.recipients.filter(r => {
+    const prefs = prefsMap.get(r.id)
+    if (!prefs || Object.keys(prefs).length === 0) return true // Legacy — no prefs, send
+    if (prefs.receive_all === true) return true
+    // Si el eventType no tiene key en prefs, enviar por default
+    if (!(params.eventType in prefs)) return true
+    return prefs[params.eventType] === true
+  })
+
+  console.log(`[Notification] ${params.eventType}: ${eligibleRecipients.length}/${params.recipients.length} eligible after prefs filter`)
+
+  for (const recipient of eligibleRecipients) {
     const targetEmail = TEST_EMAIL ?? recipient.email
 
     if (!targetEmail) {
@@ -55,24 +83,39 @@ export async function sendNotification(params: {
         channel: 'email',
         status: 'skipped',
         error_message: 'No email address',
-        payload: params.data ?? {},
+        payload: (params.data ?? {}) as { [key: string]: string | number | boolean | null | undefined },
       })
       if (logErr) console.error('[Notification] Failed to log skip to notification_log:', logErr.message)
       skipped++
       continue
     }
 
-    // DEDUP: skip si mismo evento+recipient enviado en últimos 5 minutos
+    // DEDUP: skip si mismo evento+destinatario enviado en últimos 5 minutos.
+    // En TEST mode deduplicamos por recipient_email (targetEmail), no por
+    // recipient_id original — sin esto, probar un evento que notifica a
+    // varios PMs dispara N copias al mismo buzón de test.
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-    const { data: recent } = await supabase
+    const dedupQuery = supabase
       .from('notification_log')
       .select('id')
       .eq('event_type', params.eventType)
       .eq('reference_id', params.referenceId)
-      .eq('recipient_id', recipient.id)
       .eq('status', 'sent')
       .gte('created_at', fiveMinAgo)
       .limit(1)
+
+    const { data: recent, error: dedupErr } = TEST_EMAIL
+      ? await dedupQuery.eq('recipient_email', targetEmail)
+      : await dedupQuery.eq('recipient_id', recipient.id)
+
+    // Fail-closed: si la query de dedup falla, asumimos que podría haber
+    // duplicado y skipeamos. Evita tormenta de emails si Supabase tiene
+    // problemas y la query retorna error en vez de resultados.
+    if (dedupErr) {
+      console.error('[Notification] dedup query failed — skipping to fail closed:', dedupErr.message)
+      skipped++
+      continue
+    }
 
     if (recent && recent.length > 0) {
       skipped++
@@ -84,14 +127,17 @@ export async function sendNotification(params: {
         ? `[TEST → ${recipient.name}] ${params.subject}`
         : params.subject
 
-      const { data: result, error } = await resend.emails.send({
+      const { data: result, error } = await getResend().emails.send({
         from: FROM_EMAIL,
         to: targetEmail,
         subject,
         html: params.html,
       })
 
-      if (error) throw new Error(error.message)
+      if (error) {
+        console.error(`[Notification] Resend error for ${recipient.name}: ${error.message} (name: ${error.name})`)
+        throw new Error(error.message)
+      }
 
       const { error: logErr } = await supabase.from('notification_log').insert({
         event_type: params.eventType,
@@ -102,7 +148,7 @@ export async function sendNotification(params: {
         channel: 'email',
         status: 'sent',
         provider_message_id: result?.id ?? null,
-        payload: params.data ?? {},
+        payload: (params.data ?? {}) as { [key: string]: string | number | boolean | null | undefined },
         sent_at: new Date().toISOString(),
       })
       if (logErr) console.error('[Notification] Failed to log sent to notification_log:', logErr.message)
@@ -118,7 +164,7 @@ export async function sendNotification(params: {
         channel: 'email',
         status: 'failed',
         error_message: errorMsg,
-        payload: params.data ?? {},
+        payload: (params.data ?? {}) as { [key: string]: string | number | boolean | null | undefined },
       })
       if (logErr) console.error('[Notification] Failed to log error to notification_log:', logErr.message)
       failed++
@@ -128,4 +174,18 @@ export async function sendNotification(params: {
 
   console.log(`[Notification] ${params.eventType} result: sent=${sent} skipped=${skipped} failed=${failed}`)
   return { sent, skipped, failed }
+}
+
+/** Usuarios con receive_all: true — reciben TODAS las notificaciones */
+export async function getReceiveAllUsers(): Promise<{ id: string; email: string | null; name: string }[]> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from('people')
+    .select('id, email, name')
+    .eq('status', 'Activo')
+    .eq('notifications_enabled', true)
+    .not('email', 'is', null)
+    .contains('notification_preferences', { receive_all: true })
+  if (error) console.error('[Notification] getReceiveAllUsers error:', error.message)
+  return data ?? []
 }

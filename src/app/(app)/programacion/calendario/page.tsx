@@ -9,6 +9,7 @@ import { startOfWeek, addDays, format, isSameDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
 import { CalendarDays, ChevronLeft, ChevronRight, Info } from 'lucide-react'
+import { todayStrInPanama, parseDateStrInPanama } from '@/lib/utils/datetime'
 
 interface CalendarTrip {
   id: string
@@ -35,9 +36,9 @@ export default function CalendarioPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
-  // weekStart = lunes de la semana actual
+  // weekStart = lunes de la semana actual (en Panamá, no en timezone del runtime)
   const [weekStart, setWeekStart] = useState(() =>
-    startOfWeek(new Date(), { weekStartsOn: 1 }),
+    startOfWeek(parseDateStrInPanama(todayStrInPanama()), { weekStartsOn: 1 }),
   )
   const [trips, setTrips] = useState<CalendarTrip[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,11 +95,11 @@ export default function CalendarioPage() {
     return result
   }, [weekStart])
 
-  const today = useMemo(() => new Date(), [])
+  const today = useMemo(() => parseDateStrInPanama(todayStrInPanama()), [])
 
   const goBack = () => setWeekStart((prev) => addDays(prev, -7))
   const goForward = () => setWeekStart((prev) => addDays(prev, 7))
-  const goToday = () => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const goToday = () => setWeekStart(startOfWeek(parseDateStrInPanama(todayStrInPanama()), { weekStartsOn: 1 }))
 
   // Ruta principal del viaje (primera asignación)
   function getRoute(trip: CalendarTrip): string {

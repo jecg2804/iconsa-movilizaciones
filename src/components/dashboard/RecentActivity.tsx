@@ -72,15 +72,15 @@ function RecentActivity({ solicitudes, trips }: RecentActivityProps) {
         )}
       </div>
 
-      {/* Viajes del Día */}
+      {/* Movilizaciones del Día */}
       <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-gray-900">Viajes Hoy</h2>
+          <h2 className="text-sm font-semibold text-gray-900">Movilizaciones Hoy</h2>
         </div>
 
         {trips.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <p className="text-sm text-iconsa-gray">No hay viajes programados para hoy</p>
+            <p className="text-sm text-iconsa-gray">No hay movilizaciones programadas para hoy</p>
           </div>
         ) : (
           <ul className="divide-y divide-gray-50">

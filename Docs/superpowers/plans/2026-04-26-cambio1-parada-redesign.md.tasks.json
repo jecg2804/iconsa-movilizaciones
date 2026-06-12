@@ -1,0 +1,54 @@
+{
+  "planPath": "Docs/superpowers/plans/2026-04-26-cambio1-parada-redesign.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Master spec v3.1 + CHANGELOG entry",
+      "status": "pending",
+      "description": "**Goal:** Reflejar en docs vivos las correcciones surgidas en brainstorming + la BD ya aplicada en staging.\n\n**Files:**\n- Modify: Docs/reference/events-v2-redesign-in-progress-v3.md (frontmatter + Sección 1.4 + Sección 2 Decisión 24 + Sección 3 Cambio 1 BD block + filtro lowercase)\n- Modify: Docs/CHANGELOG.md (nueva sección ## 2026-04-26 con entry [bd])\n\n**Verify:** git diff --stat HEAD muestra 2 archivos modificados.\n\n```json:metadata\n{\"files\": [\"Docs/reference/events-v2-redesign-in-progress-v3.md\", \"Docs/CHANGELOG.md\"], \"verifyCommand\": \"git diff --stat HEAD\", \"acceptanceCriteria\": [\"Frontmatter updated v3.1\", \"Sección 3 filtro lowercase\", \"Decisión 24 agregada\", \"CHANGELOG sección 2026-04-26 con entry [bd]\"]}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Regenerar database.ts + cleanup completo de stop_type",
+      "status": "pending",
+      "blockedBy": [0],
+      "description": "**Goal:** Sincronizar tipos generados con staging post-DDL y eliminar todas las referencias a stop_type del código de producción para que TypeScript compile.\n\n**Files:**\n- Modify (regenerate): src/lib/types/database.ts\n- Modify: src/app/(app)/mis-viajes/[id]/page.tsx (interface TripEvent, SELECT loadEvents, mapper, INSERT handleParada)\n- Modify: src/components/viajes/EventTimeline.tsx (interface EventItem, render Parada)\n- Modify: src/components/viajes/ParadaModal.tsx (ParadaData type, state stopType, STOP_TYPES, radios JSX)\n\n**Verify:** grep -rn 'stop_type' src/ → 0 matches; npm run build pasa.\n\n```json:metadata\n{\"files\": [\"src/lib/types/database.ts\", \"src/app/(app)/mis-viajes/[id]/page.tsx\", \"src/components/viajes/EventTimeline.tsx\", \"src/components/viajes/ParadaModal.tsx\"], \"verifyCommand\": \"grep -rn 'stop_type' src/ && npm run build\", \"acceptanceCriteria\": [\"database.ts regenerado sin stop_type\", \"grep cero matches en src/\", \"npm run build pasa\", \"Modal sin radios de tipo\", \"EventTimeline sin badge\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: useTrips.fetchTrip — agregar location_type",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Hacer disponible location_type en trip.assignments[].line.{from,to}_location para que ParadaModal pueda filtrar 'proyecto' y 'taller'.\n\n**Files:**\n- Modify: src/hooks/useTrips.ts (3 SELECT extensions + 2 type extensions + 3 mapper updates)\n\n**Verify:** grep -n 'location_type' src/hooks/useTrips.ts → ≥6 matches; npm run build pasa.\n\n```json:metadata\n{\"files\": [\"src/hooks/useTrips.ts\"], \"verifyCommand\": \"grep -n 'location_type' src/hooks/useTrips.ts && npm run build\", \"acceptanceCriteria\": [\"3 SELECTs extendidos con location_type\", \"TripAssignment.line.from_location/to_location incluyen location_type\", \"BacklogLine.from_location/to_location idem\", \"3 mappers preservan location_type\", \"build pasa\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: ParadaModal redesign — dropdown estricto + validaciones",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Implementar el modal final per spec: ubicación elegida del dropdown filtrado o 'Otra' → free-text, ≥1 línea afectada (no más colapsable), ≥1 attachment, sin OC reference.\n\n**Files:**\n- Modify: src/components/viajes/ParadaModal.tsx (rediseño completo del JSX + lógica + validaciones)\n- Modify: src/app/(app)/mis-viajes/[id]/page.tsx (handleParada adapta a nuevo ParadaData)\n\n**Verify:** grep -n 'ocReference\\|oc_reference\\|datalist\\|STOP_TYPES' src/components/viajes/ParadaModal.tsx → 0 matches; npm run build pasa.\n\n```json:metadata\n{\"files\": [\"src/components/viajes/ParadaModal.tsx\", \"src/app/(app)/mis-viajes/[id]/page.tsx\"], \"verifyCommand\": \"grep -n 'ocReference|oc_reference|datalist|STOP_TYPES' src/components/viajes/ParadaModal.tsx && npm run build\", \"acceptanceCriteria\": [\"<select> reemplaza <input list>\", \"Filtro lowercase 'proyecto'/'taller'\", \"Opción 'Otra ubicación' con free-text\", \"Limpia free-text al cambiar a opción\", \"Líneas afectadas siempre visibles\", \"3 validaciones bloqueantes\", \"Sin oc_reference\", \"build pasa\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: Helper registerParada + tests parada-complete",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Reescribir el helper de tests para el nuevo flow, y reemplazar los tests legacy con casos cubriendo: dropdown poblado, filtro por location_type, free-text 'Otra', validaciones bloqueantes (3), happy paths.\n\n**Files:**\n- Modify: tests/helpers.ts (helper registerParada)\n- Rewrite: tests/parada-complete.spec.ts\n- Create: tests/fixtures/sample-invoice.pdf (si no existe)\n\n**Verify:** grep -n 'stopType\\|stop_type' tests/parada-complete.spec.ts tests/helpers.ts → 0 matches.\n\n```json:metadata\n{\"files\": [\"tests/helpers.ts\", \"tests/parada-complete.spec.ts\", \"tests/fixtures/sample-invoice.pdf\"], \"verifyCommand\": \"grep -n 'stopType|stop_type' tests/parada-complete.spec.ts tests/helpers.ts\", \"acceptanceCriteria\": [\"Helper sin parámetro stopType\", \"Helper acepta useOther/freeText/lineIds/filePath\", \"Tests cubren dropdown poblado\", \"Tests cubren filtro location_type\", \"Tests cubren 3 validaciones bloqueantes\", \"Tests cubren happy paths con dropdown y free-text\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 6: Regression tests update",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Actualizar otros tests E2E que llaman registerParada con el viejo stopType o asertan stop_type en BD.\n\n**Files:**\n- Modify: tests/e2e-full-flow.spec.ts (tests 4.5, 4.6, 4.7, 5.2)\n- Modify: tests/reversion-complete.spec.ts (línea 224)\n- Modify: tests/retorno-complete.spec.ts (líneas 183-184)\n\n**Verify:** grep -rn 'stopType\\|stop_type' tests/ → 0 matches.\n\n```json:metadata\n{\"files\": [\"tests/e2e-full-flow.spec.ts\", \"tests/reversion-complete.spec.ts\", \"tests/retorno-complete.spec.ts\"], \"verifyCommand\": \"grep -rn 'stopType|stop_type' tests/\", \"acceptanceCriteria\": [\"e2e-full-flow tests 4.5/4.6/4.7/5.2 actualizados\", \"reversion-complete:224 con nueva firma\", \"retorno-complete:183-184 con nueva firma\", \"grep cero matches\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 7: Final verification (no commit)",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Confirmar que el codebase quedó consistente después de los 6 commits.\n\n**Files:** N/A (solo verificación)\n\n**Verify:** npm run build pasa; grep -rn 'stop_type|stopType|STOP_TYPES|ocReference|oc_reference' src/ tests/ → 0 matches; git status clean.\n\n```json:metadata\n{\"files\": [], \"verifyCommand\": \"npm run build && grep -rn 'stop_type|stopType|STOP_TYPES|ocReference|oc_reference' src/ tests/ && git status\", \"acceptanceCriteria\": [\"npm run build pasa\", \"grep cero matches en src/ y tests/\", \"6 commits en jaime/dev\", \"git status limpio\", \"Reporte a James con hashes\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-04-26T00:00:00Z"
+}

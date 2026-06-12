@@ -22,8 +22,11 @@ export default function MisViajesPage() {
   const [driverFilter, setDriverFilter] = useState<string | null>(null)
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([])
 
-  // Fetch conductores (campo) para filtro
+  // Fetch conductores (campo) para filtro — solo relevante para roles que ven múltiples conductores
+  const showDriverFilter = role !== 'campo'
+
   useEffect(() => {
+    if (!showDriverFilter) return
     supabase
       .from('people')
       .select('id, name')
@@ -31,11 +34,13 @@ export default function MisViajesPage() {
       .eq('app_role', 'campo')
       .order('name')
       .then(({ data }) => setDrivers(data ?? []))
-  }, [supabase])
+  }, [supabase, showDriverFilter])
 
   const statusOptions: SelectOption[] = [
     { value: 'Programado', label: 'Programado' },
     { value: 'En Ruta', label: 'En Ruta' },
+    { value: 'Completado', label: 'Completado' },
+    { value: 'Cancelado', label: 'Cancelado' },
   ]
 
   const driverOptions: SelectOption[] = useMemo(
@@ -53,24 +58,12 @@ export default function MisViajesPage() {
     })
   }, [trips, statusFilter, dateFrom, dateTo, driverFilter])
 
-  // Guard de acceso: pm no tiene acceso a esta pantalla
-  if (!authLoading && role === 'pm') {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4">
-        <h1 className="text-xl font-bold text-gray-900">Acceso denegado</h1>
-        <p className="text-sm text-iconsa-gray">
-          Los ingenieros de proyecto no tienen acceso a esta pantalla.
-        </p>
-      </div>
-    )
-  }
-
   if (authLoading || tripsLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-navy" />
-          <p className="text-sm text-iconsa-gray">Cargando viajes...</p>
+          <p className="text-sm text-iconsa-gray">Cargando movilizaciones...</p>
         </div>
       </div>
     )
@@ -78,7 +71,7 @@ export default function MisViajesPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-4 pb-8 pt-4 sm:px-6 sm:pt-6">
-      <h1 className="text-2xl font-bold text-gray-900">Mis Viajes</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Mis Movilizaciones</h1>
 
       {/* Filtros */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -102,12 +95,14 @@ export default function MisViajesPage() {
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
           title="Fecha hasta"
         />
-        <Select
-          placeholder="Todos los conductores"
-          options={driverOptions}
-          value={driverFilter}
-          onChange={setDriverFilter}
-        />
+        {showDriverFilter && (
+          <Select
+            placeholder="Todos los conductores"
+            options={driverOptions}
+            value={driverFilter}
+            onChange={setDriverFilter}
+          />
+        )}
       </div>
 
       {error && (
@@ -118,11 +113,11 @@ export default function MisViajesPage() {
 
       {filteredTrips.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <p className="text-base font-medium text-gray-900">No hay viajes activos</p>
+          <p className="text-base font-medium text-gray-900">No hay movilizaciones registradas</p>
           <p className="mt-1 text-sm text-iconsa-gray">
             {trips.length > 0
-              ? 'Ningún viaje coincide con los filtros seleccionados.'
-              : 'Los viajes en estado Programado o En Ruta aparecerán aquí.'}
+              ? 'Ninguna movilización coincide con los filtros seleccionados.'
+              : 'Las movilizaciones aparecerán aquí cuando se creen.'}
           </p>
         </div>
       ) : (

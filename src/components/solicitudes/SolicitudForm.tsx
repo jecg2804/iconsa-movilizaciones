@@ -8,6 +8,7 @@ import FileUploader from '@/components/ui/FileUploader'
 import FileDisplay from '@/components/ui/FileDisplay'
 import { formatDate, formatDateTime, formatDaysUntilDue, daysUntilDue, daysUntilDueColor, formatCompletionDelta } from '@/lib/utils/format'
 import type { SolicitudInput } from '@/hooks/useSolicitudes'
+import { useCostCodeCascade } from '@/hooks/useCostCodeCascade'
 import type { Attachment } from '@/lib/supabase/storage'
 
 type FormMode = 'create' | 'edit' | 'readonly'
@@ -27,6 +28,8 @@ interface SolicitudFormProps {
     dateSubmitted?: string | null
     dateCompleted?: string | null
     dateCancelled?: string | null
+    costCodeId?: string | null
+    costCategoryId?: string | null
   }
   /** Proyectos disponibles para el dropdown (para PM, solo sus proyectos asignados) */
   projects: SelectOption[]
@@ -79,6 +82,13 @@ function SolicitudForm({
   // UUID estable para folder de storage (en modo crear, genera uno temporal)
   const folderIdRef = useRef(solicitudId ?? crypto.randomUUID())
 
+  // Cascada cost_code header (Cambio 2): Proyecto → [Extra] → Fase → Categoría
+  const cascade = useCostCodeCascade(
+    projectId || null,
+    initialData?.costCodeId ?? null,
+    initialData?.costCategoryId ?? null,
+  )
+
   // --- Propagar cambios al padre ---
   const propagate = useCallback(
     (overrides?: Partial<SolicitudInput>) => {
@@ -89,10 +99,12 @@ function SolicitudForm({
         date_required: overrides?.date_required ?? dateRequired,
         notes: overrides?.notes !== undefined ? overrides.notes : notes || null,
         attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
+        cost_code_id: overrides?.cost_code_id !== undefined ? overrides.cost_code_id : cascade.costCodeId,
+        cost_category_id: overrides?.cost_category_id !== undefined ? overrides.cost_category_id : cascade.costCategoryId,
       }
       onChange(data)
     },
-    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, onChange],
+    [projectId, requesterId, approvedBy, dateRequired, notes, attachments, cascade.costCodeId, cascade.costCategoryId, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -101,6 +113,12 @@ function SolicitudForm({
     // Solo en el montaje inicial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Propagar cuando cambia cost_code/category (cascada interna del hook)
+  useEffect(() => {
+    propagate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cascade.costCodeId, cascade.costCategoryId])
 
   // --- Handlers de cambio ---
   const handleProjectChange = useCallback(
@@ -234,6 +252,52 @@ function SolicitudForm({
           value={dateRequired}
           onChange={handleDateChange}
           disabled={isReadonly}
+        />
+
+        {/* Cost code header — cascada Proyecto → [Extra] → Fase → Categoría (Cambio 2) */}
+        {cascade.hasExtras && (
+          <Select
+            label="Extra / Sección *"
+            placeholder={cascade.loadingExtras ? 'Cargando...' : 'Seleccionar extra...'}
+            options={[
+              { value: '__base__', label: '(Proyecto Base)' },
+              ...cascade.extraOptions,
+            ]}
+            value={cascade.selectedExtraId}
+            onChange={(val) => cascade.setSelectedExtraId(val)}
+            disabled={isReadonly || cascade.loadingExtras}
+          />
+        )}
+
+        <Select
+          label="Fase / Código de Costo *"
+          placeholder={
+            cascade.loadingCostCodes
+              ? 'Cargando...'
+              : cascade.hasExtras && !cascade.selectedExtraId
+                ? 'Seleccione un extra primero'
+                : 'Seleccionar fase...'
+          }
+          options={cascade.costCodeOptions}
+          value={cascade.costCodeId}
+          onChange={(val) => cascade.setCostCodeId(val)}
+          disabled={isReadonly || cascade.loadingCostCodes || (cascade.hasExtras && !cascade.selectedExtraId)}
+          searchable
+        />
+
+        <Select
+          label="Categoría de Costo *"
+          placeholder={
+            cascade.loadingCategories
+              ? 'Cargando...'
+              : cascade.costCodeId
+                ? 'Seleccionar categoría...'
+                : 'Seleccione una fase primero'
+          }
+          options={cascade.categoryOptions}
+          value={cascade.costCategoryId}
+          onChange={(val) => cascade.setCostCategoryId(val)}
+          disabled={isReadonly || !cascade.costCodeId || cascade.loadingCategories}
         />
 
         {/* Lifecycle timestamps */}

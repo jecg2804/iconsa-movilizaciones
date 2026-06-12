@@ -1,0 +1,386 @@
+# SYNC_LOG — Bridge entre Chat y Claude Code
+
+Ambos actores escriben aquí. James lo revisa para mantenerse al día.
+
+---
+
+## 2026-04-06 — Code: Auditoría de docs + config cleanup
+
+### Documentación sincronizada
+- SYNC_LOG actualizado con 17 días de commits faltantes (ver abajo)
+- CLAUDE.md: quitado @import de FEATURE_SPEC_v3 (ahorra 75K chars de contexto)
+- CLAUDE.md: agregados form-submit-guard.md, tool-usage.md, MASTER_BACKLOG.md
+- FEATURE_SPEC.md: columna Prioridad eliminada de spec (ya eliminada del código Mar 12), Fecha Enviada documentada
+- FEATURE_SPEC.md: referencia ROADMAP.md → MASTER_BACKLOG.md
+- BUGS.md: bug Charris movido a resueltos, auditorías documentadas
+- 6 referencias rotas arregladas en tool-usage.md, events-page.md, implement-task.md
+- 3 archivos obsoletos eliminados de archive/ (ROADMAP, SETUP_NEW_WORKFLOW, demo_v8)
+- Nuevo command: deploy-check.md
+
+---
+
+## 2026-04-01 — Code: 2 auditorías completas + 13 fixes
+
+### Auditoría #1 (8 fixes — commit 84b305c)
+- Retorno resetea qty_dispatched en trip_line_assignments
+- releaseLineFromAssignment no revierte líneas en status terminal (Entregada/Cancelada)
+- saveTrip limpia viaje huérfano si falla INSERT assignments
+- Cron endpoint solo acepta Bearer token (eliminado query param inseguro)
+- handleDelivery/handlePickup usan Math.min clamp defensivo
+- Renombrado dispatchError → eventError para claridad
+- Console.log con PII envueltos en dev-only check
+- Fix comentario en useTripEvents
+
+### Auditoría #2 (5 fixes — commit 7302a7c)
+- busyRef movido al finally en saveSolicitud (evita bloqueo permanente)
+- notifyRetornoRegistrado ahora incluye PMs del proyecto
+- deliveredQuantities eliminado de TripEventInput (código muerto)
+- Retorno handler solo revierte líneas 'En Transito' (no 'Programada')
+- Sugerencias insert ahora reporta errores + qty_scheduled clampeado
+
+---
+
+## 2026-03-25 — Code: 8 pre-production fixes (commit 296f2cf)
+
+- Event revert: trip_line_assignments.qty_delivered decrementado junto con sm_request_lines
+- Retorno: líneas 'En Transito' no entregadas regresan a Pendiente con qty_scheduled decrementado
+- notifyReversionRegistrada: envía datos reales (event type + quién revirtió)
+- registerEvent: Salida/Entrega bloqueados, redirigen a DispatchModal/DeliveryModal
+- fulfillment_type preservado al editar solicitud
+- notifyViajeEditado: eventType corregido a 'viaje_editado'
+- notifyEntregaConfirmada: nombre real del receptor
+- Llegada agregado a revertibleTypes
+
+---
+
+## 2026-03-24 — Code: Events V2 Batches 5-11
+
+### Batch 5 (f821946) — Sub-status operativo
+- Banner "En Tránsito Ahora" en solicitudes con líneas activas
+- Shortcuts y URL params para navegación rápida
+
+### Batch 6 (aeb14ea) — Per-line configuration
+- fulfillment_type (fleet/pickup) a nivel de solicitud
+- requires_code y designated_receiver a nivel de línea
+
+### Batch 7 (1f9c1e9) — DispatchModal
+- Modal editable reemplaza confirmación simple de Salida
+- Conductor, vehículo, remolque, qty por línea
+
+### Batch 8 (a6e5b48) — DeliveryModal con per-line status
+- Observaciones por línea (ok/damaged/wrong_qty/rejected)
+- trip_event_lines para audit trail detallado
+- Código condicional basado en requires_code
+
+### Batch 9 (ebc6dce) — Event reversion
+- Modal de reversión con razón requerida
+- Salida/Entrega/Retorno/Llegada revertibles
+- reverts_event_id FK para tracking
+
+### Batch 10 (ed58c67) — Self-pickup flow
+- PreparationModal + PickupModal
+- fulfillment_type='pickup': Preparación → Retiro (sin Salida/Entrega)
+- is_self_pickup en trips
+
+### Batch 11 (c3216e0) — Dashboard + notifications
+- Sección "En Tránsito" en dashboard
+- Pickup badges en programación
+- notifyMaterialPreparado + notifyReversionRegistrada
+
+---
+
+## 2026-03-23 — Code: Fixes post-batches
+
+- React Hook error #310: useSearchParams y useEffect antes de early returns
+- Campos faltantes en interfaces (LineWithRelations, SolicitudWithRelations)
+- Suspense wrapper para mis-viajes detail
+
+---
+
+## 2026-03-20 — Code: CRON_SECRET y fixes menores (RESUELTO)
+
+- Cron auth: Bearer header + query param fallback (query param eliminado en auditoría Apr 1)
+- /api/cron excluido de middleware auth
+- Mejora de error logging en notificaciones
+
+---
+
+## 2026-03-20 — Code: 2 Notificaciones urgentes
+
+### solicitud_urgente_nueva
+- Template con banner rojo/naranja según días al vencimiento
+- Función `notifySolicitudUrgenteNueva(requestId)` — se auto-descarta si days > 3
+- Se llama en 2 lugares: `useSolicitudes.ts` y `solicitudes/[id]/page.tsx` (después de notifySolicitudEnviada)
+- Destinatarios: personas con pref `solicitud_urgente_nueva: true` + receive_all (filtrado por sendNotification)
+
+### alerta_diaria_urgentes
+- Template con tabla resumen de solicitudes urgentes (vencidas + próximas 3 días) con líneas pendientes/parciales
+- Función `notifyAlertaDiariaUrgentes()` — query solicitudes Enviada/En Proceso con date_required ≤ hoy+3 y líneas Pendiente/Parcial
+- Cron endpoint: `src/app/api/cron/alertas-urgentes/route.ts` con Bearer auth via CRON_SECRET
+- vercel.json creado: schedule `0 12 * * *` (12:00 UTC = 7:00 AM Panamá)
+
+### Admin UI
+- 2 columnas nuevas en tab Notificaciones: "Urgente" y "Diaria"
+
+### PENDIENTE James
+- Agregar env var `CRON_SECRET` en Vercel con valor random (ej: `cron_mov_2026_xK9mP4qR7tW2`)
+- Agregar `CRON_SECRET` también en `.env.local` para testing local
+
+---
+
+## 2026-03-20 — Code: Notification Preferences — Filtrado + Admin UI
+
+### send.ts
+- Filtro por `notification_preferences` ANTES del loop de envío
+- Si `receive_all: true` → enviar siempre. Si no hay prefs (legacy) → enviar. Si eventType no existe como key → enviar por default
+- Nueva función exportada `getReceiveAllUsers()` — retorna personas con `receive_all: true`
+
+### actions.ts
+- 14 funciones notify ahora incluyen `receiveAllUsers` en el array de recipients via `dedup()`
+- James y Astrid (admins con `receive_all: true`) reciben TODAS las notificaciones
+
+### Admin UI
+- Nuevo tab "Notificaciones" en `/admin/masters` con tabla inline
+- Toggle master `notifications_enabled`, toggle `receive_all`, 11 checkboxes por event type
+- Checkboxes disabled cuando `receive_all = true` o `notifications_enabled = false`
+- UPDATE inmediato (optimistic) al cambiar cualquier checkbox
+
+### database.ts regenerado
+- Ahora incluye `notification_preferences` en tipo `people`
+
+### SOLICITUD BD (James → Chat)
+- Cambiar key en BD de `suggestion_fallback` → `sugerencia_fallback` en `people.notification_preferences`:
+```sql
+UPDATE people
+SET notification_preferences = notification_preferences - 'suggestion_fallback' || jsonb_build_object('sugerencia_fallback', notification_preferences->'suggestion_fallback')
+WHERE notification_preferences ? 'suggestion_fallback';
+```
+
+---
+
+## 2026-03-18 — Chat: Restructuración de docs del repo
+
+- CLAUDE.md editado: quitado NestJS/Metabase, 18→44 tablas, Quick Reference, source-of-truth → Supabase MCP, estados corregidos (Parcial solo línea, En Transito sin acento), workflow simplificado
+- FEATURE_SPEC.md (v4): schema section actualizada a 44 tablas
+- ICONSA_Feature_Specification_v3.md → renombrado FEATURE_SPEC_v3_FOUNDATIONAL.md + header deprecación
+- .mcp.json: quitado Sequential Thinking (innecesario), quedan Supabase + Context7
+- .claude/rules/: cost-management y no-modify-specs actualizados (quitado BUILD_PLAN/PROJECT_STATUS refs)
+- .claude/skills/: 7 skills con YAML frontmatter. Nuevo: technical-decisions/SKILL.md (extraído de SPEC.md)
+- self-update.md: refs actualizadas (PROJECT_STATUS → SYNC_LOG, BUILD_PLAN → FEATURE_SPEC)
+- Docs/archive/: BUILD_PLAN, PROJECT_STATUS, MVP_Sprint_Brief, ROADMAP, demo_v8.jsx, supabase_schema_verified.sql
+- Eliminados: ref/ completo, Docs/ref/ duplicado, .new files, SPRINT_TODAY, suggestions.md
+
+## 2026-03-18 — Chat: Auth fix + Notifications fix
+
+- auth.users: todos los campos string NULL → '' para 16 usuarios (email_change, recovery_token, confirmation_token, etc.)
+- people.notifications_enabled: true para todos los usuarios con email y rol activo
+- Charris ahora recibe TODAS las notificaciones (pendiente commit de código — prompt generado para Claude Code)
+
+## 2026-03-17 — Chat: DB expansion 22 → 44 tablas
+
+- 22 tablas nuevas (inspecciones, work orders, fuel, PO, warehouse, campaigns, vendors)
+- Equipment expandida: 12 columnas + auto-tag IC-0001→IC-0377 + trigger
+- Equipment categories seeded (10 rows)
+- Aplicado a producción Y branch staging
+
+## 2026-03-17 — Chat/Code: UX + Qty management + Paginación
+
+- Qty management 3 capas (frontend clamp + save validation + DB trigger enforce_qty_integrity)
+- Filtros por sección (backlog independiente de viajes)
+- Calendario click-to-filter + date range (Desde/Hasta)
+- Paginación server-side (solicitudes) + client-side (viajes, admin)
+- Time picker 12h, collapsibles default open, line cards con qty pill
+- Supabase branch persistente vonwkciosksqspyljzfy creada
+
+## 2026-03-15 — Chat: Attachments + Notifications + RLS
+
+- File attachments: Storage bucket `attachments` con 4 RLS policies
+- Email notifications: 12 templates via Resend (server actions, fire-and-forget)
+- RLS: generate_request_id y generate_trip_id → SECURITY DEFINER
+- Correos reales actualizados para 14 usuarios
+- Env vars en Vercel: RESEND_API_KEY, SUPABASE_SERVICE_ROLE_KEY
+- Vercel production fix: NEXT_PUBLIC env vars agregadas
+
+## 2026-03-12 — Code: Entregas parciales + Bugs 20-27
+
+### BD (Chat en Supabase)
+- trip_line_assignments.qty_delivered NUMERIC DEFAULT 0 agregado
+- cascade_request_status() actualizado: Parcial eliminado de solicitudes, líneas Parcial cuentan como En Proceso
+- 'En Transito' sin acento es canonical en BD
+- BD limpia (0 datos transaccionales)
+
+### Código (Claude Code — 3 chunks)
+Chunk 1: normalizar En Transito, quitar Parcial de request, Bug #20 KPI, database.ts
+Chunk 2: entregas parciales core (acumular qty_delivered, decrementar qty_scheduled, backlog Parcial/Programada, fórmula disponible, releaseLineFromAssignment respeta entregas, guard Salida)
+Chunk 3: UI cantidad real en Entrega, LineRow progreso, Bug #23 receptores
+
+---
+
+## 2026-03-12 — Code: Bugs 18-19 + eliminar prioridad visual
+
+### Cambios Supabase (James)
+- pg_cron job `recalculate-priorities` ELIMINADO (prioridad ya no se recalcula diario)
+- Trigger `calculate_priority()` sigue activo solo en INSERT/UPDATE de date_required
+
+### Bugs corregidos (Code)
+- **Bug #18**: `formatCompletionDelta` usaba `parseLocalDate` en TIMESTAMPTZ, causando desfase de 1 día en Panama (UTC-5). Fix: convertir TIMESTAMPTZ a fecha local con `new Date()`.
+- **Bug #19**: Columna "Días" en lista de solicitudes siempre mostraba días vs hoy. Ahora: Completada→delta vs date_completed, Cancelada→"—", Activa→días vs hoy.
+
+### Prioridad visual eliminada de UI
+- Eliminados badges de prioridad (Vencida/Urgente/Próxima/Normal) de: lista solicitudes, detalle solicitud, backlog programación, dashboard.
+- Eliminados filter chips de prioridad en lista solicitudes.
+- **Mantenido en BD**: trigger `calculate_priority()`, campo `priority` en sm_requests, constantes en código.
+- **Razón**: La columna "Días" con color ya comunica la misma información sin redundancia.
+
+---
+
+## 2026-03-12 — Code: Fix created_by semántico
+
+- `useSolicitudes.ts`: `created_by` cambiado de `header.requester_id` → `personId` (el usuario logueado)
+- `solicitudes/nueva/page.tsx`: pasa `person?.id` a saveSolicitud en handleSaveDraft y handleSend
+- **Razón:** `created_by` y `requester_id` son conceptos diferentes. created_by = quién opera el sistema, requester_id = quién solicita el equipo. Un admin puede crear solicitud en nombre de un PM.
+- Las 11 solicitudes existentes tienen created_by = NULL (pre-fix). Solo futuras tendrán el valor correcto.
+
+---
+
+## 2026-03-12 — Chat: Correcciones post-auditoría aplicadas en Supabase
+
+### RLS fix (migración aplicada)
+- sm_request_lines: nueva policy `operational_update` reemplaza `pm_admin_update`. Ahora permite UPDATE a pm, admin, logistica, campo, almacen.
+- sm_requests UPDATE: sigue siendo pm+admin solamente. El cascade trigger es SECURITY DEFINER, así que cuando campo/logistica actualizan una línea, el trigger puede actualizar el header sin darle permisos directos.
+- Flujo de entrega ahora funciona para todos los roles operativos.
+
+### cascade_request_status() corregido (SECURITY DEFINER)
+- Completada: delivered = total
+- Cancelada: cancelled = total
+- Parcial: delivered + cancelled = total, mix de ambos (todo resuelto pero no todo entregado)
+- En Proceso: hay líneas activas (programadas/en tránsito) O hay entregas con líneas pendientes
+- Enviada: nada moviéndose aún
+- 24-404-SM-003 corregido de "Parcial" → "En Proceso" (1 entregada + 2 programadas)
+- 25-506-SM-002 corregido de "Enviada" → "En Proceso" (1 línea En Tránsito)
+
+### Backfill
+- delivered_at backfillado en 10 líneas Entregada con timestamps reales de trip_events
+- qty_delivered ya estaba correcto (backfillado anteriormente)
+
+---
+
+## 2026-03-11 — Code: Auditoría completa + 7 fixes implementados (commit 6198f5b)
+
+### Auditoría Supabase vs Código
+- 20 tablas en BD (docs dicen 18): audit_log y project_extras no documentadas
+- 37 triggers en 12 tablas, 8 no documentados (audit_*, lifecycle, equipment_location)
+- 67 RLS policies activas
+- pg_cron activo: recalcula prioridad daily 6AM UTC para solicitudes activas
+
+### Cambios implementados (6 archivos)
+1. **database.ts**: +date_submitted/completed/cancelled (sm_requests), +date_cancelled (trips), +delivered_at (sm_request_lines)
+2. **format.ts**: nueva función `formatCompletionDelta()` para solicitudes completadas
+3. **SolicitudForm.tsx**: prioridad inteligente (frozen en Completada, oculta en Cancelada, live en activas) + lifecycle chips (Creada, Enviada, Completada, Cancelada con timestamps)
+4. **solicitudes/[id]/page.tsx**: pasa lifecycle timestamps + mini-timeline de trip_events por viaje (Salida→Llegada→Entrega→Retorno)
+5. **useTripEvents.ts**: fix qty_delivered=0 bug — ahora actualiza qty_delivered con quantity_assigned + delivered_at timestamp en Entrega
+6. **useSolicitudes.ts + useTripEvents.ts**: updated_by en operaciones de líneas
+
+### SOLICITUD BD — James debe aplicar (3 items)
+1. **RLS GAP CRÍTICO**: logistica no puede UPDATE sm_requests ni sm_request_lines. Agregar logistica a UPDATE policies.
+2. **cascade_request_status() BUG**: Muestra "Parcial" cuando debería ser "En Proceso" (verifica delivered>0 antes de in_progress>0). SQL fix en plan file.
+3. **scheduled_time ya tenía campo UI** — Paso 6 del plan no fue necesario, ya existía.
+
+### Discrepancias encontradas
+- PROJECT_STATUS dice 18 tablas, BD tiene 20 (audit_log, project_extras)
+- 8 triggers no documentados en PROJECT_STATUS ni schema SQL
+- 17 personas con app_role pero sin auth account (pre-lanzamiento)
+- 2 solicitudes con status inconsistente por bug en cascade trigger
+
+---
+
+## 2026-03-12 — Code: UX mejoras — métricas vivas, layout, dashboard global
+
+5 archivos modificados (commit 3592470):
+- `format.ts`: 3 nuevas funciones (daysUntilDue, formatDaysUntilDue, daysUntilDueColor)
+- `programacion/page.tsx`: backlog primero, calendario después; calendar cards con conteo líneas
+- `solicitudes/page.tsx`: columna "Días", prioridad viva client-side, calendar cards mejoradas
+- `BacklogTable.tsx`: días-al-vencimiento junto a fecha, prioridad viva
+- `dashboard/page.tsx`: métricas globales para TODOS los roles (quitado filtro PM, redirect campo, guard isGlobalRole)
+- Opacity en filas completadas/canceladas eliminada de ambas tablas
+
+Decisión: prioridad client-side (`calculatePriority()`) para display en páginas client. Dashboard (Server Component) sigue usando valor de BD (pg_cron 6AM es aceptable).
+
+---
+
+## 2026-03-12 — Code: Bloque 1 + Bloque 2 completados
+
+### Bloque 1: Extras en cascada de cost codes
+- LineEditor.tsx: nuevo prop `projectId`, fetch extras interno
+- Cascada: Proyecto → Extra (condicional) → Fase → Categoría
+- Dropdown "Extra / Sección" solo visible si proyecto tiene extras (24-404, 25-505)
+- Opción "(Proyecto Base)" para fases sin extra
+- Detección automática de extra al editar línea existente
+- database.ts actualizado: project_extras + extra_id en cost_codes
+
+### Bloque 2: Fase 6 — Admin Masters
+- Nuevo componente Modal.tsx (dialog nativo, backdrop click, ESC)
+- /admin redirige a /admin/masters
+- 6 tabs: Proyectos, Personas, Equipos, Ubicaciones, Tarifas, Extras
+- CRUD completo en cada tab con DataTable + Modal
+- Tab Personas incluye panel "Proyectos Asignados" (person_projects CRUD)
+- Tab Extras con filtro por proyecto
+- Toggle activar/desactivar en todas las tablas
+- Búsqueda por nombre/código en cada tab
+
+---
+
+## 2026-03-12 — Chat: Person Projects insertados
+
+- 30 asignaciones totales (era 12)
+- Franklin Marciaga → app_role=pm, asignado 25-506
+- Héctor Pino → app_role=pm, asignado 24-404
+- Lourdes Dominguez → app_role=pm, asignado 24-404
+- César Caballero → agregado a 25-506
+- Andrés Solís → 24-404, 25-505
+- David Ríos → 24-404, 25-505
+- Madeleine Lange → 24-404, 25-505
+- Jenniffer Troetsch → 24-404, 25-505
+- Juan Jácome → 24-404, 25-506
+- Edward Rodriguez → 25-506
+- Marisa Pozza → 26-604 (Gerente)
+- Ariel González → 26-604 (Superintendente)
+- Velideth González → 26-605 (Ingeniero)
+- PENDIENTE mañana: Javier Ferrer (26-605), Luis Lima (26-605), Yanelys Sánchez, emails reales
+
+## 2026-03-12 — Chat: Project Extras (CAMBIO MAYOR)
+
+- Nueva tabla `project_extras` creada (19 tablas ahora)
+- `cost_codes.extra_id` FK agregado (nullable, NULL = proyecto base)
+- 12 extras insertados:
+  - 24-404: E1 Camino acceso, E2 Edificio Principal, E3 Muelles Flotantes, E4 Tanque combustible, E5 Trabajos electricos, E6 Trabajos mecanicos
+  - 25-505: E1 Pilotes Acero, E2 Flotadores, E3 Estructuras Fijas, E4 Rampas, E5 Trabajos Electricos, E6 Pintura flotadores
+- Cost codes reimportados con clasificación por extra: 122 fases, 784 combos
+- Trigger `generate_full_code()` actualizado. Formato con dash: `24-404-E1-01-3100`
+- full_code base sigue igual: `24-404-01-3100`
+- **Claude Code:** La cascada en LineEditor necesita dropdown "Extra" condicional. Ver SPRINT_TODAY.md Bloque 1.
+
+## 2026-03-12 — Chat: database.ts regenerado
+
+- James colocará en src/lib/types/database.ts
+- Incluye: project_extras, extra_id en cost_codes, received_by_id en trip_events
+
+## 2026-03-12 — Chat: Flujo de trabajo mejorado
+
+- Nuevo sistema de Tiers para documentación (ver .claude/rules/no-modify-specs.md)
+- Nueva skill self-update (ver .claude/skills/self-update.md)
+- .claude/suggestions.md creado para sugerencias de Claude Code
+- Docs/BUGS.md creado para tracking de bugs
+
+## 2026-03-09 — Chat: Schema changes anteriores
+
+- received_by_id UUID FK people agregado a trip_events
+- Trigger generate_confirmation_code() en trips
+- Trigger generate_full_code() en cost_codes (todo dashes)
+- confirmation_code backfilled en viajes existentes
+- Sequences corregidos
+
+## 2026-03-09 — James: App deployed
+
+- URL: https://www.rein-eisenwerk.com/login
+- Vercel connected to jaime/dev branch

@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 
 // --- Tipos exportados ---
 
-export type TripEventType = 'Salida' | 'Llegada' | 'Entrega' | 'Retorno' | 'Incidencia'
+export type TripEventType = 'Salida' | 'Llegada' | 'Entrega' | 'Retorno' | 'Incidencia' | 'Parada'
 
 export interface TripEventInput {
   id?: string // UUID pre-generado para folder de storage
@@ -17,7 +17,6 @@ export interface TripEventInput {
   confirmation_code_used?: string | null
   received_by_id?: string | null
   received_by_name?: string | null
-  deliveredQuantities?: Record<string, number> // lineId → qty entregada en ESTE viaje
   attachments?: unknown[] | null
 }
 
@@ -41,6 +40,16 @@ export function useTripEvents(tripId: string) {
       setRegisterError(null)
 
       try {
+        // Guard: Salida/Entrega ahora se manejan desde DispatchModal/DeliveryModal
+        if (input.event_type === 'Salida') {
+          setRegisterError('Salida debe registrarse desde el modal de Despacho')
+          return false
+        }
+        if (input.event_type === 'Entrega') {
+          setRegisterError('Entrega debe registrarse desde el modal de Entrega')
+          return false
+        }
+
         // 1. INSERT trip_events (INMUTABLE — sin UPDATE/DELETE)
         const { error: eventError } = await supabase.from('trip_events').insert({
           ...(input.id ? { id: input.id } : {}),
@@ -57,41 +66,20 @@ export function useTripEvents(tripId: string) {
         })
 
         if (eventError) {
-          setRegisterError(eventError.message)
-          return false
+          // Si el insert ya existía (respuesta perdida en intento anterior), tratar como éxito
+          if (eventError.code === '23505') {
+            console.warn('[TripEvents] Duplicate key detected — treating as idempotent success')
+          } else {
+            setRegisterError(eventError.message)
+            return false
+          }
         }
 
         // 2. Transiciones de estado según tipo de evento
+        // NOTA: Salida y Entrega redirigidos a DispatchModal y DeliveryModal respectivamente.
+        // Los guards arriba retornan error si se intenta registrarlos por esta vía.
 
-        if (input.event_type === 'Salida') {
-          // trips → En Ruta + actual_departure
-          const { error: tripError } = await supabase
-            .from('trips')
-            .update({
-              status: 'En Ruta',
-              actual_departure: input.event_timestamp,
-            })
-            .eq('id', tripId)
-
-          if (tripError) {
-            setRegisterError(tripError.message)
-            return false
-          }
-
-          // líneas → En Transito
-          if (assignedLineIds.length > 0) {
-            const { error: linesError } = await supabase
-              .from('sm_request_lines')
-              .update({ status: 'En Transito', updated_by: person?.id ?? null })
-              .in('id', assignedLineIds)
-              .eq('status', 'Programada')
-
-            if (linesError) {
-              setRegisterError(linesError.message)
-              return false
-            }
-          }
-        } else if (input.event_type === 'Llegada') {
+        if (input.event_type === 'Llegada') {
           // trips → actual_arrival
           const { error: tripError } = await supabase
             .from('trips')
@@ -102,62 +90,10 @@ export function useTripEvents(tripId: string) {
             setRegisterError(tripError.message)
             return false
           }
-        } else if (input.event_type === 'Entrega') {
-          // Entregas parciales: acumula qty_delivered, decrementa qty_scheduled
-          if (assignedLineIds.length > 0) {
-            const { data: assignments } = await supabase
-              .from('trip_line_assignments')
-              .select('request_line_id, quantity_assigned')
-              .eq('trip_id', tripId)
-              .in('request_line_id', assignedLineIds)
-
-            const now = new Date().toISOString()
-
-            for (const lineId of assignedLineIds) {
-              const assignment = assignments?.find((a) => a.request_line_id === lineId)
-              const qtyAssigned = assignment?.quantity_assigned ?? 0
-              // qty real entregada (default = lo asignado al viaje)
-              const qtyThisTrip = input.deliveredQuantities?.[lineId] ?? qtyAssigned
-
-              // Leer estado actual de la línea
-              const { data: currentLine } = await supabase
-                .from('sm_request_lines')
-                .select('quantity, qty_scheduled, qty_delivered')
-                .eq('id', lineId)
-                .single()
-
-              if (!currentLine) continue
-
-              const newQtyDelivered = (currentLine.qty_delivered ?? 0) + qtyThisTrip
-              const newQtyScheduled = Math.max(0, (currentLine.qty_scheduled ?? 0) - qtyAssigned)
-              const newStatus = newQtyDelivered >= currentLine.quantity ? 'Entregada' : 'Parcial'
-
-              const { error: lineError } = await supabase
-                .from('sm_request_lines')
-                .update({
-                  status: newStatus,
-                  qty_delivered: newQtyDelivered,
-                  qty_scheduled: newQtyScheduled,
-                  delivered_at: now,
-                  updated_by: person?.id ?? null,
-                })
-                .eq('id', lineId)
-
-              if (lineError) {
-                setRegisterError(lineError.message)
-                return false
-              }
-
-              // Auditoría: guardar qty_delivered en la asignación
-              await supabase
-                .from('trip_line_assignments')
-                .update({ qty_delivered: qtyThisTrip })
-                .eq('trip_id', tripId)
-                .eq('request_line_id', lineId)
-            }
-          }
         } else if (input.event_type === 'Retorno') {
-          // trips → Completado
+          // Retorno es NO-OP para cantidades: solo marca el viaje Completado.
+          // Si hay líneas En Transito sin entregar, el guard en UI avisa — y quedan visibles
+          // en el dashboard "Entregas pendientes en viajes cerrados" para resolver después.
           const { error: tripError } = await supabase
             .from('trips')
             .update({ status: 'Completado' })

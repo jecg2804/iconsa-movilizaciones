@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useVehicles } from '@/hooks/useVehicles'
 import { useTrips, type TripInput, type AssignmentInput } from '@/hooks/useTrips'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import { formatCurrency } from '@/lib/utils/format'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
@@ -31,6 +32,7 @@ interface RateRow {
 
 export default function NuevoViajePage() {
   const router = useRouter()
+  const guard = useSubmitGuard()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
 
@@ -67,7 +69,6 @@ export default function NuevoViajePage() {
     att_permit: false,
     escort: false,
     notes: null,
-    is_external: false,
   })
 
   // Asignaciones de lineas seleccionadas
@@ -202,20 +203,22 @@ export default function NuevoViajePage() {
     if (isCabezal && !tripData.trailer_id) {
       errors.push('Remolque requerido para vehículo cabezal')
     }
-    // Tarifa es opcional — no toda movilización tiene tarifa formal
+    // Cambio 6: tarifa obligatoria (BD trips.rate_id NOT NULL)
+    if (!tripData.rate_id) errors.push('Seleccione una tarifa')
+    if (tripData.cost == null || tripData.cost <= 0) errors.push('El costo debe ser mayor a cero')
     if (assignments.length === 0) errors.push('Seleccione al menos una linea')
     setValidationErrors(errors)
     return errors.length === 0
   }, [tripData, assignments, isCabezal])
 
   // --- Guardar viaje ---
-  const handleSave = useCallback(async () => {
+  const handleSave = guard(async () => {
     if (!validate()) return
     const result = await saveTrip(tripData, assignments, person?.id)
     if (result) {
       router.push('/programacion')
     }
-  }, [validate, saveTrip, tripData, assignments, router, person?.id])
+  })
 
   // --- Estado de carga global ---
   const isLoading =
@@ -228,7 +231,7 @@ export default function NuevoViajePage() {
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4">
         <h1 className="text-xl font-bold text-gray-900">Acceso denegado</h1>
         <p className="text-sm text-iconsa-gray">
-          No tiene permisos para crear viajes.
+          No tiene permisos para crear movilizaciones.
         </p>
         <Button variant="secondary" onClick={() => router.push('/programacion')}>
           Volver a Programacion
@@ -264,7 +267,7 @@ export default function NuevoViajePage() {
       </div>
 
       {/* Titulo */}
-      <h1 className="text-2xl font-bold text-gray-900">Nuevo Viaje</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Nueva Movilización</h1>
 
       {/* Error global de guardado */}
       {saveError && (
@@ -302,7 +305,7 @@ export default function NuevoViajePage() {
       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900">
-            Lineas del Viaje
+            Lineas de la Movilización
           </h2>
           {assignments.length > 0 && (
             <span className="rounded-full bg-navy/10 px-2.5 py-0.5 text-xs font-medium text-navy">
@@ -333,9 +336,9 @@ export default function NuevoViajePage() {
             variant="primary"
             onClick={handleSave}
             loading={saving}
-            disabled={saving}
+            disabled={saving || assignments.length === 0}
           >
-            Guardar Viaje
+            Guardar Movilización
           </Button>
         </div>
       </div>

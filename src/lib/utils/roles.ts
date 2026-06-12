@@ -43,7 +43,8 @@ export function canCreateTrip(role: string | null): boolean {
 }
 
 /**
- * Logística, campo, almacén, y admin pueden registrar eventos de viaje.
+ * Logística, campo, almacén, admin, y PM pueden registrar eventos de viaje.
+ * PM necesita registrar entregas (confirmación con código).
  * Sin restricción por driver_id en MVP.
  */
 export function canRegisterEvent(role: string | null): boolean {
@@ -51,7 +52,8 @@ export function canRegisterEvent(role: string | null): boolean {
     role === 'logistica' ||
     role === 'campo' ||
     role === 'almacen' ||
-    role === 'admin'
+    role === 'admin' ||
+    role === 'pm'
   )
 }
 

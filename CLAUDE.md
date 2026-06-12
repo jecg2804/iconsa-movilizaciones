@@ -1,14 +1,19 @@
 # MovimientOS
 
-Sistema digital de movilizaciones para ICONSA, constructora pesada en Panamá.
-Digitaliza el procedimiento IC-LOG-PO-06: solicitudes → programación → ejecución → dashboard.
+Sistema de operaciones para ICONSA (constructora pesada, Panamá). Digitaliza procedimientos del taller de Chilibre, empezando por movilizaciones (IC-LOG-PO-06): solicitudes → programación → ejecución.
+
+## Quick Reference
+
+- **47 tablas** en public schema con RLS habilitada en todas (usar Supabase MCP para detalles)
+- **Stack:** Next.js 16 (App Router) + Supabase + Tailwind CSS → Vercel (`rein-eisenwerk.com`)
+- **Auth:** Supabase Auth con RLS en todas las tablas
+- **Patrón clave:** Operaciones a nivel de LÍNEA (logística programa LÍNEAS, no solicitudes)
+- **Skills:** Ver `.claude/skills/` para CRUD, eventos, queries, entregas parciales, seed data, decisiones técnicas
 
 ## Stack
 
-- **Frontend:** Next.js (App Router) + TypeScript + Tailwind CSS → Vercel
-- **Backend:** NestJS (TypeScript) → Railway/Fly.io (se integra en Fase 6)
-- **DB:** Supabase PostgreSQL + Auth + RLS + Storage
-- **Reporting:** Metabase (post-MVP)
+- **Frontend:** Next.js 16 (App Router) + TypeScript (target ES2022) + Tailwind CSS → Vercel
+- **DB:** Supabase PostgreSQL + Auth + RLS + Storage (prod `bzeoszympkkicwlfdtcn`, staging `vonwkciosksqspyljzfy`, 47 tablas)
 
 ## Commands
 
@@ -22,17 +27,22 @@ npx supabase gen types typescript --project-id bzeoszympkkicwlfdtcn > src/lib/ty
 ## Key Directories
 
 ```
-.claude/                          # ⚠️ EN LA RAÍZ DEL REPO, NO en tu directorio de usuario
+.claude/
 ├── rules/                        # Reglas que Claude Code debe seguir siempre
 │   ├── commit-after-step.md
 │   ├── cost-management.md
-│   └── no-modify-specs.md        # Sistema de Tiers (Tier 1: solo Chat, Tier 2: Code actualiza, Tier 3: Code sugiere)
-├── skills/                       # Patrones de implementación por tipo de tarea
+│   ├── git-workflow.md            # Política branches/commits/releases + enforcement layers
+│   ├── plan-lifecycle.md          # Cuándo crear/limpiar/borrar plan files
+│   ├── supabase-readonly.md
+│   └── tool-usage.md             # MCPs, plugins, skills — cuándo y cómo usar cada herramienta
+├── skills/                       # Patrones de implementación (cargan on-demand)
 │   ├── crud-page.md
 │   ├── events-page.md
+│   ├── form-submit-guard.md      # Anti doble-submit — useSubmitGuard en todo handler async
 │   ├── supabase-queries.md
-│   └── self-update.md            # Cómo mantener docs sincronizados
-└── suggestions.md                # Claude Code escribe aquí sugerencias a Tier 1
+│   ├── partial-delivery/SKILL.md
+│   ├── seed-data/SKILL.md
+│   └── technical-decisions/SKILL.md  # Funciones, triggers, cascada, RLS
 src/
 ├── app/
 │   ├── (auth)/login/           # Login (Supabase Auth)
@@ -57,19 +67,36 @@ src/
 └── middleware.ts               # Auth redirect + role guard
 ```
 
-## Reference Docs (leer antes de implementar)
+## Reference Docs
 
-| Documento | Cuándo leerlo |
+### Auto-cargados al inicio de sesión
+
+| Documento | Propósito |
 |-----------|---------------|
-| @Docs/BUILD_PLAN.md | **SIEMPRE primero.** Orden de fases, archivos por paso, reglas críticas. |
-| @Docs/ICONSA_MVP_Sprint_Brief.md | Contexto rápido: features MVP, modelo de datos, UI guidelines. |
-| @Docs/ICONSA_Feature_Specification_v3.md | Detalle completo de pantallas, campos, validaciones, estados (v3.3). |
-| @Docs/PROJECT_STATUS.md | Schema actual de BD (18 tablas), estado de cada componente, decisiones. |
-| @Docs/supabase_schema_verified.sql | SQL del schema — referencia para humanos. Claude Code: consultar Supabase directamente via MCP. |
-| @Docs/SYNC_LOG.md | **Leer al inicio de cada sesión.** Escribir después de cada paso y cuando encuentres discrepancias o necesites cambio de BD. |
-| @Docs/BUGS.md | Documentar bugs encontrados y resueltos. |
+| @Docs/TRAIL.md | **Primer doc a leer.** Single-page de la jerarquía de tareas actual. Dónde estamos, qué sigue. Actualizar cuando cambiamos de dirección. |
+| @Docs/CHANGELOG.md | Qué se hizo recientemente (código + BD). Actualizar con cada commit. |
+| @Docs/BACKLOG.md | Lo que falta por hacer. Consultar cuando se planifica siguiente feature. |
 
-**IMPORTANTE:** Si una regla de negocio no está clara, consulta el Feature Spec. Si hay conflicto entre documentos, PROJECT_STATUS.md es la fuente de verdad para el schema, y Feature Spec v3.3 para reglas de negocio.
+### Source of truth
+
+| Recurso | Uso |
+|-----------|---------------|
+| Supabase MCP | **Schema source of truth.** Consultar tablas, columnas, relaciones directamente. 47 tablas con COMMENT ON TABLE/COLUMN. |
+| Docs/FEATURE_SPEC.md | Reglas de negocio, pantallas, estados. Leer secciones relevantes (NO auto-cargar — 39K chars). |
+
+### Reference docs — consultivos, no prescriptivos
+
+Los docs en `Docs/reference/` son para consulta puntual. **No son best practices obligatorias** — hay que juzgarlos caso por caso antes de aplicar recomendaciones.
+
+| Contexto | Doc |
+|---|---|
+| Planificar features Tier 1-4, prioridad de SOPs de ICONSA | `Docs/reference/Vision Roadmap.md` |
+| Tocar pickup / custody_transfers / debt AD-1/2/3 | `Docs/reference/Self-pickup.md` |
+| Evaluar tools/librerías nuevas (PDF, dashboards, comparar con pro tools) | `Docs/reference/MovimientOS From Logistics App to Operations Platform - Strategic Roadmap and Tools Analysis.md` |
+| Mejorar setup de Claude Code (skills, MCPs, rules path-scoping) | `Docs/reference/Claude Code Setup Research.md` |
+| Crítica honesta del ecosistema Claude Code + patrones como "Document & Clear" | `Docs/reference/The vibecoder's honest guide to Claude.md` |
+
+**IMPORTANTE:** Para schema, siempre consultar Supabase MCP (no docs estáticos). Para reglas de negocio, FEATURE_SPEC.md es la fuente de verdad. Ver `.claude/rules/` para reglas de commit, git workflow, supabase, plan lifecycle, y cost management.
 
 ## Coding Conventions
 
@@ -90,8 +117,8 @@ src/
 - Todas las tablas tienen `created_at` y `updated_at` con trigger automático.
 - RLS habilitado en todas las tablas.
 - Tabla `equipment` es UNIFICADA (equipos + vehículos). Vehículos = `type_code IN ('VHL','VHP')`. Remolques = `spectrum_code LIKE 'REM%'`.
-- **18 tablas definidas y verificadas.** No crear tablas nuevas sin discusión con James (vía Chat).
-- **user_app_roles** existe como fundación multi-app RBAC pero el código MVP usa `people.app_role`. No migrar a user_app_roles todavía.
+- **47 tablas** en public schema. Consultar Supabase MCP para detalles de cada tabla.
+- **user_app_roles** existe como fundación multi-app RBAC pero el código MVP usa `people.app_role`. No migrar todavía.
 - **cost_codes** filtrar por `project_id`. **cost_categories** filtrar via `cost_code_categories` por `cost_code_id` seleccionado.
 
 ### Archivos
@@ -132,73 +159,55 @@ Gray:   #5A6272  (secondary text)
 6. **Mobile-first.** Los ingenieros y conductores usan celulares.
 7. **Monospace para IDs.** `25-506-SM-023` y `MOV-2026-042` siempre en fuente monoespaciada.
 8. **Remolque condicional.** REQUERIDO cuando vehículo es cabezal (CAB### o 'CABEZAL'). Filtrar remolques por `spectrum_code LIKE 'REM%'`. Opcional para pick-up, volquete, camión grúa.
-9. **Tarifa y Costo OPCIONALES.** No toda movilización tiene tarifa formal. Si se selecciona tarifa, pre-rellenar Costo con `rate`. Campo sigue editable.
+9. **Tarifa OBLIGATORIA.** Toda movilización requiere tarifa seleccionada al crear y editar. Costo se auto-rellena con `rate.amount` y queda **read-only** (deseleccionar tarifa NO posible — es requerida). Validación bloquea guardar/editar sin tarifa. BD: `trips.rate_id` NOT NULL. **Cambio 2026-04-29 (Cambio 6):** antes la tarifa era opcional; ahora es requerida en todo trip nuevo y editado. **Cambio 2026-04-15 (J6, contexto histórico):** se introdujo el read-only del costo cuando hay tarifa, antes el campo seguía editable con diálogo de confirmación.
 10. **Redirect después de guardar/enviar.** Crear nuevo → redirige a lista. Editar existente → se queda en detalle. Enviar solicitud → siempre a lista.
 11. **Filtro equipos en solicitud:** `type_code NOT IN ('ING')`. NO excluir VHL, VHP, TEC.
 12. **Solicitante NO editable.** Auto-fill con usuario logueado. El campo es disabled/readonly.
 13. **Aprobado por filtrado.** Dropdown filtra por `app_role = 'pm'` (11 personas de proyecto).
-14. **Cost codes en cascada desde BD.** Proyecto → Fase (cost_codes filtrado por project_id) → Categoría (cost_categories filtrado via cost_code_categories) → Código auto-generado: `{proyecto}-{fase}-{categoría}`.
-15. **Código de confirmación visible para pm/logistica/admin.** NUNCA para campo/almacen. PM lo ve en /solicitudes/[id] sección Viajes Programados. Código MUST be correct — no hay bypass. `received_by_id` vincula receptor a people.
+14. **Cost codes en cascada desde BD.** Proyecto → Extra/Sección (opcional según proyecto) → Fase (cost_codes filtrado por project_id + extra) → Categoría (cost_categories filtrado via cost_code_categories) → Código auto-generado: `{proyecto}-{fase}-{categoría}`. **Los 3 componentes del código de costo (Extra si aplica + Fase + Categoría) son REQUERIDOS** en cada línea de solicitud — validación en LineEditor bloquea guardar si falta cualquiera. Extra solo se valida cuando `hasExtras === true` para ese proyecto. **Cambio 2026-04-15 (J7 + J7-ext):** antes Fase era opcional y Categoría seguía opcional después del primer fix; ahora los 3 son requeridos.
+15. **Código de confirmación siempre obligatorio** (decisión 2026-04-16). Visible para pm/logistica/admin, NUNCA para campo/almacen. PM lo ve en /solicitudes/[id] sección Viajes Programados. Código MUST be correct — no hay bypass. `received_by_id` vincula receptor a people. El feature anterior de `requires_code` per-line fue eliminado — no hay toggle, no hay condicional, el código siempre se pide en toda entrega y retiro.
 16. **Timestamps de eventos automáticos.** now() automático, NO editable. El usuario no puede cambiar cuándo ocurrió un evento.
 17. **Search de equipos por código.** Dropdowns de equipment buscan en spectrum_code Y description. Label: "{spectrum_code} — {description}".
 
 ## Estados y Cascada
 
 ```
-Solicitud: Borrador → Enviada → En Proceso → Completada / Parcial / Cancelada
-Línea:     Pendiente → Programada → En Tránsito → Entregada / Parcial / Cancelada
+Solicitud: Borrador → Enviada → En Proceso → Completada / Cancelada
+Línea:     Pendiente → Programada → En Transito → Entregada / Parcial / Cancelada
 Viaje:     Programado → En Ruta → Completado / Cancelado
 ```
 
+**'Parcial' existe SOLO a nivel de LÍNEA.** Nunca a nivel de solicitud.
+**'En Transito' SIN acento** es canónico — mismatches fallan silenciosamente.
 Cascada (`cascade_request_status()`): cuando cambia una línea, re-evalúa la solicitud padre.
-Ver Feature Spec sección 8.4 para reglas exactas.
 
-## Workflow para Claude Code
+## Workflow
 
-**ANTES de cada sesión:**
-1. `/model sonnet` — Sonnet es el default. Solo usar `/model opus` para arquitectura compleja.
-2. Lee `@Docs/BUILD_PLAN.md` para confirmar la fase actual y qué archivos crear.
-3. Lee `@Docs/SYNC_LOG.md` para ver cambios recientes de Chat/James que te afectan.
-4. Lee `@Docs/PROJECT_STATUS.md` sección "PENDIENTE PARA CLAUDE CODE" para ver tareas priorizadas.
+### Commands
+- `/project:fix-bug "descripción"` — Diagnostica y arregla un bug
+- `/project:deploy-check` — Verifica readiness pre-deploy (build, types, secrets, git)
 
-**DURANTE la sesión:**
-5. Lee la sección relevante del Feature Spec para campos, validaciones, y UX.
-6. Verifica columnas y relaciones consultando Supabase via MCP (read-only).
-7. Implementa. Corre `npm run build` para verificar que compila sin errores.
-8. `/compact` al llegar a 50% de contexto. Después de 60% la calidad degrada.
+### Flujo por tarea
+1. CHANGELOG.md y BACKLOG.md se auto-cargan (contexto reciente + pendientes)
+2. Feature nuevo → Plan Mode. Bug → `/fix-bug`. Auditoría → Explore agents.
+3. Si toca eventos/fulfillment → leer `Docs/reference/Self-pickup.md`
+4. Si planifica feature nuevo → leer `Docs/reference/Vision Roadmap.md`
+5. Verifica schema via Supabase MCP si es necesario
+6. `git commit` + `git push origin jaime/dev`. Husky `post-commit` lanza `npm run build` en background automáticamente — no hace falta correrlo a mano; si falla, el siguiente `git push` lo bloquea (ver `.claude/rules/git-workflow.md` para el flujo completo).
+7. Commit → CHANGELOG.md entry (atómico, mismo commit)
 
-**DESPUÉS de cada paso completado:**
-9. `git add -A` + `git commit` + `git push origin jaime/dev` automáticamente.
-10. Formato commit: `feat: paso X.Y — descripción` o `fix: bug #X — descripción`.
-11. Actualizar `Docs/PROJECT_STATUS.md` con estado del paso completado.
-12. Escribir en `Docs/SYNC_LOG.md`: qué se implementó, discrepancias encontradas.
-13. Si encontraste un bug, documentarlo en `Docs/BUGS.md`.
-14. Continuar al siguiente paso sin esperar aprobación.
-15. `/clear` entre fases no relacionadas.
+### Cambios de BD
+- STOP. Agregar `[bd-pending]` en CHANGELOG.md. James ejecuta via Supabase SQL Editor en staging (y después en prod con `/release`) → cambiar a `[bd]`.
 
-**CUANDO NECESITES UN CAMBIO DE BD:**
-- NO modificar Supabase. Escribir en `Docs/SYNC_LOG.md`:
-  "Code: SOLICITUD BD — {descripción}. Razón: {por qué}."
-- James lo verá y delegará a Chat para ejecutar.
-- Chat escribirá confirmación en SYNC_LOG.md.
-- Verificar leyendo Supabase via MCP y continuar.
+### NUNCA
+- No commits/push a `main`. Solo `jaime/dev`. Deny patterns + Husky lo bloquean técnicamente.
+- No ESCRIBIR en Supabase via MCP. Solo LEER. Las tools mutantes del plugin están denegadas en `.claude/settings.json`.
 
-**NUNCA:**
-- No hacer commits ni push a `main`. Solo `jaime/dev` o `andy/dev`.
-- No modificar Feature Spec ni BUILD_PLAN (Tier 1). Si hay discrepancia → `.claude/suggestions.md`.
-- No ESCRIBIR en Supabase. Solo LEER via MCP. Cambios de BD → SYNC_LOG.md → James → Chat.
-- No correr `npx supabase gen types`. James genera database.ts manualmente.
-- No crear tablas nuevas. Cambios de BD se discuten con James.
-
-## Tres actores — quién hace qué
-
-**Claude Chat (claude.ai):** Planificación, diseño, discusión de lógica de negocio, auditoría de documentos, cambios directos en Supabase (tiene acceso de escritura). Si Claude Code necesita un cambio de BD → James consulta con Chat primero.
-
-**James (humano):** Decisiones finales, input de negocio, coordinación con equipo ICONSA, aprobación de cambios. Push a git solo desde `jaime/dev`.
-
-**Claude Code (tú):** Implementación de código, testing, builds. Puede: crear/editar archivos de código, correr npm run build/lint, LEER Supabase via MCP (read-only, NO escribir), actualizar PROJECT_STATUS/SYNC_LOG/BUGS, hacer commit+push automático a jaime/dev, sugerir cambios a specs en `.claude/suggestions.md`.
-
-**Regla de oro:** Si algo involucra cambiar BD o lógica de negocio no documentada → STOP, escribe en SYNC_LOG.md, y dile a James que consulte con Chat. Si es solo implementación de código basada en lo que ya está en docs → HAZLO.
+### Quién hace qué
+- **Code (yo):** Implementar, auditar, fix bugs, commits a jaime/dev. El `post-commit` hook ya dispara build para mí.
+- **James:** Ejecutar SQL en Supabase SQL Editor, decisiones finales, aprobar PRs de release, configurar external services (GitHub, Vercel).
+- **Chat:** Research web, leer PDFs de ICONSA, planificación estratégica de largo plazo.
+- **James:** Decisiones finales, input de negocio, aprobaciones
 
 ## Git
 

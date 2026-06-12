@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Bloquea commits directos a main — estos deben venir via PR desde jaime/dev.
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" = "main" ]; then
+  echo "❌ Commits directos a main están prohibidos."
+  echo "   Cambia a jaime/dev: git switch jaime/dev"
+  echo "   Para promover a main usa el skill /release."
+  exit 1
+fi

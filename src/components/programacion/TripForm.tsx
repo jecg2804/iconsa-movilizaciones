@@ -8,6 +8,25 @@ import FileUploader from '@/components/ui/FileUploader'
 import FileDisplay from '@/components/ui/FileDisplay'
 import type { TripInput } from '@/hooks/useTrips'
 import type { Attachment } from '@/lib/supabase/storage'
+import { todayStrInPanama } from '@/lib/utils/datetime'
+
+/** Genera opciones de hora de 4:00 AM a 8:00 PM cada 5 min */
+function generateTimeOptions(): SelectOption[] {
+  const options: SelectOption[] = []
+  for (let h = 4; h <= 20; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      if (h === 20 && m > 0) break
+      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+      const ampm = h >= 12 ? 'PM' : 'AM'
+      const label = `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+      options.push({ value, label })
+    }
+  }
+  return options
+}
+
+const TIME_OPTIONS = generateTimeOptions()
 
 type TripFormMode = 'create' | 'edit' | 'readonly'
 
@@ -25,7 +44,6 @@ interface TripFormProps {
     attPermit: boolean
     escort: boolean
     notes: string | null
-    isExternal: boolean
     status?: string
     confirmationCode?: string | null
   }
@@ -102,9 +120,6 @@ function TripForm({
     initialData?.escort ?? false,
   )
   const [notes, setNotes] = useState<string>(initialData?.notes ?? '')
-  const [isExternal, setIsExternal] = useState<boolean>(
-    initialData?.isExternal ?? false,
-  )
   const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments ?? [])
   // UUID estable para folder de storage (en modo crear, genera uno temporal)
   const folderIdRef = useRef(tripIdProp ?? crypto.randomUUID())
@@ -123,12 +138,11 @@ function TripForm({
         att_permit: overrides?.att_permit !== undefined ? overrides.att_permit : attPermit,
         escort: overrides?.escort !== undefined ? overrides.escort : escort,
         notes: overrides?.notes !== undefined ? overrides.notes : (notes.trim() || null),
-        is_external: overrides?.is_external !== undefined ? overrides.is_external : isExternal,
         attachments: overrides?.attachments !== undefined ? overrides.attachments : attachments,
       }
       onChange(data)
     },
-    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, isExternal, attachments, onChange],
+    [scheduledDate, scheduledTime, driverId, vehicleId, trailerId, rateId, cost, attPermit, escort, notes, attachments, onChange],
   )
 
   // Propagar el estado inicial al montar
@@ -149,10 +163,9 @@ function TripForm({
   )
 
   const handleTimeChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value
-      setScheduledTime(val)
-      propagate({ scheduled_time: val || null })
+    (val: string | null) => {
+      setScheduledTime(val ?? '')
+      propagate({ scheduled_time: val })
     },
     [propagate],
   )
@@ -183,18 +196,20 @@ function TripForm({
 
   const handleRateChange = useCallback(
     (val: string | null) => {
-      setRateId(val)
-      // Auto-rellenar costo desde el amount de la opción seleccionada
+      // Cambio 4 (revert J6): seleccionar rate pre-rellena cost del rate.amount
+      // pero el campo SIGUE editable como override manual. Movimientos internos
+      // o casos especiales pueden requerir cost custom incluso con rate.
       if (val) {
         const selectedRate = rates.find((r) => r.value === val)
         if (selectedRate?.amount != null) {
-          const newCost = String(selectedRate.amount)
-          setCost(newCost)
+          setRateId(val)
+          setCost(String(selectedRate.amount))
           onRateChange?.(val)
           propagate({ rate_id: val, cost: selectedRate.amount })
           return
         }
       }
+      setRateId(val)
       onRateChange?.(val)
       propagate({ rate_id: val })
     },
@@ -237,15 +252,6 @@ function TripForm({
     [propagate],
   )
 
-  const handleExternalChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.checked
-      setIsExternal(val)
-      propagate({ is_external: val })
-    },
-    [propagate],
-  )
-
   // Datos de visualizacion de la barra de identificacion
   const tripId = initialData?.tripId
   const status = initialData?.status
@@ -274,7 +280,7 @@ function TripForm({
               {attPermit && (
                 <Badge
                   variant="custom"
-                  label="ATT"
+                  label="ATTT"
                   bg="bg-purple-100"
                   text="text-purple-800"
                 />
@@ -304,22 +310,25 @@ function TripForm({
 
       {/* Campos del formulario */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Fecha Programada */}
+        {/* Fecha Programada — min = hoy Panamá (solo creación) */}
         <Input
           label="Fecha Programada"
           type="date"
           value={scheduledDate}
           onChange={handleDateChange}
           disabled={fieldsDisabled}
+          min={mode === 'create' ? todayStrInPanama() : undefined}
         />
 
-        {/* Hora de Salida (opcional) */}
-        <Input
+        {/* Hora de Salida (opcional) — dropdown filtrable 12h */}
+        <Select
           label="Hora de Salida (opcional)"
-          type="time"
-          value={scheduledTime}
+          placeholder="Seleccionar hora..."
+          options={TIME_OPTIONS}
+          value={scheduledTime || null}
           onChange={handleTimeChange}
           disabled={fieldsDisabled}
+          searchable
         />
 
         {/* Conductor */}
@@ -373,7 +382,7 @@ function TripForm({
           searchable
         />
 
-        {/* Costo */}
+        {/* Costo — siempre editable; rate solo pre-rellena (Cambio 4 — revert J6) */}
         <Input
           label="Costo (B/.)"
           type="number"
@@ -385,9 +394,9 @@ function TripForm({
           placeholder="0.00"
         />
 
-        {/* Toggles: ATT Permit + Escolta + Externo — fila completa en mobile, columna par en desktop */}
+        {/* Toggles: ATTT Permit + Escolta — fila completa en mobile, columna par en desktop */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6 md:col-span-2">
-          {/* Requiere Permiso ATT */}
+          {/* Requiere Permiso ATTT */}
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -397,7 +406,7 @@ function TripForm({
               className="rounded border-gray-300 text-navy focus:ring-navy disabled:cursor-not-allowed"
             />
             <span className="text-sm font-medium text-gray-700">
-              Requiere Permiso ATT
+              Requiere Permiso ATTT
             </span>
           </label>
 
@@ -412,20 +421,6 @@ function TripForm({
             />
             <span className="text-sm font-medium text-gray-700">
               Requiere Escolta
-            </span>
-          </label>
-
-          {/* Viaje externo (conductor/empresa externa) */}
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isExternal}
-              onChange={handleExternalChange}
-              disabled={fieldsDisabled}
-              className="rounded border-gray-300 text-navy focus:ring-navy disabled:cursor-not-allowed"
-            />
-            <span className="text-sm font-medium text-gray-700">
-              Viaje externo
             </span>
           </label>
         </div>
@@ -447,7 +442,7 @@ function TripForm({
           )}
           {attPermit && attachments.length === 0 && !isReadonly && (
             <p className="mt-1 text-xs text-blue-600">
-              ℹ️ Este viaje requiere permiso ATT. Puede adjuntarlo cuando esté disponible.
+              ℹ️ Este viaje requiere permiso ATTT. Puede adjuntarlo cuando esté disponible.
             </p>
           )}
         </div>
@@ -466,7 +461,7 @@ function TripForm({
             onChange={handleNotesChange}
             // Las notas son editables incluso en modo En Ruta
             disabled={isReadonly}
-            placeholder="Observaciones operativas del viaje (opcional)"
+            placeholder="Observaciones operativas de la movilización (opcional)"
             rows={3}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue disabled:bg-gray-50 disabled:text-gray-500"
           />

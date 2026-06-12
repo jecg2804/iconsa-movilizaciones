@@ -10,14 +10,10 @@ interface TripCardProps {
 }
 
 // Pasos en orden de la barra de progreso
-const PROGRESS_STEPS: MyTripEvent['event_type'][] = [
-  'Salida',
-  'Llegada',
-  'Entrega',
-  'Retorno',
-]
+const FLEET_STEPS: MyTripEvent['event_type'][] = ['Salida', 'Llegada', 'Entrega', 'Retorno']
 
 function ProgressBar({ events }: { events: MyTripEvent[] }) {
+  const PROGRESS_STEPS = FLEET_STEPS
   const completedTypes = new Set(events.map((e) => e.event_type))
 
   return (
@@ -85,7 +81,7 @@ export function TripCard({ trip, onClick }: TripCardProps) {
           )}
           <Badge variant="trip" label={trip.status} />
           {trip.att_permit && (
-            <Badge variant="custom" label="ATT" bg="bg-purple-100" text="text-purple-800" />
+            <Badge variant="custom" label="ATTT" bg="bg-purple-100" text="text-purple-800" />
           )}
           {trip.escort && (
             <Badge variant="custom" label="Escolta" bg="bg-orange-100" text="text-orange-800" />

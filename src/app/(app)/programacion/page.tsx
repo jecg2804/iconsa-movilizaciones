@@ -2,21 +2,28 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight } from 'lucide-react'
+import { Plus, Truck, Lock, Siren, Search, Wrench, Package, ArrowRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useProjects } from '@/hooks/useProjects'
-import { useTrips, type TripWithRelations } from '@/hooks/useTrips'
+import { useTrips, type TripWithRelations, type BacklogLine } from '@/hooks/useTrips'
+import { usePickupOrders, type PickupOrderLineInput } from '@/hooks/usePickupOrders'
+import { useExternalOrders, type ExternalOrderLineInput } from '@/hooks/useExternalOrders'
 import { canCreateTrip } from '@/lib/utils/roles'
 import { TRIP_STATUSES } from '@/lib/utils/constants'
 import { formatDate, formatCurrency } from '@/lib/utils/format'
 import { BacklogTable } from '@/components/programacion/BacklogTable'
+import { PickupOrderCard, type PickupOrderWithLines } from '@/components/programacion/PickupOrderCard'
+import { ExternalOrderCard, type ExternalOrderWithLines } from '@/components/programacion/ExternalOrderCard'
+import { CreatePickupOrderModal } from '@/components/programacion/CreatePickupOrderModal'
+import { CreateExternalOrderModal } from '@/components/programacion/CreateExternalOrderModal'
+import { ConfirmPickupOrderDeliveryModal } from '@/components/programacion/ConfirmPickupOrderDeliveryModal'
+import { ConfirmExternalOrderDeliveryModal } from '@/components/programacion/ConfirmExternalOrderDeliveryModal'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Select, type SelectOption } from '@/components/ui/Select'
 import { MiniCalendar, type CalendarItem } from '@/components/ui/MiniCalendar'
-import { FilterBar, type FilterChip } from '@/components/ui/FilterBar'
+import type { Attachment } from '@/lib/supabase/storage'
 
 // Tipos de línea para el filtro del backlog
 const LINE_TYPES = ['Todos', 'Equipo', 'Material'] as const
@@ -25,23 +32,35 @@ type LineTypeFilter = (typeof LINE_TYPES)[number]
 export default function ProgramacionPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { role, loading: authLoading } = useAuth()
+  const { role, person, loading: authLoading } = useAuth()
   const { allProjects, loading: projectsLoading } = useProjects()
   const {
     backlog,
     backlogLoading,
     trips,
+    tripsTotalCount,
     listLoading,
     listError,
+    filters: tripFilters,
+    setFilters: setTripFilters,
+    refetchBacklog,
   } = useTrips()
 
-  // --- Filtros unificados ---
-  const [projectFilter, setProjectFilter] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<string | null>(null)
-  const [driverFilter, setDriverFilter] = useState<string | null>(null)
-  const [dateFilter, setDateFilter] = useState<string | null>(null)
-  const [searchFilter, setSearchFilter] = useState('')
+  const pickupOrders = usePickupOrders()
+  const externalOrders = useExternalOrders()
+
+  // J4: todos los filtros de viajes son ahora server-side via tripFilters del hook.
+  // Project filter usa 2-step query (trips no tiene project_id directo).
+  // El calendario y la tabla son una sola "vista de datos" con filtros unificados.
+
+  // --- Filtros del backlog (independientes del trip filter) ---
   const [typeFilter, setTypeFilter] = useState<LineTypeFilter>('Todos')
+  const [backlogProjectFilter, setBacklogProjectFilter] = useState<string | null>(null)
+  const [backlogSearch, setBacklogSearch] = useState('')
+
+  // --- Control de expandir/colapsar viajes (controlled state) ---
+  const [tripExpandedKeys, setTripExpandedKeys] = useState<Set<string>>(new Set())
+  const [expandInitialized, setExpandInitialized] = useState(false)
 
   // Conductores para filtro
   const [conductors, setConductors] = useState<{ id: string; name: string }[]>([])
@@ -58,34 +77,54 @@ export default function ProgramacionPage() {
   // Selección de líneas
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(new Set())
 
-  // Opciones de dropdowns
-  const projectOptions: SelectOption[] = useMemo(
-    () => allProjects.map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` })),
-    [allProjects],
-  )
-  const conductorOptions: SelectOption[] = useMemo(
-    () => conductors.map((c) => ({ value: c.id, label: c.name })),
-    [conductors],
-  )
+  // Receivers — todas las personas activas (Q5 cerrado en Cambio 3, fallback texto)
+  const [receiverOptions, setReceiverOptions] = useState<Array<{ value: string; label: string }>>([])
+  useEffect(() => {
+    supabase
+      .from('people')
+      .select('id, name')
+      .eq('status', 'Activo')
+      .order('name')
+      .then(({ data }) => {
+        setReceiverOptions((data ?? []).map((p) => ({ value: p.id, label: p.name })))
+      })
+  }, [supabase])
 
-  // Nombre helpers para chips
-  const projectName = useMemo(
-    () => allProjects.find((p) => p.id === projectFilter),
-    [allProjects, projectFilter],
-  )
-  const driverName = useMemo(
-    () => conductors.find((c) => c.id === driverFilter),
-    [conductors, driverFilter],
-  )
+  // Bulk approve modals
+  const [createPickupModal, setCreatePickupModal] = useState<{ lines: BacklogLine[] } | null>(null)
+  const [createExternalModal, setCreateExternalModal] = useState<{ lines: BacklogLine[] } | null>(null)
+
+  // Surface 3 — listas de orders activos
+  const [pendingPickupOrders, setPendingPickupOrders] = useState<PickupOrderWithLines[]>([])
+  const [pendingExternalOrders, setPendingExternalOrders] = useState<ExternalOrderWithLines[]>([])
+  const [pickupOrdersLoading, setPickupOrdersLoading] = useState(false)
+  const [externalOrdersLoading, setExternalOrdersLoading] = useState(false)
+
+  // Confirm delivery modals
+  const [confirmPickupOrder, setConfirmPickupOrder] = useState<PickupOrderWithLines | null>(null)
+  const [confirmExternalOrder, setConfirmExternalOrder] = useState<ExternalOrderWithLines | null>(null)
+
+  // Cancel order modals con stats contextual + razón (Cambio 6 T8)
+  const [cancelPickupModal, setCancelPickupModal] = useState<{
+    order: PickupOrderWithLines
+    deliveredCount: number
+    deliveredQty: number
+  } | null>(null)
+  const [cancelPickupReason, setCancelPickupReason] = useState('')
+  const [cancelExternalModal, setCancelExternalModal] = useState<{
+    order: ExternalOrderWithLines
+    deliveredCount: number
+    deliveredQty: number
+  } | null>(null)
+  const [cancelExternalReason, setCancelExternalReason] = useState('')
 
   // --- Filtrado ---
   const filteredBacklog = useMemo(() => {
     return backlog.filter((line) => {
-      if (projectFilter && line.request.project?.id !== projectFilter) return false
+      if (backlogProjectFilter && line.request.project?.id !== backlogProjectFilter) return false
       if (typeFilter !== 'Todos' && line.line_type !== typeFilter) return false
-      if (dateFilter && line.request.date_required !== dateFilter) return false
-      if (searchFilter) {
-        const q = searchFilter.toLowerCase()
+      if (backlogSearch) {
+        const q = backlogSearch.toLowerCase()
         const matchesId = line.request.request_id?.toLowerCase().includes(q) ?? false
         const matchesDesc = line.description?.toLowerCase().includes(q) ?? false
         const matchesEquip = line.equipment?.spectrum_code?.toLowerCase().includes(q) ?? false
@@ -93,115 +132,130 @@ export default function ProgramacionPage() {
       }
       return true
     })
-  }, [backlog, projectFilter, typeFilter, dateFilter, searchFilter])
+  }, [backlog, backlogProjectFilter, typeFilter, backlogSearch])
 
-  const filteredTrips = useMemo(() => {
-    return trips.filter((trip) => {
-      if (projectFilter) {
-        const matchesProject = trip.assignments.some(
-          (a) => a.line?.request?.project?.id === projectFilter,
-        )
-        if (!matchesProject) return false
-      }
-      if (statusFilter && trip.status !== statusFilter) return false
-      if (driverFilter && trip.driver_id !== driverFilter) return false
-      if (dateFilter && trip.scheduled_date !== dateFilter) return false
-      if (searchFilter) {
-        const q = searchFilter.toLowerCase()
-        const matchesId = trip.trip_id?.toLowerCase().includes(q) ?? false
-        const matchesDriver = trip.driver?.name?.toLowerCase().includes(q) ?? false
-        const matchesVehicle = trip.vehicle?.description?.toLowerCase().includes(q) ?? false
-        if (!matchesId && !matchesDriver && !matchesVehicle) return false
-      }
-      return true
-    })
-  }, [trips, projectFilter, statusFilter, driverFilter, dateFilter, searchFilter])
+  // Inicializar colapsado al cargar datos. trips ya viene filtrado server-side
+  // por el hook según tripFilters (status, conductor, search, projectId,
+  // dateFrom, dateTo) — no hay capa de filter client-side.
+  useEffect(() => {
+    if (!expandInitialized && trips.length > 0) {
+      setTripExpandedKeys(new Set()) // default collapsed
+      setExpandInitialized(true)
+    }
+  }, [expandInitialized, trips])
 
-  // --- MiniCalendar items (viajes como mini-cards, sin filtro de fecha) ---
-  const calendarItems = useMemo<CalendarItem[]>(() => {
-    return trips
-      .filter((trip) => {
-        if (projectFilter) {
-          const match = trip.assignments.some(
-            (a) => a.line?.request?.project?.id === projectFilter,
-          )
-          if (!match) return false
+  const allTripsExpanded = tripExpandedKeys.size > 0
+
+  // --- MiniCalendar items — query SIN paginación pero CON los mismos filtros que la tabla.
+  // J4: calendario y tabla son una sola "vista de datos" con un set de filtros
+  // unificado. Cualquier filtro activo (proyecto, status, conductor, fechas,
+  // search) aplica por igual.
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([])
+
+  useEffect(() => {
+    const fetchCalendarTrips = async () => {
+      // Resolver projectId via 2-step (trips no tiene project_id directo)
+      let projectTripIds: string[] | null = null
+      if (tripFilters.projectId) {
+        const { data: linkData } = await supabase
+          .from('trip_line_assignments')
+          .select('trip_id, line:request_line_id!inner(request:request_id!inner(project_id))')
+          .eq('line.request.project_id', tripFilters.projectId)
+        const ids = new Set<string>()
+        for (const row of linkData ?? []) {
+          const tripId = (row as { trip_id: string | null }).trip_id
+          if (tripId) ids.add(tripId)
         }
-        if (statusFilter && trip.status !== statusFilter) return false
-        if (driverFilter && trip.driver_id !== driverFilter) return false
-        return true
-      })
-      .map((t) => {
-        // Ruta abreviada
-        const a = t.assignments?.[0]?.line
-        let route: string | undefined
-        if (a) {
-          const from = a.from_location?.name ?? a.from_text ?? ''
-          const to = a.to_location?.name ?? a.to_text ?? ''
-          if (from && to) route = `${from} → ${to}`
+        projectTripIds = Array.from(ids)
+        if (projectTripIds.length === 0) {
+          setCalendarItems([])
+          return
         }
+      }
+
+      let query = supabase
+        .from('trips')
+        .select('id, trip_id, scheduled_date, status, driver:people!driver_id(name)')
+        .order('scheduled_date')
+
+      if (projectTripIds) {
+        query = query.in('id', projectTripIds)
+      }
+      if (tripFilters.status) {
+        query = query.eq('status', tripFilters.status)
+      } else {
+        query = query.not('status', 'in', '("Cancelado")')
+      }
+      if (tripFilters.conductorId) {
+        query = query.eq('driver_id', tripFilters.conductorId)
+      }
+      if (tripFilters.dateFrom) {
+        query = query.gte('scheduled_date', tripFilters.dateFrom)
+      }
+      if (tripFilters.dateTo) {
+        query = query.lte('scheduled_date', tripFilters.dateTo)
+      }
+      if (tripFilters.search) {
+        query = query.ilike('trip_id', `%${tripFilters.search}%`)
+      }
+
+      const { data } = await query
+      setCalendarItems((data ?? []).map((t: Record<string, unknown>) => {
+        const driver = Array.isArray(t.driver) ? t.driver[0] : t.driver
         return {
-          id: t.id,
-          date: t.scheduled_date,
-          label: t.trip_id ?? '—',
-          status: t.status,
+          id: t.id as string,
+          date: t.scheduled_date as string,
+          label: (t.trip_id as string) ?? '—',
+          status: t.status as string,
           badgeVariant: 'trip' as const,
-          subtitle: `${t.driver?.name ?? 'Sin conductor'} · ${t.assignments.length} lín.`,
-          route,
+          subtitle: `${(driver as { name: string } | null)?.name ?? 'Sin conductor'}`,
           href: `/programacion/viaje/${t.id}`,
         }
-      })
-  }, [trips, projectFilter, statusFilter, driverFilter])
+      }))
+    }
+    fetchCalendarTrips()
+  }, [
+    supabase,
+    tripFilters.projectId,
+    tripFilters.status,
+    tripFilters.conductorId,
+    tripFilters.dateFrom,
+    tripFilters.dateTo,
+    tripFilters.search,
+  ])
 
-  // --- Chips de filtros activos ---
-  const filterChips = useMemo<FilterChip[]>(() => {
-    const chips: FilterChip[] = []
-    if (projectFilter && projectName) {
-      chips.push({
-        key: 'project',
-        label: projectName.code,
-        onRemove: () => setProjectFilter(null),
-      })
-    }
-    if (statusFilter) {
-      chips.push({
-        key: 'status',
-        label: statusFilter,
-        onRemove: () => setStatusFilter(null),
-      })
-    }
-    if (driverFilter && driverName) {
-      chips.push({
-        key: 'driver',
-        label: driverName.name,
-        onRemove: () => setDriverFilter(null),
-      })
-    }
-    if (dateFilter) {
-      const d = new Date(dateFilter + 'T00:00:00')
-      chips.push({
-        key: 'date',
-        label: d.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }),
-        onRemove: () => setDateFilter(null),
-      })
-    }
-    if (searchFilter) {
-      chips.push({
-        key: 'search',
-        label: `"${searchFilter}"`,
-        onRemove: () => setSearchFilter(''),
-      })
-    }
-    return chips
-  }, [projectFilter, projectName, statusFilter, driverFilter, driverName, dateFilter, searchFilter])
+  // --- Handlers de filtro de fecha (todos server-side via setTripFilters) ---
+  // J4-A: click en día del calendario usa `singleDay` (filtra solo la tabla,
+  // el calendario sigue mostrando otros días). Desde/Hasta usa dateFrom/dateTo.
+  const handleCalendarClick = useCallback(
+    (date: string | null) => {
+      if (!date) {
+        setTripFilters({ singleDay: null, page: 0 })
+        return
+      }
+      // Toggle: si es el mismo día ya seleccionado, des-seleccionar.
+      if (tripFilters.singleDay === date) {
+        setTripFilters({ singleDay: null, page: 0 })
+      } else {
+        setTripFilters({ singleDay: date, page: 0 })
+      }
+    },
+    [tripFilters.singleDay, setTripFilters],
+  )
 
-  const clearAllFilters = useCallback(() => {
-    setProjectFilter(null)
-    setStatusFilter(null)
-    setDriverFilter(null)
-    setDateFilter(null)
-    setSearchFilter('')
-  }, [])
+  const handleDateFromChange = useCallback(
+    (from: string | null) => {
+      setTripFilters({ dateFrom: from, page: 0 })
+    },
+    [setTripFilters],
+  )
+
+  const handleDateToChange = useCallback(
+    (to: string | null) => {
+      setTripFilters({ dateTo: to, page: 0 })
+    },
+    [setTripFilters],
+  )
 
   // --- Selección de líneas ---
   const visibleSelectedCount = useMemo(() => {
@@ -243,6 +297,283 @@ export default function ProgramacionPage() {
     [router],
   )
 
+  // --- Surface 3: refetch pickup_orders y external_orders 'Aprobado' ---
+  const refetchPendingPickupOrders = useCallback(async () => {
+    setPickupOrdersLoading(true)
+    try {
+      const { data } = await supabase
+        .from('pickup_orders')
+        .select(`
+          id, pickup_id, status, scheduled_date, approved_at, completed_at, cancelled_at,
+          received_by_id, received_by_name, notes, attachments,
+          approved_by_person:people!pickup_orders_approved_by_fkey(name),
+          completed_by_person:people!pickup_orders_completed_by_fkey(name),
+          cancelled_by_person:people!pickup_orders_cancelled_by_fkey(name),
+          lines:pickup_order_lines(
+            id, request_line_id, quantity_assigned, qty_delivered,
+            line:request_line_id(
+              description, line_type, quantity,
+              unit:unit_id(code), unit_text,
+              from_location:from_location_id(name), from_text,
+              to_location:to_location_id(id, name, project_id, location_type), to_text,
+              request:request_id(id, request_id, project:project_id(code, name))
+            )
+          )
+        `)
+        .eq('status', 'Aprobado')
+        .order('scheduled_date', { ascending: true })
+
+      const mapped: PickupOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        pickup_id: row.pickup_id as string,
+        status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+        scheduled_date: row.scheduled_date as string,
+        approved_at: row.approved_at as string,
+        approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+        completed_at: (row.completed_at as string | null) ?? null,
+        completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+        cancelled_at: (row.cancelled_at as string | null) ?? null,
+        cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+        received_by_id: (row.received_by_id as string | null) ?? null,
+        received_by_name: (row.received_by_name as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        attachments: Array.isArray(row.attachments) ? (row.attachments as unknown as Attachment[]) : [],
+        lines: (Array.isArray(row.lines) ? row.lines : []) as PickupOrderWithLines['lines'],
+      }))
+      setPendingPickupOrders(mapped)
+    } finally {
+      setPickupOrdersLoading(false)
+    }
+  }, [supabase])
+
+  const refetchPendingExternalOrders = useCallback(async () => {
+    setExternalOrdersLoading(true)
+    try {
+      const { data } = await supabase
+        .from('external_orders')
+        .select(`
+          id, external_id, status, scheduled_date, provider_name, invoice_amount, invoice_attachments,
+          approved_at, completed_at, cancelled_at,
+          received_by_id, received_by_name, notes,
+          approved_by_person:people!external_orders_approved_by_fkey(name),
+          completed_by_person:people!external_orders_completed_by_fkey(name),
+          cancelled_by_person:people!external_orders_cancelled_by_fkey(name),
+          lines:external_order_lines(
+            id, request_line_id, quantity_assigned, qty_delivered,
+            line:request_line_id(
+              description, line_type, quantity,
+              unit:unit_id(code), unit_text,
+              from_location:from_location_id(name), from_text,
+              to_location:to_location_id(id, name, project_id, location_type), to_text,
+              request:request_id(id, request_id, project:project_id(code, name))
+            )
+          )
+        `)
+        .eq('status', 'Aprobado')
+        .order('scheduled_date', { ascending: true })
+
+      const mapped: ExternalOrderWithLines[] = (data ?? []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        external_id: row.external_id as string,
+        status: row.status as 'Aprobado' | 'Entregado' | 'Cancelado',
+        scheduled_date: row.scheduled_date as string,
+        provider_name: row.provider_name as string,
+        invoice_amount: row.invoice_amount as number,
+        invoice_attachments: Array.isArray(row.invoice_attachments) ? (row.invoice_attachments as unknown as Attachment[]) : [],
+        approved_at: row.approved_at as string,
+        approved_by_name: ((row.approved_by_person as { name?: string } | null)?.name) ?? null,
+        completed_at: (row.completed_at as string | null) ?? null,
+        completed_by_name: ((row.completed_by_person as { name?: string } | null)?.name) ?? null,
+        cancelled_at: (row.cancelled_at as string | null) ?? null,
+        cancelled_by_name: ((row.cancelled_by_person as { name?: string } | null)?.name) ?? null,
+        received_by_id: (row.received_by_id as string | null) ?? null,
+        received_by_name: (row.received_by_name as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        lines: (Array.isArray(row.lines) ? row.lines : []) as ExternalOrderWithLines['lines'],
+      }))
+      setPendingExternalOrders(mapped)
+    } finally {
+      setExternalOrdersLoading(false)
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    if (role === 'logistica' || role === 'admin') {
+      void refetchPendingPickupOrders()
+      void refetchPendingExternalOrders()
+    }
+  }, [role, refetchPendingPickupOrders, refetchPendingExternalOrders])
+
+  // --- Bulk approve handlers ---
+  const handleOpenBulkApprovePickup = useCallback(() => {
+    const lines = backlog.filter((l) => selectedLineIds.has(l.id))
+    if (lines.length === 0) return
+    setCreatePickupModal({ lines })
+  }, [backlog, selectedLineIds])
+
+  const handleOpenBulkApproveExternal = useCallback(() => {
+    const lines = backlog.filter((l) => selectedLineIds.has(l.id))
+    if (lines.length === 0) return
+    setCreateExternalModal({ lines })
+  }, [backlog, selectedLineIds])
+
+  const handleConfirmCreatePickup = useCallback(
+    async (lines: PickupOrderLineInput[], scheduledDate: string, notes: string | null) => {
+      if (!person?.id) return
+      const result = await pickupOrders.createPickupOrder(person.id, lines, scheduledDate, notes)
+      if (result.ok) {
+        setCreatePickupModal(null)
+        setSelectedLineIds(new Set())
+        refetchBacklog()
+        void refetchPendingPickupOrders()
+      }
+    },
+    [person, pickupOrders, refetchBacklog, refetchPendingPickupOrders],
+  )
+
+  const handleConfirmCreateExternal = useCallback(
+    async (
+      lines: ExternalOrderLineInput[],
+      providerName: string,
+      invoiceAmount: number,
+      invoiceAttachments: Attachment[],
+      scheduledDate: string,
+      notes: string | null,
+    ) => {
+      if (!person?.id) return
+      const result = await externalOrders.createExternalOrder(
+        person.id,
+        lines,
+        providerName,
+        invoiceAmount,
+        invoiceAttachments,
+        scheduledDate,
+        notes,
+      )
+      if (result.ok) {
+        setCreateExternalModal(null)
+        setSelectedLineIds(new Set())
+        refetchBacklog()
+        void refetchPendingExternalOrders()
+      }
+    },
+    [person, externalOrders, refetchBacklog, refetchPendingExternalOrders],
+  )
+
+  // --- Confirm delivery handlers ---
+  const handleConfirmPickupDelivery = useCallback(
+    async (data: {
+      receivedById: string | null
+      receivedByName: string
+      notes: string
+      additionalAttachments: Attachment[]
+    }) => {
+      if (!confirmPickupOrder || !person?.id) return
+      const result = await pickupOrders.completePickupOrder(
+        confirmPickupOrder.id,
+        person.id,
+        data.receivedById,
+        data.receivedByName,
+        data.notes,
+        data.additionalAttachments,
+      )
+      if (result.ok) {
+        setConfirmPickupOrder(null)
+        void refetchPendingPickupOrders()
+        refetchBacklog()
+      }
+    },
+    [confirmPickupOrder, person, pickupOrders, refetchPendingPickupOrders, refetchBacklog],
+  )
+
+  const handleConfirmExternalDelivery = useCallback(
+    async (data: {
+      receivedById: string | null
+      receivedByName: string
+      notes: string
+      additionalAttachments: Attachment[]
+    }) => {
+      if (!confirmExternalOrder || !person?.id) return
+      const result = await externalOrders.completeExternalOrder(
+        confirmExternalOrder.id,
+        person.id,
+        data.receivedById,
+        data.receivedByName,
+        data.notes,
+        data.additionalAttachments,
+      )
+      if (result.ok) {
+        setConfirmExternalOrder(null)
+        void refetchPendingExternalOrders()
+        refetchBacklog()
+      }
+    },
+    [confirmExternalOrder, person, externalOrders, refetchPendingExternalOrders, refetchBacklog],
+  )
+
+  // --- Cancel order handlers (con stats contextual pre-flight) ---
+  const handleOpenCancelPickup = useCallback(
+    async (order: PickupOrderWithLines) => {
+      const { data } = await supabase
+        .from('pickup_order_lines')
+        .select('id, qty_delivered')
+        .eq('pickup_order_id', order.id)
+      const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+      setCancelPickupReason('')
+      setCancelPickupModal({
+        order,
+        deliveredCount: deliveredLines.length,
+        deliveredQty: deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0),
+      })
+    },
+    [supabase],
+  )
+
+  const handleOpenCancelExternal = useCallback(
+    async (order: ExternalOrderWithLines) => {
+      const { data } = await supabase
+        .from('external_order_lines')
+        .select('id, qty_delivered')
+        .eq('external_order_id', order.id)
+      const deliveredLines = (data ?? []).filter((l) => (l.qty_delivered ?? 0) > 0)
+      setCancelExternalReason('')
+      setCancelExternalModal({
+        order,
+        deliveredCount: deliveredLines.length,
+        deliveredQty: deliveredLines.reduce((sum, l) => sum + (l.qty_delivered ?? 0), 0),
+      })
+    },
+    [supabase],
+  )
+
+  const confirmCancelPickup = useCallback(async () => {
+    if (!cancelPickupModal || !person?.id) return
+    const result = await pickupOrders.cancelPickupOrder(
+      cancelPickupModal.order.id,
+      person.id,
+      cancelPickupReason.trim() || null,
+    )
+    if (result.ok) {
+      setCancelPickupModal(null)
+      void refetchPendingPickupOrders()
+      refetchBacklog()
+    }
+  }, [cancelPickupModal, person, pickupOrders, cancelPickupReason, refetchPendingPickupOrders, refetchBacklog])
+
+  const confirmCancelExternal = useCallback(async () => {
+    if (!cancelExternalModal || !person?.id) return
+    const result = await externalOrders.cancelExternalOrder(
+      cancelExternalModal.order.id,
+      person.id,
+      cancelExternalReason.trim() || null,
+    )
+    if (result.ok) {
+      setCancelExternalModal(null)
+      void refetchPendingExternalOrders()
+      refetchBacklog()
+    }
+  }, [cancelExternalModal, person, externalOrders, cancelExternalReason, refetchPendingExternalOrders, refetchBacklog])
+
   const puedeCrearViaje = canCreateTrip(role)
 
   // --- Columnas de tabla de viajes ---
@@ -252,6 +583,7 @@ export default function ProgramacionPage() {
         key: 'trip_id',
         header: 'ID',
         sortable: true,
+        serverSortKey: 'trip_id',
         className: 'w-[150px]',
         render: (row) => (
           <a
@@ -268,6 +600,7 @@ export default function ProgramacionPage() {
         key: 'scheduled_date',
         header: 'Fecha',
         sortable: true,
+        serverSortKey: 'scheduled_date',
         className: 'w-[120px]',
         render: (row) => (
           <span className="text-sm text-gray-900">
@@ -300,28 +633,16 @@ export default function ProgramacionPage() {
         ),
       },
       {
-        key: 'trailer',
-        header: 'Remolque',
-        render: (row) => (
-          <span
-            className="max-w-[140px] truncate block text-sm text-gray-900"
-            title={row.trailer?.description ?? '—'}
-          >
-            {row.trailer?.description ?? '—'}
-          </span>
-        ),
-      },
-      {
         key: 'rate',
         header: 'Tarifa',
         render: (row) =>
           row.rate ? (
-            <div>
-              <div className="text-sm text-gray-900">{row.rate.code}</div>
-              <div className="text-xs text-iconsa-gray">
-                {formatCurrency(row.rate.rate)}
-              </div>
-            </div>
+            <span
+              className="text-sm text-gray-900"
+              title={row.rate.code}
+            >
+              {formatCurrency(row.rate.rate)}
+            </span>
           ) : (
             <span className="text-sm text-iconsa-gray">—</span>
           ),
@@ -368,6 +689,7 @@ export default function ProgramacionPage() {
         key: 'status',
         header: 'Estado',
         sortable: true,
+        serverSortKey: 'status',
         className: 'w-[130px]',
         render: (row) => (
           <span className="flex items-center gap-1.5">
@@ -386,7 +708,7 @@ export default function ProgramacionPage() {
         render: (row) => (
           <span className="flex items-center gap-1">
             {row.att_permit && (
-              <span title="Requiere permiso ATT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
+              <span title="Requiere permiso ATTT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
                 <Lock className="h-3 w-3" />
               </span>
             )}
@@ -397,6 +719,31 @@ export default function ProgramacionPage() {
             )}
           </span>
         ),
+      },
+      {
+        key: 'actions',
+        header: '',
+        className: 'w-[110px]',
+        render: (row: TripWithRelations) => {
+          const today = new Date().toISOString().split('T')[0]
+          if (row.status === 'Programado' && row.scheduled_date === today) {
+            return (
+              <a href={`/mis-viajes/${row.id}?action=dispatch`}
+                 className="text-xs font-medium text-navy hover:underline whitespace-nowrap">
+                🚛 Despachar →
+              </a>
+            )
+          }
+          if (row.status === 'En Ruta') {
+            return (
+              <a href={`/mis-viajes/${row.id}`}
+                 className="text-xs font-medium text-blue-600 hover:underline whitespace-nowrap">
+                Ver Eventos →
+              </a>
+            )
+          }
+          return null
+        },
       },
     ],
     [],
@@ -420,7 +767,7 @@ export default function ProgramacionPage() {
           </span>
           <span className="flex items-center gap-1">
             {row.att_permit && (
-              <span title="Permiso ATT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
+              <span title="Permiso ATTT" className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
                 <Lock className="h-3 w-3" />
               </span>
             )}
@@ -438,89 +785,193 @@ export default function ProgramacionPage() {
 
   const isLoading = authLoading
 
+  // Estilo compartido para selects nativos
+  const selectClass = 'rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 bg-white focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue'
+  const inputClass = 'w-full rounded-lg border border-gray-200 pl-8 pr-3 py-1.5 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue'
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Header — solo título + botón "Nueva Movilización" cuando NO hay selección */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-navy">Programación de Viajes</h1>
-        {puedeCrearViaje && (
+        <h1 className="text-2xl font-bold text-navy">Programación de Movilizaciones</h1>
+        {puedeCrearViaje && visibleSelectedCount === 0 && (
           <Button onClick={() => router.push('/programacion/viaje/nuevo')} className="shrink-0">
-            <Plus className="h-4 w-4" />
-            Crear Viaje
+            <Plus className="h-4 w-4" /> Nueva Movilización
           </Button>
         )}
       </div>
 
-      {/* FilterBar unificado */}
-      <FilterBar chips={filterChips} onClearAll={clearAllFilters}>
-        <div className="w-full sm:w-52">
-          <Select
-            placeholder="Proyecto"
-            options={projectOptions}
-            value={projectFilter}
-            onChange={setProjectFilter}
-            disabled={projectsLoading || isLoading}
-          />
-        </div>
-        <div className="w-full sm:w-40">
-          <Select
-            placeholder="Estado"
-            options={TRIP_STATUSES.map((s) => ({ value: s, label: s }))}
-            value={statusFilter}
-            onChange={setStatusFilter}
-          />
-        </div>
-        <div className="w-full sm:w-44">
-          <Select
-            placeholder="Conductor"
-            options={conductorOptions}
-            value={driverFilter}
-            onChange={setDriverFilter}
-          />
-        </div>
-        <div className="relative w-full sm:w-44">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
-          />
-        </div>
-      </FilterBar>
+      {/* ─── Bulk action toolbar (D1) — 3 botones consistentes con jerarquía visual por color ─── */}
+      {puedeCrearViaje && visibleSelectedCount > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-amber-900">
+              {visibleSelectedCount} {visibleSelectedCount === 1 ? 'línea seleccionada' : 'líneas seleccionadas'}
+            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Crear Movilización — navy (acción default) */}
+              <Button variant="primary" size="sm" onClick={handleCrearViajeConLineas}>
+                <Truck className="h-4 w-4" /> Crear Movilización
+              </Button>
+              {/* Aprobar pickup — amber (override) */}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenBulkApprovePickup}
+                className="bg-amber-500! hover:bg-amber-600! focus-visible:ring-amber-500!"
+              >
+                Aprobar pickup
+              </Button>
+              {/* Aprobar viaje externo — blue (override) */}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenBulkApproveExternal}
+                className="bg-blue-600! hover:bg-blue-700! focus-visible:ring-blue-600!"
+              >
+                Aprobar viaje externo
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelectedLineIds(new Set())}
+                className="text-xs text-amber-900 hover:underline ml-1"
+              >
+                Limpiar selección
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
-      {/* ─── Sección 1: Backlog ─── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">
-            Sin Programar
-            {!backlogLoading && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-                {filteredBacklog.length}
+      {/* ─── Surface 3a: Pickups Pendientes (D5) ─── */}
+      {(role === 'logistica' || role === 'admin') && (pickupOrdersLoading || pendingPickupOrders.length > 0) && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50/30">
+          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Pickups Pendientes</h2>
+            {!pickupOrdersLoading && (
+              <span className="rounded-full bg-amber-200 text-amber-900 px-2 py-0.5 text-xs font-medium">
+                {pendingPickupOrders.length}
               </span>
             )}
-          </h2>
-          {/* Filtro tipo (específico del backlog) */}
-          <div className="flex items-center gap-1">
-            {LINE_TYPES.map((tipo) => (
+          </div>
+          <div className="px-4 pb-4 space-y-2">
+            {pickupOrdersLoading ? (
+              <p className="py-4 text-center text-sm text-iconsa-gray">Cargando pickups...</p>
+            ) : (
+              pendingPickupOrders.map((order) => (
+                <PickupOrderCard
+                  key={order.id}
+                  order={order}
+                  canConfirmDelivery={role === 'logistica' || role === 'admin'}
+                  canCancelOrder={role === 'logistica' || role === 'admin'}
+                  onConfirmDelivery={() => setConfirmPickupOrder(order)}
+                  onCancelOrder={() => handleOpenCancelPickup(order)}
+                />
+              ))
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ─── Surface 3b: Viajes Externos Pendientes (D6) ─── */}
+      {(role === 'logistica' || role === 'admin') && (externalOrdersLoading || pendingExternalOrders.length > 0) && (
+        <section className="rounded-xl border border-blue-200 bg-blue-50/30">
+          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Viajes Externos Pendientes</h2>
+            {!externalOrdersLoading && (
+              <span className="rounded-full bg-blue-200 text-blue-900 px-2 py-0.5 text-xs font-medium">
+                {pendingExternalOrders.length}
+              </span>
+            )}
+          </div>
+          <div className="px-4 pb-4 space-y-2">
+            {externalOrdersLoading ? (
+              <p className="py-4 text-center text-sm text-iconsa-gray">Cargando externos...</p>
+            ) : (
+              pendingExternalOrders.map((order) => (
+                <ExternalOrderCard
+                  key={order.id}
+                  order={order}
+                  canConfirmDelivery={role === 'logistica' || role === 'admin'}
+                  canCancelOrder={role === 'logistica' || role === 'admin'}
+                  onConfirmDelivery={() => setConfirmExternalOrder(order)}
+                  onCancelOrder={() => handleOpenCancelExternal(order)}
+                />
+              ))
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ─── Sección 1: Sin Programar ─── */}
+      <section className="rounded-xl border border-gray-200 bg-white">
+        <div className="px-4 pt-4 pb-3 space-y-3">
+          {/* Header: título + count + toggle tipo */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Sin Programar</h2>
+              {!backlogLoading && (
+                <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs font-medium">
+                  {filteredBacklog.length}
+                </span>
+              )}
+            </div>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {LINE_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTypeFilter(t)}
+                  className={`px-3 py-1.5 font-medium transition-colors ${
+                    typeFilter === t
+                      ? 'bg-navy text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Filtros inline */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              title="Filtrar por proyecto"
+              value={backlogProjectFilter ?? ''}
+              onChange={(e) => setBacklogProjectFilter(e.target.value || null)}
+              className={selectClass}
+              disabled={projectsLoading}
+            >
+              <option value="">Proyecto</option>
+              {allProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+              ))}
+            </select>
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar equipo, solicitud..."
+                value={backlogSearch}
+                onChange={(e) => setBacklogSearch(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            {(backlogProjectFilter || backlogSearch) && (
               <button
-                key={tipo}
                 type="button"
-                onClick={() => setTypeFilter(tipo)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  typeFilter === tipo
-                    ? 'bg-navy text-white'
-                    : 'bg-gray-100 text-iconsa-gray hover:bg-gray-200'
-                }`}
+                onClick={() => { setBacklogProjectFilter(null); setBacklogSearch('') }}
+                className="text-xs text-iconsa-blue hover:underline"
               >
-                {tipo}
+                Limpiar
               </button>
-            ))}
+            )}
           </div>
         </div>
 
-        <div className="rounded-xl ring-1 ring-gray-200 bg-white p-1">
+        {/* Tabla backlog */}
+        <div className="px-1 pb-1">
           <BacklogTable
             lines={filteredBacklog}
             loading={backlogLoading}
@@ -533,102 +984,340 @@ export default function ProgramacionPage() {
         </div>
       </section>
 
-      {/* MiniCalendar */}
-      <MiniCalendar
-        items={calendarItems}
-        selectedDate={dateFilter}
-        onSelectDate={setDateFilter}
-      />
-
-      {/* ─── Sección 2: Viajes Recientes ─── */}
-      <section className="space-y-3">
-        <h2 className="text-base font-semibold text-gray-900">Viajes Recientes</h2>
-
-        {listError && (
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
-            Error al cargar viajes: {listError}
+      {/* ─── Sección 2: Movilizaciones ─── */}
+      <section className="rounded-xl border border-gray-200 bg-white">
+        <div className="px-4 pt-4 pb-3 space-y-3">
+          {/* Header */}
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-gray-900">Movilizaciones</h2>
+            {trips.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setTripExpandedKeys((prev) =>
+                  prev.size > 0 ? new Set() : new Set(trips.map((t) => t.id))
+                )}
+                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                {allTripsExpanded ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}
+                {allTripsExpanded ? 'Colapsar' : 'Expandir'}
+              </button>
+            )}
           </div>
-        )}
 
-        <DataTable<TripWithRelations>
-          columns={columns}
-          data={filteredTrips}
-          keyExtractor={(row) => row.id}
-          loading={listLoading}
-          emptyMessage="No hay viajes para mostrar"
-          mobileRender={mobileRender}
-          expandRender={(row) => {
-            const assignments = row.assignments ?? []
-            if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
-            return (
-              <div className="space-y-1.5">
-                {assignments.map((a) => {
-                  const line = a.line
-                  if (!line) return null
-                  const fromName = line.from_location?.name ?? line.from_text ?? '—'
-                  const toName = line.to_location?.name ?? line.to_text ?? '—'
-                  const unitName = line.unit?.code ?? line.unit_text ?? ''
-                  const isEquipo = line.line_type === 'Equipo'
-                  return (
-                    <div key={a.id} className="flex items-center gap-2 text-sm">
-                      {isEquipo ? (
-                        <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
-                      ) : (
-                        <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
-                      )}
-                      <span className="min-w-0 max-w-[200px] truncate font-medium text-gray-900" title={line.description}>
-                        {line.description}
-                      </span>
-                      <span className="flex items-center gap-1 text-iconsa-gray">
-                        <span className="max-w-[100px] truncate">{fromName}</span>
-                        <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                        <span className="max-w-[100px] truncate">{toName}</span>
-                      </span>
-                      <span className="shrink-0 text-gray-600">{a.quantity_assigned} {unitName}</span>
-                      <Badge label={line.status} variant="line" />
-                      {line.notes && (
-                        <span className="max-w-[150px] truncate text-xs italic text-amber-600" title={line.notes}>
-                          {line.notes}
+          {/* Filtros inline */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              title="Filtrar por proyecto"
+              value={tripFilters.projectId ?? ''}
+              onChange={(e) => setTripFilters({ projectId: e.target.value || null, page: 0 })}
+              className={selectClass}
+              disabled={projectsLoading}
+            >
+              <option value="">Proyecto</option>
+              {allProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+              ))}
+            </select>
+            <select
+              title="Filtrar por estado"
+              value={tripFilters.status ?? ''}
+              onChange={(e) => setTripFilters({ status: e.target.value || null, page: 0 })}
+              className={selectClass}
+            >
+              <option value="">Estado</option>
+              {TRIP_STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              title="Filtrar por conductor"
+              value={tripFilters.conductorId ?? ''}
+              onChange={(e) => setTripFilters({ conductorId: e.target.value || null, page: 0 })}
+              className={selectClass}
+            >
+              <option value="">Conductor</option>
+              {conductors.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar movilización..."
+                value={tripFilters.search ?? ''}
+                onChange={(e) => setTripFilters({ search: e.target.value || null, page: 0 })}
+                className={inputClass}
+              />
+            </div>
+            {/* Rango de fechas */}
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-iconsa-gray whitespace-nowrap">Desde</label>
+              <input
+                type="date"
+                title="Fecha desde"
+                value={tripFilters.dateFrom ?? ''}
+                onChange={(e) => handleDateFromChange(e.target.value || null)}
+                className={selectClass}
+              />
+              <label className="text-xs text-iconsa-gray whitespace-nowrap">Hasta</label>
+              <input
+                type="date"
+                title="Fecha hasta"
+                value={tripFilters.dateTo ?? ''}
+                onChange={(e) => handleDateToChange(e.target.value || null)}
+                className={selectClass}
+              />
+            </div>
+            {(tripFilters.projectId || tripFilters.status || tripFilters.conductorId || tripFilters.search || tripFilters.dateFrom || tripFilters.dateTo || tripFilters.singleDay) && (
+              <button
+                type="button"
+                onClick={() => setTripFilters({ projectId: null, status: null, conductorId: null, search: null, dateFrom: null, dateTo: null, singleDay: null, page: 0 })}
+                className="text-xs text-iconsa-blue hover:underline"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Calendario */}
+        <div className="px-4 pb-3">
+          <MiniCalendar
+            items={calendarItems}
+            selectedDate={tripFilters.singleDay ?? null}
+            onSelectDate={handleCalendarClick}
+          />
+        </div>
+
+        {/* Tabla de viajes */}
+        <div className="px-1 pb-1">
+          {listError && (
+            <div className="mx-3 mb-3 rounded-lg bg-red-50 p-3 text-sm text-iconsa-red">
+              Error al cargar movilizaciones: {listError}
+            </div>
+          )}
+
+          <DataTable<TripWithRelations>
+            columns={columns}
+            data={trips}
+            keyExtractor={(row) => row.id}
+            loading={listLoading}
+            emptyMessage="No hay movilizaciones para mostrar"
+            mobileRender={mobileRender}
+            expandedKeys={tripExpandedKeys}
+            onExpandedKeysChange={setTripExpandedKeys}
+            pagination="server"
+            pageSize={tripFilters.pageSize}
+            totalCount={tripsTotalCount}
+            currentPage={tripFilters.page}
+            onPageChange={(page) => setTripFilters({ page })}
+            onPageSizeChange={(size) => setTripFilters({ pageSize: size, page: 0 })}
+            externalSort={{
+              column: tripFilters.sortColumn ?? null,
+              direction: tripFilters.sortDirection ?? 'desc',
+              onSortChange: (column, direction) => setTripFilters({ sortColumn: column, sortDirection: direction, page: 0 }),
+            }}
+            expandRender={(row) => {
+              const assignments = row.assignments ?? []
+              if (assignments.length === 0) return <p className="text-sm text-iconsa-gray">Sin líneas asignadas</p>
+              return (
+                <div className="space-y-1.5">
+                  {assignments.map((a) => {
+                    const line = a.line
+                    if (!line) return null
+                    const fromName = line.from_location?.name ?? line.from_text ?? '—'
+                    const toName = line.to_location?.name ?? line.to_text ?? '—'
+                    const unitName = line.unit?.code ?? line.unit_text ?? ''
+                    const isEquipo = line.line_type === 'Equipo'
+                    return (
+                      <div key={a.id} className="flex items-center gap-2 text-sm py-1">
+                        {isEquipo ? (
+                          <Wrench className="h-3.5 w-3.5 shrink-0 text-iconsa-blue" />
+                        ) : (
+                          <Package className="h-3.5 w-3.5 shrink-0 text-gold" />
+                        )}
+                        <span className="font-medium text-gray-900" title={line.description}>
+                          {line.description}
                         </span>
-                      )}
-                    </div>
-                  )
-                })}
-                <a
-                  href={`/programacion/viaje/${row.id}`}
-                  onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
-                  className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
-                >
-                  Ver detalle del viaje
-                </a>
-              </div>
-            )
-          }}
-        />
+                        <span className="text-gray-300">·</span>
+                        <span className="font-semibold text-gray-700 whitespace-nowrap bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                          {a.quantity_assigned} {unitName}
+                        </span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">{fromName} → {toName}</span>
+                        {line.status !== 'Programada' && line.status !== 'En Transito' && (
+                          <Badge label={line.status} variant="line" />
+                        )}
+                      </div>
+                    )
+                  })}
+                  <a
+                    href={`/programacion/viaje/${row.id}`}
+                    onClick={(e) => { e.stopPropagation(); router.push(`/programacion/viaje/${row.id}`) }}
+                    className="mt-1 inline-block text-xs font-medium text-iconsa-blue hover:underline"
+                  >
+                    Ver detalle de la movilización
+                  </a>
+                </div>
+              )
+            }}
+          />
+        </div>
       </section>
 
-      {/* Barra flotante: crear viaje con líneas seleccionadas */}
-      {puedeCrearViaje && visibleSelectedCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-4 py-3 shadow-lg sm:bottom-4 sm:left-auto sm:right-6 sm:w-auto sm:rounded-xl sm:border sm:shadow-xl">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-700">
-              <span className="font-semibold text-navy">{visibleSelectedCount}</span>{' '}
-              {visibleSelectedCount === 1 ? 'línea seleccionada' : 'líneas seleccionadas'}
-            </span>
-            <Button size="sm" onClick={handleCrearViajeConLineas}>
-              <Truck className="h-4 w-4" />
-              Crear Viaje
-            </Button>
-            <button
-              type="button"
-              onClick={() => setSelectedLineIds(new Set())}
-              className="text-xs text-iconsa-gray hover:text-gray-900 transition-colors"
-            >
-              Cancelar
-            </button>
+      {/* ─── Modales ─── */}
+      {createPickupModal && (
+        <CreatePickupOrderModal
+          selectedLines={createPickupModal.lines}
+          onConfirm={handleConfirmCreatePickup}
+          onClose={() => setCreatePickupModal(null)}
+          loading={pickupOrders.loading}
+          error={pickupOrders.error}
+        />
+      )}
+
+      {createExternalModal && (
+        <CreateExternalOrderModal
+          selectedLines={createExternalModal.lines}
+          onConfirm={handleConfirmCreateExternal}
+          onClose={() => setCreateExternalModal(null)}
+          loading={externalOrders.loading}
+          error={externalOrders.error}
+        />
+      )}
+
+      {confirmPickupOrder && (
+        <ConfirmPickupOrderDeliveryModal
+          order={confirmPickupOrder}
+          receiverOptions={receiverOptions}
+          onConfirm={handleConfirmPickupDelivery}
+          onClose={() => setConfirmPickupOrder(null)}
+          loading={pickupOrders.loading}
+          error={pickupOrders.error}
+        />
+      )}
+
+      {confirmExternalOrder && (
+        <ConfirmExternalOrderDeliveryModal
+          order={confirmExternalOrder}
+          receiverOptions={receiverOptions}
+          onConfirm={handleConfirmExternalDelivery}
+          onClose={() => setConfirmExternalOrder(null)}
+          loading={externalOrders.loading}
+          error={externalOrders.error}
+        />
+      )}
+
+      {cancelPickupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              ¿Cancelar pickup {cancelPickupModal.order.pickup_id}?
+            </h3>
+            {cancelPickupModal.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este pickup tiene <strong>{cancelPickupModal.deliveredCount} línea{cancelPickupModal.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelPickupModal.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">Las líneas volverán al backlog. ¿Confirmar?</p>
+            )}
+            <div className="mt-4">
+              <label htmlFor="cancel-pickup-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelPickupModal.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="cancel-pickup-reason"
+                value={cancelPickupReason}
+                onChange={(e) => setCancelPickupReason(e.target.value)}
+                placeholder={cancelPickupModal.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={pickupOrders.loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelPickupModal.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelPickupReason.trim().length}/10 caracteres mínimos
+                </p>
+              )}
+            </div>
+            {pickupOrders.error && (
+              <p className="mt-2 text-sm text-red-600">{pickupOrders.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setCancelPickupModal(null)} disabled={pickupOrders.loading}>
+                Volver
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={confirmCancelPickup}
+                loading={pickupOrders.loading}
+                disabled={cancelPickupModal.deliveredCount > 0 && cancelPickupReason.trim().length < 10}
+              >
+                Sí, cancelar pickup
+              </Button>
+            </div>
           </div>
         </div>
       )}
+
+      {cancelExternalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">
+              ¿Cancelar viaje externo {cancelExternalModal.order.external_id}?
+            </h3>
+            {cancelExternalModal.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este viaje externo tiene <strong>{cancelExternalModal.deliveredCount} línea{cancelExternalModal.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelExternalModal.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La factura subida se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">Las líneas volverán al backlog. La factura subida se preserva. ¿Confirmar?</p>
+            )}
+            <div className="mt-4">
+              <label htmlFor="cancel-external-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelExternalModal.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="cancel-external-reason"
+                value={cancelExternalReason}
+                onChange={(e) => setCancelExternalReason(e.target.value)}
+                placeholder={cancelExternalModal.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={externalOrders.loading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelExternalModal.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelExternalReason.trim().length}/10 caracteres mínimos
+                </p>
+              )}
+            </div>
+            {externalOrders.error && (
+              <p className="mt-2 text-sm text-red-600">{externalOrders.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setCancelExternalModal(null)} disabled={externalOrders.loading}>
+                Volver
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={confirmCancelExternal}
+                loading={externalOrders.loading}
+                disabled={cancelExternalModal.deliveredCount > 0 && cancelExternalReason.trim().length < 10}
+              >
+                Sí, cancelar viaje externo
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

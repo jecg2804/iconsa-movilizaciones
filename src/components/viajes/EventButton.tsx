@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2, Truck, MapPin, CheckCircle, Home, AlertTriangle } from 'lucide-react'
+import { Loader2, Truck, MapPin, CheckCircle, Home, AlertTriangle, CircleDot } from 'lucide-react'
 import type { TripEventType } from '@/hooks/useTripEvents'
 
 interface EventButtonProps {
@@ -38,6 +38,11 @@ const EVENT_CONFIG: Record<
     label: 'Registrar Incidencia',
     icon: <AlertTriangle className="h-6 w-6" />,
     colorClass: 'bg-iconsa-orange hover:bg-iconsa-orange/90 text-white',
+  },
+  Parada: {
+    label: 'Registrar Parada',
+    icon: <CircleDot className="h-6 w-6" />,
+    colorClass: 'bg-cyan-600 hover:bg-cyan-700 text-white',
   },
 }
 

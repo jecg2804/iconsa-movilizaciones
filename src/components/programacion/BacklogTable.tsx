@@ -134,7 +134,7 @@ function BacklogTable({
 
               {/* Descripcion */}
               <span
-                className="min-w-0 max-w-50 truncate font-medium text-gray-900"
+                className="min-w-0 font-medium text-gray-900"
                 title={line.description}
               >
                 {line.description}
@@ -154,25 +154,20 @@ function BacklogTable({
                 )}
               </span>
 
-              {/* Codigo de proyecto */}
-              <span className="shrink-0 text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                {line.request.project?.code ?? '—'}
-              </span>
-
               {/* Ruta: desde → hasta */}
               <span className="flex min-w-0 items-center gap-1.5 text-iconsa-gray">
-                <span className="max-w-27.5 truncate text-xs" title={fromName}>
+                <span className="text-xs" title={fromName}>
                   {fromName}
                 </span>
                 <ArrowRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                <span className="max-w-27.5 truncate text-xs" title={toName}>
+                <span className="text-xs" title={toName}>
                   {toName}
                 </span>
               </span>
 
               {/* Solicitante */}
               {line.request.requester?.name && (
-                <span className="shrink-0 text-xs text-iconsa-gray truncate max-w-25" title={line.request.requester.name}>
+                <span className="shrink-0 text-xs text-iconsa-gray" title={line.request.requester.name}>
                   {line.request.requester.name.split(' ').slice(0, 2).join(' ')}
                 </span>
               )}
@@ -214,6 +209,7 @@ function BacklogTable({
                   {formatDaysUntilDue(line.request.date_required)}
                 </span>
               </span>
+
             </div>
 
             {/* Mobile layout: visible hasta md */}
@@ -236,12 +232,12 @@ function BacklogTable({
                 ) : (
                   <Package className="h-4 w-4 shrink-0 text-gold mt-0.5" />
                 )}
-                <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                <span className="min-w-0 text-sm font-medium text-gray-900" title={line.description}>
                   {line.description}
                 </span>
               </div>
 
-              {/* Fila 2: ID solicitud + proyecto + solicitante */}
+              {/* Fila 2: ID solicitud + solicitante */}
               <div className="flex items-center gap-2 text-xs flex-wrap">
                 <span
                   className={`font-mono text-iconsa-gray ${onRequestClick ? 'cursor-pointer hover:text-iconsa-blue hover:underline' : ''}`}
@@ -249,14 +245,10 @@ function BacklogTable({
                 >
                   {requestDisplayId}
                 </span>
-                <span className="text-gray-400">·</span>
-                <span className="font-medium text-gray-600">
-                  {line.request.project?.code ?? '—'}
-                </span>
                 {line.request.requester?.name && (
                   <>
                     <span className="text-gray-400">·</span>
-                    <span className="text-iconsa-gray truncate max-w-32">
+                    <span className="text-iconsa-gray" title={line.request.requester.name}>
                       {line.request.requester.name.split(' ').slice(0, 2).join(' ')}
                     </span>
                   </>
@@ -265,23 +257,23 @@ function BacklogTable({
 
               {/* Fila 2b: notas de solicitud */}
               {line.request.notes && (
-                <p className="text-xs italic text-gray-400 truncate">
+                <p className="text-xs italic text-gray-400 truncate" title={line.request.notes}>
                   {line.request.notes}
                 </p>
               )}
 
               {/* Fila 2c: notas de línea */}
               {line.notes && (
-                <p className="text-xs italic text-amber-600 truncate">
+                <p className="text-xs italic text-amber-600 truncate" title={line.notes}>
                   {line.notes}
                 </p>
               )}
 
               {/* Fila 3: ruta desde → hasta */}
               <div className="flex items-center gap-1.5 text-xs text-iconsa-gray">
-                <span className="max-w-32.5 truncate">{fromName}</span>
+                <span title={fromName}>{fromName}</span>
                 <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-                <span className="max-w-32.5 truncate">{toName}</span>
+                <span title={toName}>{toName}</span>
               </div>
 
               {/* Fila 4: cantidad + fecha requerida con color */}
@@ -301,6 +293,7 @@ function BacklogTable({
                   </span>
                 </span>
               </div>
+
             </div>
           </div>
         )

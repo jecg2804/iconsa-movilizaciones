@@ -6,24 +6,35 @@ import { ArrowLeft, Loader2, Wrench, Package, ArrowRight, X, KeyRound } from 'lu
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useVehicles } from '@/hooks/useVehicles'
+import { useSubmitGuard } from '@/hooks/useSubmitGuard'
 import {
   useTrips,
   type TripInput,
   type AssignmentInput,
   type TripWithRelations,
   type TripAssignment,
+  type BacklogLine,
+  type ModifiedAssignment,
 } from '@/hooks/useTrips'
 import { formatCurrency, formatDate, formatDateTime, formatQty } from '@/lib/utils/format'
-import { notifyViajeReprogramado } from '@/lib/notifications/actions'
+import { notifyViajeEditado } from '@/lib/notifications/actions'
 import type { SelectOption } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { TripForm } from '@/components/programacion/TripForm'
-import { LineSelector } from '@/components/programacion/LineSelector'
+import TripLiveMap from '@/components/gps/TripLiveMap'
+import { LineSelector, getDateColor } from '@/components/programacion/LineSelector'
 import type { Attachment } from '@/lib/supabase/storage'
 import FileDisplay from '@/components/ui/FileDisplay'
 
 // --- Helpers ---
+
+/** Unidades que deben usar enteros (min=1, step=1) */
+const INTEGER_UNITS = new Set(['und', 'pzas', 'juegos', 'gal', 'ft', 'qq'])
+
+function getQtyStep(unitCode: string | undefined): { min: number; step: number } {
+  return INTEGER_UNITS.has(unitCode ?? '') ? { min: 1, step: 1 } : { min: 0.01, step: 0.01 }
+}
 
 /** Convierte un TripWithRelations al TripInput editable */
 function tripToInput(trip: TripWithRelations): TripInput {
@@ -38,7 +49,6 @@ function tripToInput(trip: TripWithRelations): TripInput {
     att_permit: trip.att_permit ?? false,
     escort: trip.escort ?? false,
     notes: trip.notes,
-    is_external: trip.is_external ?? false,
   }
 }
 
@@ -88,11 +98,14 @@ interface TripEventRow {
 
 interface AssignmentRowProps {
   assignment: TripAssignment
+  originalQty: number
   canRemove: boolean
+  canEdit: boolean
   onRemove: (assignmentId: string) => void
+  onQtyChange?: (assignmentId: string, newQty: number) => void
 }
 
-function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) {
+function AssignmentRow({ assignment, originalQty, canRemove, canEdit, onRemove, onQtyChange }: AssignmentRowProps) {
   const router = useRouter()
   const line = assignment.line
   const isEquipo = line?.line_type === 'Equipo'
@@ -128,7 +141,7 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
               <Package className="h-4 w-4 text-gold" />
             )}
           </span>
-          <span className="truncate text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium text-gray-900" title={line?.description ?? undefined}>
             {line?.description ?? 'Cargando...'}
           </span>
           <button
@@ -140,33 +153,82 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
           </button>
         </div>
 
-        {/* Ruta */}
+        {/* Ruta + fecha requerida + solicitante */}
         {line && (
-          <div className="flex items-center gap-1 text-xs text-iconsa-gray">
-            <span className="truncate max-w-25 sm:max-w-37.5">{fromName}</span>
+          <div className="flex items-center gap-1 text-xs text-iconsa-gray flex-wrap">
+            <span title={fromName}>{fromName}</span>
             <ArrowRight className="h-3 w-3 shrink-0 text-gray-400" />
-            <span className="truncate max-w-25 sm:max-w-37.5">{toName}</span>
+            <span title={toName}>{toName}</span>
+            {line.request.date_required && (
+              <>
+                <span className="text-gray-300 mx-0.5">·</span>
+                <span className={`font-medium ${getDateColor(line.request.date_required)}`}>
+                  {formatDate(line.request.date_required)}
+                </span>
+              </>
+            )}
+            {line.request.requester?.name && (
+              <>
+                <span className="text-gray-300 mx-0.5">·</span>
+                <span title={line.request.requester.name}>{line.request.requester.name.split(' ').slice(0, 2).join(' ')}</span>
+              </>
+            )}
           </div>
-        )}
-
-        {/* Fecha requerida de la solicitud */}
-        {line?.request.date_required && (
-          <span className="text-xs text-iconsa-gray">
-            Requerida: {formatDate(line.request.date_required)}
-          </span>
         )}
       </div>
 
       {/* Cantidad + estado */}
       <div className="shrink-0 flex items-center gap-3">
-        <span className="text-sm text-gray-700 whitespace-nowrap">
-          {formatQty(assignment.quantity_assigned)} {unitCode}
-          {(assignment.qty_delivered ?? 0) > 0 && (
-            <span className="text-xs text-orange-600 ml-1">
-              ({formatQty(assignment.qty_delivered)} entregadas)
-            </span>
-          )}
-        </span>
+        {canEdit ? (
+          (() => {
+            const { min: qtyMin, step: qtyStep } = getQtyStep(unitCode || undefined)
+            // max = total - entregado - programado_otros_viajes
+            // qty_scheduled incluye ESTE viaje → sumamos originalQty (congelado al cargar)
+            const maxQty = line?.quantity
+              ? Math.max(qtyMin, line.quantity - (line.qty_delivered ?? 0) - (line.qty_scheduled ?? 0) + originalQty)
+              : undefined
+            return (
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <input
+                  type="number"
+                  value={assignment.quantity_assigned}
+                  min={qtyMin}
+                  max={maxQty}
+                  step={qtyStep}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === '' || raw === '-') return
+                    const parsed = parseFloat(raw)
+                    if (!Number.isFinite(parsed)) return
+                    onQtyChange?.(assignment.id, parsed)
+                  }}
+                  onFocus={(e) => e.target.select()}
+                  onBlur={(e) => {
+                    const parsed = parseFloat(e.target.value)
+                    if (!Number.isFinite(parsed) || parsed < qtyMin) {
+                      onQtyChange?.(assignment.id, qtyMin)
+                    }
+                  }}
+                  title="Cantidad asignada"
+                  className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-right focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+                />
+                <span className="text-xs text-iconsa-gray">{unitCode}</span>
+                {maxQty !== undefined && (
+                  <span className="text-xs text-gray-400 whitespace-nowrap">/ {maxQty}</span>
+                )}
+              </div>
+            )
+          })()
+        ) : (
+          <span className="text-sm text-gray-700 whitespace-nowrap">
+            {formatQty(assignment.quantity_assigned)} {unitCode}
+            {(assignment.qty_delivered ?? 0) > 0 && (
+              <span className="text-xs text-orange-600 ml-1">
+                ({formatQty(assignment.qty_delivered)} entregadas)
+              </span>
+            )}
+          </span>
+        )}
         {line?.status && (
           <Badge variant="line" label={line.status} />
         )}
@@ -178,7 +240,7 @@ function AssignmentRow({ assignment, canRemove, onRemove }: AssignmentRowProps) 
           type="button"
           onClick={() => onRemove(assignment.id)}
           className="shrink-0 rounded p-1.5 text-iconsa-gray hover:bg-red-50 hover:text-iconsa-red transition-colors"
-          title="Quitar linea del viaje"
+          title="Quitar linea de la movilización"
         >
           <X className="h-4 w-4" />
         </button>
@@ -194,6 +256,7 @@ export default function ViajeDetailPage() {
   const id = params.id as string
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const guard = useSubmitGuard()
 
   // Auth y permisos
   const { person, role, loading: authLoading } = useAuth()
@@ -205,6 +268,7 @@ export default function ViajeDetailPage() {
   const {
     backlog,
     backlogLoading,
+    refetchBacklog,
     fetchTrip,
     updateTrip,
     cancelTrip,
@@ -228,13 +292,14 @@ export default function ViajeDetailPage() {
     att_permit: false,
     escort: false,
     notes: null,
-    is_external: false,
   })
 
   // Asignaciones: las originales del viaje + las nuevas seleccionadas
   const [existingAssignments, setExistingAssignments] = useState<TripAssignment[]>([])
+  const [originalAssignments, setOriginalAssignments] = useState<Map<string, number>>(new Map())
   const [newAssignments, setNewAssignments] = useState<AssignmentInput[]>([])
   const [removedAssignmentIds, setRemovedAssignmentIds] = useState<string[]>([])
+  const [removedLines, setRemovedLines] = useState<BacklogLine[]>([])
 
   // Eventos de ejecución
   const [tripEvents, setTripEvents] = useState<TripEventRow[]>([])
@@ -242,6 +307,11 @@ export default function ViajeDetailPage() {
   // Estado de UI
   const [isDirty, setIsDirty] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  // Cambio 6 T8: state para razón de cancelación + stats pre-flight.
+  // Si stats.deliveredCount>0, razón es required (≥10 chars) — el trigger BD
+  // enforce_cancellation_reason_trips ataja en defense-in-depth.
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelStats, setCancelStats] = useState<{ deliveredCount: number; deliveredQty: number }>({ deliveredCount: 0, deliveredQty: 0 })
 
   // Datos adicionales (fetch inline)
   const [drivers, setDrivers] = useState<PersonRow[]>([])
@@ -258,8 +328,10 @@ export default function ViajeDetailPage() {
         setTrip(data)
         setTripData(tripToInput(data))
         setExistingAssignments(data.assignments)
+        setOriginalAssignments(new Map(data.assignments.map((a: TripAssignment) => [a.id, a.quantity_assigned])))
         setNewAssignments([])
         setRemovedAssignmentIds([])
+        setRemovedLines([])
         setIsDirty(false)
 
         // Fetch eventos de ejecución
@@ -350,10 +422,84 @@ export default function ViajeDetailPage() {
 
   // --- Quitar asignacion existente ---
   const handleRemoveExisting = useCallback((assignmentId: string) => {
+    const removed = existingAssignments.find((a) => a.id === assignmentId)
     setExistingAssignments((prev) => prev.filter((a) => a.id !== assignmentId))
     setRemovedAssignmentIds((prev) => [...prev, assignmentId])
+
+    // Reconstruir como BacklogLine para que aparezca inmediatamente en disponibles
+    if (removed?.line) {
+      const l = removed.line
+      // qty_scheduled real MENOS lo que este viaje tenía asignado
+      const adjustedQtyScheduled = Math.max(0, (l.qty_scheduled ?? 0) - removed.quantity_assigned)
+      const bl: BacklogLine = {
+        id: removed.request_line_id,
+        request_id: l.request?.id ?? '',
+        line_number: l.line_number,
+        line_type: l.line_type,
+        equipment_id: l.equipment?.id ?? null,
+        description: l.description,
+        from_location_id: l.from_location?.id ?? null,
+        from_text: l.from_text ?? null,
+        to_location_id: l.to_location?.id ?? null,
+        to_text: l.to_text ?? null,
+        quantity: l.quantity,
+        unit_id: l.unit?.id ?? null,
+        unit_text: l.unit_text ?? null,
+        category: null,
+        status: adjustedQtyScheduled > 0 ? 'Programada' : 'Pendiente',
+        notes: l.notes ?? null,
+        qty_scheduled: adjustedQtyScheduled,
+        qty_delivered: l.qty_delivered ?? 0,
+        equipment: l.equipment ?? null,
+        from_location: l.from_location ?? null,
+        to_location: l.to_location ?? null,
+        unit: l.unit ?? null,
+        request: {
+          id: l.request?.id ?? '',
+          request_id: l.request?.request_id ?? '',
+          project: l.request?.project ?? { id: '', code: '', name: '' },
+          requester: l.request?.requester ?? { id: '', name: '' },
+          priority: null,
+          date_required: l.request?.date_required ?? '',
+          status: 'Enviada',
+          notes: null,
+          attachments: null,
+        },
+      }
+      setRemovedLines((prev) => {
+        // Si ya existe en removedLines, reemplazar (evitar duplicados)
+        const idx = prev.findIndex((rl) => rl.id === bl.id)
+        if (idx >= 0) {
+          const copy = [...prev]
+          copy[idx] = bl
+          return copy
+        }
+        return [...prev, bl]
+      })
+    }
+
     setIsDirty(true)
-  }, [])
+  }, [existingAssignments])
+
+  // --- Cambiar cantidad de asignacion existente ---
+  const handleExistingQtyChange = useCallback((assignmentId: string, newQty: number) => {
+    setExistingAssignments((prev) =>
+      prev.map((a) => {
+        if (a.id !== assignmentId) return a
+        // originalQty congelado al cargar — no se mueve mientras el usuario teclea
+        const origQty = originalAssignments.get(a.id) ?? a.quantity_assigned
+        const maxQty = a.line?.quantity
+          ? a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + origQty
+          : newQty
+        const unitCode = a.line?.unit?.code ?? a.line?.unit_text
+        const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
+        const safeMax = Math.max(qtyMin, maxQty)
+        const clamped = Math.min(Math.max(qtyMin, newQty), safeMax)
+        return { ...a, quantity_assigned: clamped }
+      }),
+    )
+    setIsDirty(true)
+  }, [originalAssignments])
 
   // --- Cambiar nuevas asignaciones (desde LineSelector) ---
   const handleNewAssignmentsChange = useCallback((updated: AssignmentInput[]) => {
@@ -403,47 +549,99 @@ export default function ViajeDetailPage() {
     [existingAssignments],
   )
 
-  // Backlog disponible = solo las lineas que no estan ya asignadas al viaje actual
-  const availableBacklog = useMemo(
-    () => backlog.filter((l) => !existingLineIds.has(l.id)),
-    [backlog, existingLineIds],
-  )
+  // Backlog disponible = lineas no asignadas al viaje + lineas recién removidas del viaje
+  const availableBacklog = useMemo(() => {
+    const fromBacklog = backlog.filter((l) => !existingLineIds.has(l.id))
+    // removedLines tiene prioridad (qty_scheduled ajustada por la cantidad liberada)
+    const removedIds = new Set(removedLines.map((l) => l.id))
+    const deduped = fromBacklog.filter((l) => !removedIds.has(l.id))
+    return [...deduped, ...removedLines.filter((l) => !existingLineIds.has(l.id))]
+  }, [backlog, existingLineIds, removedLines])
 
   // --- Guardar cambios ---
-  const handleSave = useCallback(async () => {
+  const handleSave = guard(async () => {
     if (!trip) return
     // Validar remolque para cabezal
     if (isCabezal && !tripData.trailer_id) {
       return // El TripForm ya muestra el warning visual; no avanzar
     }
+    // Cambio 6: tarifa obligatoria. updateTrip también valida defense-in-depth,
+    // acá bloqueamos antes para que el TripForm muestre el error sin loading.
+    if (!tripData.rate_id) {
+      return
+    }
+    if (tripData.cost == null || tripData.cost <= 0) {
+      return
+    }
+    // Validar que ninguna cantidad exceda su max (safety net)
+    for (const a of existingAssignments) {
+      if (!a.line?.quantity) continue
+      const origQty = originalAssignments.get(a.id) ?? a.quantity_assigned
+      const maxQty = a.line.quantity - (a.line.qty_delivered ?? 0) - (a.line.qty_scheduled ?? 0) + origQty
+      const unitCode = a.line?.unit?.code ?? a.line?.unit_text
+      const qtyMin = INTEGER_UNITS.has(unitCode ?? '') ? 1 : 0.01
+      if (a.quantity_assigned > maxQty || a.quantity_assigned < qtyMin) return
+    }
+    // Calcular asignaciones existentes con cantidad modificada
+    const modified: ModifiedAssignment[] = existingAssignments
+      .filter((a) => {
+        const orig = originalAssignments.get(a.id)
+        return orig !== undefined && orig !== a.quantity_assigned
+      })
+      .map((a) => ({
+        id: a.id,
+        request_line_id: a.request_line_id,
+        quantity_assigned: a.quantity_assigned,
+        original_quantity: originalAssignments.get(a.id) ?? a.quantity_assigned,
+      }))
+
     const originalDate = trip.scheduled_date
-    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id)
+    const success = await updateTrip(trip.id, tripData, newAssignments, removedAssignmentIds, person?.id, modified)
     if (success) {
-      // Notificar si se cambió la fecha
-      if (originalDate !== tripData.scheduled_date) {
-        notifyViajeReprogramado(trip.id, originalDate, tripData.scheduled_date).catch(console.error)
+      // Detectar cambios significativos para notificación
+      const changes: string[] = []
+      if (originalDate !== tripData.scheduled_date)
+        changes.push(`Fecha: ${originalDate} → ${tripData.scheduled_date}`)
+      if (removedAssignmentIds.length > 0)
+        changes.push(`${removedAssignmentIds.length} línea(s) removida(s)`)
+      if (newAssignments.length > 0)
+        changes.push(`${newAssignments.length} línea(s) agregada(s)`)
+      if (modified.length > 0)
+        changes.push('Cantidades ajustadas')
+      if (trip.vehicle_id !== tripData.vehicle_id)
+        changes.push('Vehículo cambiado')
+      if (trip.trailer_id !== tripData.trailer_id)
+        changes.push('Remolque cambiado')
+      if (changes.length > 0) {
+        notifyViajeEditado(trip.id, changes).catch(console.error)
       }
-      // Refrescar datos del viaje
+      // Refrescar backlog y datos del viaje
+      refetchBacklog()
       const updated = await fetchTrip(id)
       if (updated) {
         setTrip(updated)
         setTripData(tripToInput(updated))
         setExistingAssignments(updated.assignments)
+        setOriginalAssignments(new Map(updated.assignments.map((a: TripAssignment) => [a.id, a.quantity_assigned])))
         setNewAssignments([])
         setRemovedAssignmentIds([])
+        setRemovedLines([])
         setIsDirty(false)
       }
     }
-  }, [trip, tripData, newAssignments, removedAssignmentIds, updateTrip, fetchTrip, id, person?.id])
+  })
 
   // --- Cancelar viaje ---
-  const handleCancelTrip = useCallback(async () => {
+  // Cambio 6: cancelTrip ahora acepta razón opcional (BD trigger valida
+  // si es required cuando hay qty_delivered>0). El modal en T8 setea
+  // cancelReason via state local antes de invocar.
+  const handleCancelTrip = guard(async () => {
     if (!trip) return
-    const success = await cancelTrip(trip.id)
+    const success = await cancelTrip(trip.id, cancelReason.trim() || null)
     if (success) {
       router.push('/programacion')
     }
-  }, [trip, cancelTrip, router])
+  })
 
   // --- Estado de carga global ---
   const isLoading =
@@ -470,7 +668,7 @@ export default function ViajeDetailPage() {
           Programacion
         </button>
         <div className="rounded-lg border border-gray-200 bg-white px-6 py-12 text-center">
-          <p className="text-iconsa-gray">Viaje no encontrado.</p>
+          <p className="text-iconsa-gray">Movilización no encontrada.</p>
         </div>
       </div>
     )
@@ -496,7 +694,7 @@ export default function ViajeDetailPage() {
           {trip.trip_id ? (
             <span className="font-mono">{trip.trip_id}</span>
           ) : (
-            'Detalle de Viaje'
+            'Detalle de Movilización'
           )}
         </h1>
         {/* Codigo de confirmacion prominente si existe */}
@@ -533,7 +731,6 @@ export default function ViajeDetailPage() {
             attPermit: trip.att_permit ?? false,
             escort: trip.escort ?? false,
             notes: trip.notes,
-            isExternal: trip.is_external ?? false,
             status: trip.status,
             confirmationCode: trip.confirmation_code,
           }}
@@ -548,6 +745,13 @@ export default function ViajeDetailPage() {
           initialAttachments={(trip.attachments as unknown[])?.map(a => a as Attachment) ?? []}
         />
       </div>
+
+      {/* Mapa en vivo del vehículo (GPS) — solo trips En Ruta con GPS */}
+      {trip.status === 'En Ruta' && trip.vehicle?.gps_vehicle_id && (
+        <div className="mt-6">
+          <TripLiveMap tripId={trip.id} variant="full" />
+        </div>
+      )}
 
       {/* Banner material entregado pendiente retorno */}
       {trip.status === 'En Ruta' && tripEvents.some(e => e.event_type === 'Entrega') && (
@@ -573,7 +777,7 @@ export default function ViajeDetailPage() {
         {existingAssignments.length === 0 && newAssignments.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-6 py-8 text-center">
             <p className="text-sm text-iconsa-gray">
-              No hay lineas asignadas a este viaje.
+              No hay lineas asignadas a esta movilización.
             </p>
           </div>
         ) : (
@@ -582,8 +786,11 @@ export default function ViajeDetailPage() {
               <AssignmentRow
                 key={assignment.id}
                 assignment={assignment}
+                originalQty={originalAssignments.get(assignment.id) ?? assignment.quantity_assigned}
                 canRemove={canRemoveAssignments}
+                canEdit={canEditFullTrip}
                 onRemove={handleRemoveExisting}
+                onQtyChange={handleExistingQtyChange}
               />
             ))}
           </div>
@@ -670,10 +877,19 @@ export default function ViajeDetailPage() {
             {canCancelTrip && (
               <Button
                 variant="danger"
-                onClick={() => setShowCancelConfirm(true)}
+                onClick={() => {
+                  // T8: pre-flight stats para UI confirmation modal
+                  const lines = trip.assignments.filter((a) => (a.qty_delivered ?? 0) > 0)
+                  setCancelStats({
+                    deliveredCount: lines.length,
+                    deliveredQty: lines.reduce((sum, a) => sum + (a.qty_delivered ?? 0), 0),
+                  })
+                  setCancelReason('')
+                  setShowCancelConfirm(true)
+                }}
                 disabled={saving}
               >
-                Cancelar Viaje
+                Cancelar Movilización
               </Button>
             )}
 
@@ -690,11 +906,16 @@ export default function ViajeDetailPage() {
                 variant="primary"
                 onClick={handleSave}
                 loading={saving}
-                disabled={!isDirty || saving}
+                disabled={!isDirty || saving || (existingAssignments.length + newAssignments.length) === 0}
               >
                 Guardar Cambios
               </Button>
             </div>
+            {(existingAssignments.length + newAssignments.length) === 0 && (
+              <p className="text-sm text-amber-600 mt-2">
+                La movilización debe tener al menos una línea asignada.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -712,18 +933,46 @@ export default function ViajeDetailPage() {
         </div>
       )}
 
-      {/* Modal de confirmacion de cancelacion de viaje */}
+      {/* Modal de confirmacion de cancelacion de viaje (Cambio 6 T8) */}
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">
-              Cancelar Viaje
+              Cancelar Movilización
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              ¿Esta seguro de que desea cancelar este viaje? Todas las lineas
-              asignadas regresaran al backlog como pendientes. Esta accion no se
-              puede deshacer.
-            </p>
+
+            {cancelStats.deliveredCount > 0 ? (
+              <p className="mt-2 text-sm text-amber-700">
+                Este viaje tiene <strong>{cancelStats.deliveredCount} línea{cancelStats.deliveredCount === 1 ? '' : 's'}</strong> con <strong>{cancelStats.deliveredQty} unidades</strong> entregadas. El histórico se preserva. La razón es obligatoria.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-gray-600">
+                ¿Estás seguro de que querés cancelar esta movilización? Las líneas asignadas vuelven al backlog como pendientes.
+              </p>
+            )}
+
+            <div className="mt-4">
+              <label htmlFor="cancel-trip-reason" className="mb-1 block text-sm font-medium text-gray-700">
+                Razón de cancelación
+                {cancelStats.deliveredCount > 0 && <span className="text-red-600"> *</span>}
+              </label>
+              <textarea
+                id="cancel-trip-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder={cancelStats.deliveredCount > 0 ? 'Razón de cancelación (mínimo 10 caracteres)...' : 'Razón opcional...'}
+                rows={3}
+                maxLength={500}
+                disabled={saving}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-iconsa-blue focus:outline-none focus:ring-1 focus:ring-iconsa-blue"
+              />
+              {cancelStats.deliveredCount > 0 && (
+                <p className="mt-1 text-xs text-iconsa-gray">
+                  {cancelReason.trim().length}/10 caracteres mínimos
+                </p>
+              )}
+            </div>
+
             <div className="mt-4 flex items-center justify-end gap-3">
               <Button
                 variant="ghost"
@@ -737,14 +986,16 @@ export default function ViajeDetailPage() {
                 variant="danger"
                 size="sm"
                 onClick={handleCancelTrip}
+                disabled={cancelStats.deliveredCount > 0 && cancelReason.trim().length < 10}
                 loading={saving}
               >
-                Si, cancelar viaje
+                Si, cancelar movilización
               </Button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   )
 }

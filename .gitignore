@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env*.example
 
 # vercel
 .vercel
@@ -39,3 +40,23 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.playwright-mcp/
+test-results/
+playwright-report/
+tests/.auth/
+
+# Husky post-commit background build status
+.build-status
+
+# Claude Code machine-specific (session data, local overrides)
+.claude/settings.local.json
+.claude/projects/
+
+# Test screenshots — temporales, no deben persistir en el repo
+Docs/test-screenshots/
+
+# Repomix output — generado bajo demanda para Claude Chat
+repomix-output.*
+
+# Supabase CLI auto-generated temp state (no aporta valor al repo)
+supabase/.temp/

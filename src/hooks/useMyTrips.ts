@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 
 // --- Tipos exportados ---
 
@@ -55,6 +56,7 @@ function unwrap<T>(value: T | T[] | null | undefined): T | null {
 
 export function useMyTrips() {
   const supabase = useMemo(() => createClient(), [])
+  const { person, role, loading: authLoading } = useAuth()
   const [trips, setTrips] = useState<MyTripSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +66,7 @@ export function useMyTrips() {
     setError(null)
 
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('trips')
         .select(`
           id,
@@ -100,8 +102,14 @@ export function useMyTrips() {
             notes
           )
         `)
-        .in('status', ['Programado', 'En Ruta'])
-        .order('scheduled_date', { ascending: true })
+        .order('scheduled_date', { ascending: false })
+
+      // Seguridad: conductores solo ven SUS viajes asignados
+      if (role === 'campo' && person?.id) {
+        query = query.eq('driver_id', person.id)
+      }
+
+      const { data, error: fetchError } = await query
 
       if (fetchError) {
         setError(fetchError.message)
@@ -180,11 +188,13 @@ export function useMyTrips() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, role, person?.id])
 
   useEffect(() => {
+    // Esperar auth load para no disparar fetch sin el filtro de role
+    if (authLoading) return
     void fetchTrips()
-  }, [fetchTrips])
+  }, [fetchTrips, authLoading])
 
   return { trips, loading, error, refetch: fetchTrips }
 }

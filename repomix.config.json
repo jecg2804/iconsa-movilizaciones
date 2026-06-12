@@ -1,0 +1,51 @@
+{
+  "output": {
+    "filePath": "repomix-MovimientOS.xml",
+    "style": "xml",
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "removeEmptyLines": false,
+    "topFilesLength": 20,
+    "showLineNumbers": true,
+    "copyToClipboard": false,
+    "includeEmptyDirectories": false
+  },
+  "include": [
+    "src/**",
+    "tests/**",
+    "scripts/**",
+    "Docs/**",
+    ".claude/**",
+    "CLAUDE.md",
+    "README.md",
+    "package.json",
+    "tsconfig.json",
+    "next.config.*",
+    "tailwind.config.*",
+    "postcss.config.*",
+    "playwright.config.ts",
+    "middleware.ts",
+    "proxy.ts",
+    ".env.example"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "node_modules/**", ".next/**", "dist/**", "build/**",
+      "*.log",
+      ".env",
+      ".env.local",
+      ".env.*.local",
+      ".env.production",
+      ".env.development",
+      ".env.test",
+      "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+      "*.test.*.snap",
+      "playwright-report/**", "test-results/**",
+      "public/**",
+      "*.ico", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.woff*"
+    ]
+  }
+}
