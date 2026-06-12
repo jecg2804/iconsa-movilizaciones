@@ -46,6 +46,10 @@ Las comparte por nombre pero la versión de prod es V1 (pre-Events V2). Requiere
 - **1 trip con rate_id NULL** (ver §5).
 - (BL-EXCLUSIVITY no aplica en prod: las tablas pickup/external no existen aún, así que una línea no puede estar en 3 modalidades estructuralmente.)
 
+## GPS bootstrap (actualizado 2026-06-12 — el del 2026-04-20 quedó STALE)
+
+El bootstrap de `equipment.gps_vehicle_id` del CHANGELOG 2026-04-20 usaba los unit_ids del proveedor VIEJO (`118`, `5061`, …). **NO usar en el script consolidado.** El proveedor nuevo (SkyData Latam) usa unit_ids de 6 dígitos. El mapeo vigente (aplicado en staging 2026-06-12, verificado) es: CAB444→869773, CAB930→875584, CAM823→869763, VOL812→869771, CAM430→869743, CAM837→869761, CAM839→875577, BUS008→868611, PUP467→870305, PUP468→870312, PUP321→869757, PUP322→869756, PUP323→869749, PUP324→881955, BUS830→869769. El script de prod debe: (1) `ALTER TABLE equipment ADD COLUMN gps_vehicle_id text` (+ índice parcial), (2) aplicar estos 15 UPDATE por `spectrum_code`, (3) backfill placa BUS008←CJ0008 / PUP467←EA3467. Los 5 que perdieron GPS (BUS009/010, PUP245, PUP244, SUV539) nacen sin valor en prod (la columna no existe aún), así que no requieren NULL explícito.
+
 ## Pendiente de validar en vivo (próximos diagnósticos)
 
 - `pg_get_functiondef` de las 6 funciones compartidas V1-vs-V2 → confirmar cuáles realmente cambian.
