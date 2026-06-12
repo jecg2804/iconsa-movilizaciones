@@ -11,9 +11,9 @@
  * Uso:
  *   npx tsx --env-file=.env.local scripts/debug-skydata.ts
  *
- * Lee credenciales de process.env (`SKYDATA_API_KEY`, `SKYDATA_API_PASSWORD`,
- * opcionalmente `SKYDATA_BASE_URL`). Si falta alguna, aborta. Nada hardcoded,
- * nada con fallback a un valor real.
+ * Lee credenciales de process.env (`SKYDATA_API_KEY`, opcionalmente
+ * `SKYDATA_BASE_URL`). El API nuevo (acceso.skydatalatam.com) autentica con
+ * key como query param, sin password. Si falta la key, aborta. Nada hardcoded.
  *
  * NO se ejecuta en hooks, builds, ni pipelines. Tool manual de diagnóstico.
  *
@@ -36,30 +36,27 @@ import type { VehiclePosition } from '../src/lib/gps/types'
 
 const STALE_THRESHOLD_HOURS = 48
 
-// Fields que la app (o su normalizer) consume del payload crudo. Incluye
-// ambas convenciones (x/y geométrica y lat/lon cartográfica) para detectar
-// rápido si SkyData alguna vez cambia de nomenclatura.
+// Fields que la app (o su normalizer) consume del payload crudo del API nuevo
+// (acceso.skydatalatam.com /unit/list.json). El canario: si SkyData renombra
+// o deja de enviar un field, el conteo baja y el drift se ve de inmediato.
 const EXPECTED_FIELDS = [
-  'vehId', 'id',
-  'x', 'y', 'lat', 'lon', 'lng',
-  'speed', 'heading', 'course',
-  'event', 'eventDescription',
-  'place', 'epoch', 'odometer',
-  'description', 'licensePlate',
+  'unit_id', 'number', 'vin',
+  'lat', 'lng',
+  'speed', 'direction',
+  'state', 'movement_state',
+  'last_update', 'mileage',
 ] as const
 
 async function main() {
   const key = process.env.SKYDATA_API_KEY
-  const pwd = process.env.SKYDATA_API_PASSWORD
-  const baseUrl = process.env.SKYDATA_BASE_URL ?? 'https://app.skydataglobal.com'
-  if (!key || !pwd) {
-    console.error('[debug-skydata] missing SKYDATA_API_KEY or SKYDATA_API_PASSWORD in env')
+  const baseUrl = process.env.SKYDATA_BASE_URL ?? 'https://acceso.skydatalatam.com/api/v1'
+  if (!key) {
+    console.error('[debug-skydata] missing SKYDATA_API_KEY in env')
     process.exit(1)
   }
 
-  const auth = Buffer.from(`${key}:${pwd}`).toString('base64')
-  const resp = await fetch(`${baseUrl}/api/fleet/status`, {
-    headers: { Authorization: `Basic ${auth}` },
+  const resp = await fetch(`${baseUrl}/unit/list.json?key=${encodeURIComponent(key)}`, {
+    cache: 'no-store',
   })
   if (!resp.ok) {
     console.error(`[debug-skydata] upstream ${resp.status}`)
@@ -67,8 +64,9 @@ async function main() {
     process.exit(1)
   }
 
-  const raw = (await resp.json()) as unknown
-  const list = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : []
+  const raw = (await resp.json()) as { data?: { units?: unknown } }
+  const units = raw?.data?.units
+  const list = Array.isArray(units) ? (units as Record<string, unknown>[]) : []
 
   console.log(`Fetched ${list.length} vehicle${list.length === 1 ? '' : 's'}`)
   if (list.length === 0) {

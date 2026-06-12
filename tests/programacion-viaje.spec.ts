@@ -31,7 +31,7 @@ test.describe.serial('Trip Creation', () => {
   })
 
   test('Create trip → BD has correct data', async () => {
-    const trip = await createTrip(page, { solicitudId: sol.dbId })
+    const trip = await createTrip(page, { solicitudId })
     tripDbId = trip.dbId
 
     const { data } = await db

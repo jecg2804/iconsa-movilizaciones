@@ -1,7 +1,7 @@
 // Shared types between the API route, the SkyData client, and the React component.
 
 export interface VehiclePosition {
-  /** SkyData internal vehicle id (text — they sometimes use numeric strings). */
+  /** SkyData `unit_id` stringificado (matchea `equipment.gps_vehicle_id`). */
   vehId: string
   /** Decimal degrees. */
   lat: number
@@ -11,13 +11,13 @@ export interface VehiclePosition {
   speed: number
   /** Degrees, 0 = north, clockwise. May be 0 when stationary. */
   heading: number
-  /** Free-text status from SkyData (e.g. "Moving", "Stopped", "Idle"). */
+  /** Estado de movimiento traducido (p. ej. "En movimiento", "Detenido"). */
   event: string
-  /** Reverse-geocoded address string from SkyData. */
+  /** Dirección reverse-geocoded. Vacío con el API nuevo (unit/list no la trae). */
   place: string
-  /** Unix epoch seconds of the last report. */
+  /** Unix epoch seconds del último reporte (derivado de `last_update` ISO). */
   epoch: number
-  /** Odometer in km (cumulative). */
+  /** Odómetro en km (cumulativo, campo `mileage`). */
   odometer: number
 }
 
